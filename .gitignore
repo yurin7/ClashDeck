@@ -1,0 +1,31 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+pubspec.lock.bak
+*.iml
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/.kotlin/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# 内核二进制：118 MB，且 GitHub 单文件上限 100 MB。
+# 用 tool/build_core.ps1 本地构建（需要 Go 与 mihomo 源码），见 README「构建内核」。
+android/app/src/main/jniLibs/**/*.so
+
+# IDE / 系统
+.idea/
+.vscode/
+*.log
+Thumbs.db
+.DS_Store

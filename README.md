@@ -21,6 +21,19 @@ Clash 系客户端大多只让你旁路改 YAML 文本：想加一个 vless 节�
 - **内置内核**：打包 mihomo（linux/arm64 静态二进制），点一下就用 VpnService 起 TUN，
   运行页能看状态、速率、日志，跑着改配置会热重载而不掉线。
 
+## 下载安装
+
+预编译安装包在 Releases 里：**https://github.com/yurin7/ClashDeck/releases/latest**
+
+| 文件 | ABI | 适用 |
+| --- | --- | --- |
+| `ClashDeck-0.1.0-arm64-v8a.apk` | arm64-v8a | 绝大多数手机（33.1 MB，推荐） |
+| `ClashDeck-0.1.0-x86_64.apk` | x86_64 | 模拟器 / x86 平板（35.2 MB） |
+
+- `minSdk 24`（Android 7.0+），`targetSdk 36`；APK 里已带 mihomo 内核与 GEOIP/GEOSITE 数据，装完即用
+- 当前用 **debug keystore 签名**（自用/测试足够，不用于上架）；没有 armeabi-v7a 包
+- 安装后首次「启动内核」会请求 VPN 授权；不想接管全局流量可以在设置里切「仅代理端口」模式
+
 工作名 ClashDeck，包名 `dev.clashdeck`，许可证 **GPL-3.0**（与 mihomo 一致）。
 完整条款见 [LICENSE](LICENSE)；随包分发的 mihomo 二进制、GEOIP/GEOSITE 数据与所做的
 构建补丁都在 [NOTICE.md](NOTICE.md) 里交代清楚了。

@@ -139,9 +139,24 @@ flutter build apk --debug --target-platform android-arm64,android-x64
 > 别在 `android/app/build.gradle.kts` 里写 `ndk { abiFilters }`：Flutter Gradle 插件在本文件之后
 > 用 `-Ptarget-platform` 覆盖它，不会有任何效果。
 
+### 内核二进制不在仓库里
+
 `android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libmihomo.so` 是预编译的 mihomo 内核
-（arm64 约 57 MB、x86_64 约 61 MB，均 `-ldflags="-s -w"` 已 strip），重新生成的方法在
-docs/ARCHITECTURE.md 第 7 节。armeabi-v7a 没有内核，在 32 位设备上启动会提示"找不到内核文件"。
+（arm64 约 57 MB、x86_64 约 61 MB，均 `-ldflags="-s -w"` 已 strip），两个加起来 118 MB、
+单文件也超过 GitHub 的 100 MB 上限，所以 `.gitignore` 把它们排除了。**克隆下来直接
+`flutter build apk` 能编译，但运行内核会提示「找不到内核文件」**，先补一步：
+
+```powershell
+# 需要 Go 1.25+ 与一份 mihomo 源码（Alpha 分支）
+git clone --depth 1 -b Alpha https://github.com/MetaCubeX/mihomo D:\dev\_downloads\mihomo-src\mihomo-Alpha
+.\tool\build_core.ps1        # 复制源码 → 打 anet 构建约束补丁 → 交叉编译两个 ABI
+```
+
+`tool/build_core.ps1` 会就地把 `component/iface/anet/{interface_android.go,netlink_android.go}`
+改名并加 `//go:build android || linux`（原因见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §5.2），
+产物直接写进 `jniLibs/<abi>/libmihomo.so`。交叉编译的完整命令在
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 第 7 节。armeabi-v7a 没有内核，32 位设备上启动会提示
+「找不到内核文件」。
 
 ## 目录
 

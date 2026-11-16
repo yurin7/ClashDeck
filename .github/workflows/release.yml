@@ -1,0 +1,121 @@
+name: release
+
+# 推送 v* 标签（或手动触发）时：构建 mihomo 内核 → 编译 APK → 发布 GitHub Release。
+# 内核二进制不进仓库（118 MB、超 GitHub 单文件上限），所以这里在 runner 上用 Go 现编。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的标签，例如 v0.1.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build APK & publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "拿不到标签名" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Build mihomo core
+        run: bash tool/build_core.sh
+        env:
+          ABIS: arm64-v8a x86_64
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build APK (split per ABI)
+        run: |
+          flutter build apk --release --split-per-abi \
+            --build-name="${{ steps.v.outputs.name }}" \
+            --build-number="${{ github.run_number }}"
+
+      - name: Collect artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          version="${{ steps.v.outputs.name }}"
+          for f in build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi="$(basename "$f" | sed -E 's/^app-(.+)-release\.apk$/\1/')"
+            cp "$f" "dist/ClashDeck-${version}-${abi}.apk"
+          done
+          ls -lh dist
+          sha256sum dist/*.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: ClashDeck ${{ steps.v.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## 安装
+
+            - `arm64-v8a`：绝大多数手机（推荐）
+            - `x86_64`：模拟器 / 少数 x86 设备
+
+            `minSdk 24`（Android 7.0 及以上）、`targetSdk 36`。APK 里已经带上 mihomo 内核与
+            GEOIP/GEOSITE 数据，不用另外下载；首次启动会请求 VPN 授权，也可以只开本地代理端口。
+
+            > 这是 debug keystore 签名的构建产物，仅用于试用；正式分发请自行配置签名密钥。
+
+            完整改动见 [CHANGELOG](https://github.com/${{ github.repository }}/compare/${{ steps.v.outputs.tag }}...main)
+            或本页下方的自动生成说明。
+          files: dist/*.apk

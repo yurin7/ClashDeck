@@ -200,12 +200,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   await _applyRestart(() => state.setRoutePackages(picked));
                 },
               ),
-              _InfoRow(
+              _ChoiceRow<String>(
                 label: 'TUN 协议栈',
                 description:
-                    '本项目的 TUN fd 由系统 VpnService 传来，只有 gVisor 栈能跑在上面；'
-                    'system / mixed 要内核自建网卡，实测 bind 失败 —— 所以这里不给选择',
-                value: 'gVisor',
+                    'gvisor：纯用户态，已验证可用；system / mixed 在 VpnService 传入 fd 的模式下'
+                    '会出现「能启动但收不到包」（模拟器实测，见 README 的 TUN 说明）。'
+                    '改动需重启内核生效',
+                value: state.tunStack,
+                items: const ['gvisor', 'system', 'mixed'],
+                labelOf: (v) => v,
+                onChanged: (v) => _applyRestart(() => state.setTunStack(v)),
               ),
               _ChoiceRow<int>(
                 label: 'TUN MTU',
@@ -593,55 +597,6 @@ class _ValueRow extends StatelessWidget {
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// 只读信息行：说明某个能力当前只有一种实现，不做成可切换的下拉。
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.description,
-    required this.value,
-  });
-
-  final String label;
-  final String description;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        Insets.lg,
-        Insets.md,
-        Insets.lg,
-        Insets.md,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: display(14, weight: 600)),
-                const SizedBox(height: 2),
-                Text(description, style: hintStyle(context)),
-              ],
-            ),
-          ),
-          const SizedBox(width: Insets.md),
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              value,
-              style: mono(11.5, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -42,17 +42,29 @@ Clash 系客户端大多只让你旁路改 YAML 文本：想加一个 vless 节�
 
 | 模块 | 状态 |
 | --- | --- |
-| YAML 无损编辑 / 模型 / 30 类体检 / 10 种链接解析 / 链接与订阅导入 | ✅ 239 个单测全绿 |
+| YAML 无损编辑 / 模型 / 30 类体检 / 10 种链接解析 / 链接与订阅导入 | ✅ 241 个单测全绿 |
 | 三页 IA：底部悬浮岛切换「概览 / 配置 / 设置」，一个 `AppShell` 持有唯一内核控制器 | ✅ |
 | 配置列表、导入、分组拖拽、节点动态表单、规则编辑、YAML 视图 | ✅ |
 | mihomo 子进程 + VpnService 传 fd + 运行页 | ✅ 模拟器（Android 16 / x86_64）跑通：TUN 监听 `tun0(fd=158)`、REST 在线、测速 87–148 ms；待真机复验 |
 | 代理设置开关化（TUN/仅端口、分应用代理、TUN MTU、DNS、分流模式、局域网、IPv6、订阅自动更新、日志级别） | ✅ 逐项写进 YAML 或 sidecar 并验证生效 |
 
 关于 TUN：**支持**，而且是默认模式——`VpnService.Builder` 建 TUN、`detachFd()` 后把 fd 交给
-mihomo（`tun.file-descriptor`），内核在子进程里从 TUN 收包。协议栈固定 **gVisor**：system /
-mixed 需要内核自建网卡并给网卡套地址，实测在「系统给的 fd」上会
-`bind: cannot assign requested address`，所以设置页只留 gVisor 并写明了原因；MTU 仍然可调
-（实测改成 1500 后 `ip addr show tun0` 与内核日志都跟着变）。
+mihomo（`tun.file-descriptor`），内核在子进程里从 TUN 收包。
+
+协议栈三选（`gvisor` / `system` / `mixed`）已经接回设置页，但**实测只有 gVisor 在「系统传入 fd」的
+模式下能真正转发流量**：
+
+- 早前 `system` / `mixed` 报 `listen tcp4 198.18.0.1:0: bind: cannot assign requested address`，
+  原因是两边地址不一致——`VpnService` 用 `172.19.0.1/30` 建网卡，而 mihomo 的
+  `config.parseTun()` 会忽略配置里的 `inet4-address`，只用 `dns.fake-ip-range` 截成 `/30`
+  （默认 `198.18.0.1/30`）。现在两端都跟着 `fake-ip-range` 走（Dart 算地址 → 传给 Kotlin 建网卡），
+  bind 错误已消失。
+- 但地址对齐后，`system` / `mixed` 仍然「能启动、能监听 `tun0`、`ip addr` 有地址，却收不到任何包」：
+  同一配置同一次测试，`gVisor` 立刻打出 `[TCP] dial …` 连接日志与真实流量，`system`/`mixed` 的
+  `core.log` 只有启动行、网页一片空白（sing-tun 的 `stack_system.go` / `stack_mixed.go` 依赖
+  自己创建并管理网卡，不认外部 fd）。
+- 因此设置页保留下拉便于在真机上复验，但说明里写明「gvisor 已验证可用，system / mixed 可能收不到
+  包」。MTU 仍然可调（实测改成 1500 后 `ip addr show tun0` 与内核日志都跟着变）。
 | 应用图标 / 启动页 | ⬜ 仍是 Flutter 默认 logo |
 
 模拟器上验证过的完整链路（`adb logcat -s ClashDeck.Core`）：
@@ -104,7 +116,7 @@ fork/exec，见 §5）；`GOOS=linux` 会漏掉 mihomo 的 android netlink 修�
 | --- | --- | --- |
 | 运行 | 代理模式：**TUN 模式** / **仅代理端口** | meta `app.proxyMode`；决定起不起 VPN 与 TUN |
 | 运行 | 分应用代理：全部应用 / 仅选中的应用 / 排除选中的应用 + 选择应用（`listApps` 读已安装应用） | meta `app.routeMode` + `app.routePackages` |
-| 运行 | TUN 协议栈：固定 gVisor（只读说明，不可选） | YAML `tun.stack`（运行时统一强制 gvisor） |
+| 运行 | TUN 协议栈：gvisor / system / mixed（默认 gvisor；gvisor 已验证可转发，其余见 TUN 说明） | YAML `tun.stack`，运行时原样透传 |
 | 运行 | TUN MTU：1500 / 4064 / 9000 | YAML `tun.mtu` |
 | 分流 | 模式：规则 / 全局 / 直连 | YAML `mode` |
 | 分流 | 允许局域网 | YAML `allow-lan`（开启后同 Wi-Fi 可用本机 7890） |
@@ -141,7 +153,7 @@ mihomo 子进程直接拿到同一个 fd 号 → 内核按 `tun.file-descriptor`
 . D:\dev\env.ps1          # Flutter 3.50 / JDK 17 / Go 1.25 / Android SDK 环境变量
 cd E:\project\Agents\ClashAndroid
 
-flutter test              # 239 个单测（Windows 上直接跑，不用设备）
+flutter test              # 241 个单测（Windows 上直接跑，不用设备）
 flutter analyze
 flutter build apk --debug # 产物 build\app\outputs\flutter-apk\app-debug.apk
 ```
@@ -186,5 +198,6 @@ lib/runtime/  mihomo REST 客户端、运行配置生成、子进程控制器、
 android/app/src/main/kotlin/dev/clashdeck/   VpnService、内核进程、MethodChannel 桥
 assets/geo/    随包携带的 mihomo GEOIP/GEOSITE 数据（8.0 + 4.2 MB），首启铺到内核工作目录
 ```
+
 
 

@@ -117,12 +117,16 @@ class RuntimeController extends ChangeNotifier {
       // 国内基本必定超时，带 GEOIP 规则的配置会直接启动失败。
       await Geodata.ensure(Directory(_workDir!));
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
-      final rawMtu = configProvider().plainAt(['tun', 'mtu']);
+      final config = configProvider();
+      final rawMtu = config.plainAt(['tun', 'mtu']);
       await _channel.invokeMethod<Map<Object?, Object?>>('start', {
         'workDir': _workDir,
         'port': port,
         'secret': secret,
         'mtu': rawMtu is num ? rawMtu.toInt() : 9000,
+        // system / mixed 栈要在网卡上 bind 内核算出来的 tun 地址，这里把同一个
+        // 地址交给 Kotlin 建网卡（gVisor 不看地址，但写了也无害）。
+        'tunAddress': RuntimeConfig.tunAddressFor(config),
         ...settings.toStartArgs(),
       });
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。

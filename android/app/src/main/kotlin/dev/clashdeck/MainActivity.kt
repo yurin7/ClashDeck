@@ -146,6 +146,7 @@ class MainActivity : FlutterActivity() {
         val routeApps = (arguments["routeApps"] as? List<*>)?.mapNotNull { it as? String }
             ?: emptyList()
         val mtu = (arguments["mtu"] as? Number)?.toInt() ?: 9000
+        val tunAddress = arguments["tunAddress"] as? String
 
         val intent = Intent(this, ClashVpnService::class.java)
             .setAction(ClashVpnService.ACTION_START)
@@ -155,6 +156,7 @@ class MainActivity : FlutterActivity() {
             .putExtra(ClashVpnService.EXTRA_PROXY_MODE, proxyMode)
             .putExtra(ClashVpnService.EXTRA_ROUTE_MODE, routeMode)
             .putExtra(ClashVpnService.EXTRA_MTU, mtu)
+            .putExtra(ClashVpnService.EXTRA_TUN_ADDRESS, tunAddress)
             .putStringArrayListExtra(ClashVpnService.EXTRA_ROUTE_APPS, ArrayList(routeApps))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

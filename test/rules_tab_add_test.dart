@@ -13,12 +13,16 @@ void main() {
     expect(state.profile.rules.length, 2);
     expect(state.profile.rules.last.isTerminal, isTrue);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: ListenableBuilder(
-        listenable: state,
-        builder: (_, _) => RulesTab(state: state),
-      )),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: state,
+            builder: (_, _) => RulesTab(state: state),
+          ),
+        ),
+      ),
+    );
 
     await tester.tap(find.text('添加规则'));
     await tester.pumpAndSettle();

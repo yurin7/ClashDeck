@@ -62,10 +62,14 @@ proxy-groups:
     });
 
     test('空内容 / 垃圾内容会抛 ConfigEditException', () {
-      expect(() => parseSubscriptionBody('   '),
-          throwsA(isA<ConfigEditException>()));
-      expect(() => parseSubscriptionBody('hello world 这不是订阅'),
-          throwsA(isA<ConfigEditException>()));
+      expect(
+        () => parseSubscriptionBody('   '),
+        throwsA(isA<ConfigEditException>()),
+      );
+      expect(
+        () => parseSubscriptionBody('hello world 这不是订阅'),
+        throwsA(isA<ConfigEditException>()),
+      );
     });
   });
 

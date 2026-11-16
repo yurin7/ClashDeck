@@ -38,12 +38,19 @@ class ClashVpnService : VpnService() {
         const val EXTRA_ROUTE_APPS = "routeApps"
         const val EXTRA_MTU = "mtu"
 
+        /// Dart 侧按 `dns.fake-ip-range` 算出的 tun 地址（`ip/prefix`），要和内核一致。
+        const val EXTRA_TUN_ADDRESS = "tunAddress"
+
         private const val CHANNEL_ID = "clashdeck-core"
         private const val NOTIFICATION_ID = 0x4344
 
-        private const val TUN_ADDRESS = "172.19.0.1"
+        // 网卡地址必须和内核算出来的 tun 地址一致：mihomo 的 parseTun() 忽略配置里的
+        // inet4-address，而是把 dns.fake-ip-range（默认 198.18.0.1/16）截成 /30 当 tun 地址，
+        // 也就是 198.18.0.1/30。gVisor 栈只读写 fd、不看地址，system / mixed 栈要在网卡上
+        // bind 这个地址，对不上就会 `bind: cannot assign requested address`。
+        private const val TUN_ADDRESS = "198.18.0.1"
         private const val TUN_PREFIX = 30
-        private const val TUN_DNS = "172.19.0.2"
+        private const val TUN_DNS = "198.18.0.2"
         private const val TUN_ADDRESS6 = "fdfe:dcba:9876::1"
         private const val TUN_PREFIX6 = 126
         private const val TUN_MTU = 9000
@@ -78,9 +85,10 @@ class ClashVpnService : VpnService() {
                 val routeMode = intent.getStringExtra(EXTRA_ROUTE_MODE) ?: "all"
                 val routeApps = intent.getStringArrayListExtra(EXTRA_ROUTE_APPS) ?: arrayListOf()
                 val mtu = intent.getIntExtra(EXTRA_MTU, TUN_MTU)
+                val tunAddress = intent.getStringExtra(EXTRA_TUN_ADDRESS)
                 bootThread?.interrupt()
                 bootThread = Thread(
-                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu) },
+                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress) },
                     "clashdeck-boot",
                 ).also {
                     it.isDaemon = true
@@ -115,6 +123,7 @@ class ClashVpnService : VpnService() {
         routeMode: String,
         routeApps: List<String>,
         mtu: Int,
+        tunAddress: String?,
     ) {
         lastError = null
         RuntimeBridge.notifyState("starting")
@@ -132,7 +141,7 @@ class ClashVpnService : VpnService() {
                 return
             }
 
-            val descriptor = establishTun(routeMode, routeApps, mtu)
+            val descriptor = establishTun(routeMode, routeApps, mtu, tunAddress)
             if (descriptor == null) {
                 fail("建立 VPN 失败：没有拿到授权或系统拒绝")
                 return
@@ -173,11 +182,33 @@ class ClashVpnService : VpnService() {
         }
     }
 
-    private fun establishTun(routeMode: String, routeApps: List<String>, mtu: Int): ParcelFileDescriptor? {
+    /// 解析 Dart 传来的 `ip/prefix`，缺省 / 非法时退回常量（198.18.0.1/30）。
+    private fun parseTunAddress(raw: String?): Pair<String, Int> {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return TUN_ADDRESS to TUN_PREFIX
+        val slash = text.indexOf('/')
+        if (slash <= 0) return text to TUN_PREFIX
+        val ip = text.substring(0, slash)
+        val prefix = text.substring(slash + 1).toIntOrNull()
+        if (ip.isBlank() || prefix == null || prefix !in 1..32) {
+            MihomoCore.log("tunAddress 无法解析（$text），退回 $TUN_ADDRESS/$TUN_PREFIX")
+            return TUN_ADDRESS to TUN_PREFIX
+        }
+        return ip to prefix
+    }
+
+    private fun establishTun(
+        routeMode: String,
+        routeApps: List<String>,
+        mtu: Int,
+        tunAddress: String?,
+    ): ParcelFileDescriptor? {
+        // 地址要和内核算出来的一致，否则 system / mixed 栈 bind 会失败。
+        val (tunIp, tunPrefix) = parseTunAddress(tunAddress)
         val builder = Builder()
             .setSession("ClashDeck")
             .setMtu(if (mtu > 0) mtu else TUN_MTU)
-            .addAddress(TUN_ADDRESS, TUN_PREFIX)
+            .addAddress(tunIp, tunPrefix)
             .addDnsServer(TUN_DNS)
             .addRoute("0.0.0.0", 0)
 

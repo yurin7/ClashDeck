@@ -28,10 +28,7 @@ void main() {
     expect(await meta.length(), 16);
     expect(await site.length(), 8);
     // 临时文件不能残留
-    expect(
-      tmp.listSync().where((e) => e.path.endsWith('.tmp')),
-      isEmpty,
-    );
+    expect(tmp.listSync().where((e) => e.path.endsWith('.tmp')), isEmpty);
   });
 
   test('已有非空文件不重写（省掉每次启动几十 MB 的 IO）', () async {

@@ -58,7 +58,10 @@ rules:
       expect(node['flow'], 'xtls-rprx-vision');
       final ws = node.raw['ws-opts'] as Map<String, Object?>;
       expect(ws['path'], '/ws');
-      expect((ws['headers'] as Map<String, Object?>)['Host'], 'cdn.example.com');
+      expect(
+        (ws['headers'] as Map<String, Object?>)['Host'],
+        'cdn.example.com',
+      );
 
       // 节点被加入了 PROXY 组，且空 flow 列表已被展开成块状列表。
       final group = profile.groupByName['PROXY']!;
@@ -71,11 +74,16 @@ rules:
 
       // 生成的配置自身必须能通过校验（只有"空 select 组"之类的警告不算错误）。
       final report = ConfigValidator.validate(doc);
-      expect(report.errors, isEmpty, reason: report.errors.map((e) => e.message).join('; '));
+      expect(
+        report.errors,
+        isEmpty,
+        reason: report.errors.map((e) => e.message).join('; '),
+      );
     });
 
     test('多条链接 + 注释 + 垃圾行：只保留合法节点且按原名去重', () {
-      const text = '''
+      const text =
+          '''
 # 订阅
 $vlessLink
 not a link
@@ -85,12 +93,16 @@ vless://aaaa-bbbb@example.com:443?security=tls&sni=a.com#%E9%A6%99%E6%B8%AF%2001
       final profile = Profile.from(YamlDoc.parse(out));
       expect(profile.proxies, hasLength(2));
       expect(profile.proxies.map((p) => p.name), ['香港 01', '香港 01-2']);
-      expect(profile.groupByName['PROXY']!.members,
-          ['DIRECT', '香港 01', '香港 01-2']);
+      expect(profile.groupByName['PROXY']!.members, [
+        'DIRECT',
+        '香港 01',
+        '香港 01-2',
+      ]);
     });
 
     test('trojan 与 ss 链接混排', () {
-      const text = 'trojan://pass@t.example.com:443?sni=t.example.com#T1\n'
+      const text =
+          'trojan://pass@t.example.com:443?sni=t.example.com#T1\n'
           'ss://YWVzLTI1Ni1nY206cGFzcw@1.2.3.4:8388#S1';
       final profile = Profile.from(YamlDoc.parse(buildConfigFromText(text)));
       expect(profile.proxies.map((p) => p.type), ['trojan', 'ss']);

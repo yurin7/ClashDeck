@@ -205,7 +205,7 @@ rules:
       expect(out.contains('  file-descriptor: 42'), isTrue);
     });
 
-    test('用户写 system/mixed 栈也会被强制成 gvisor（fd 模式只有它可用）', () {
+    test('用户写的栈会保留；v4 地址由内核从 fake-ip-range 推导，不再写进配置', () {
       const src = '''
 mixed-port: 7890
 tun:
@@ -217,9 +217,47 @@ tun:
         tunFileDescriptor: 9,
       );
       final tun = YamlDoc.parse(out).plainAt(['tun'])! as Map;
-      expect(tun['stack'], 'gvisor');
+      expect(tun['stack'], 'system');
       expect(tun['mtu'], 1500); // MTU 仍然尊重用户
       expect(tun['file-descriptor'], 9);
+      // mihomo 的 parseTun() 会忽略 inet4-address，一律用 fake-ip-range 截 /30，
+      // 所以这里不写；网卡地址改由 tunAddressFor() 交给 Kotlin 建网卡。
+      expect(tun['inet4-address'], isNull);
+      expect(tun['inet6-address'], isNull);
+    });
+
+    test('tunAddressFor 跟着 fake-ip-range 走，与内核推导结果一致', () {
+      expect(
+        RuntimeConfig.tunAddressFor(YamlDoc.parse('mixed-port: 7890')),
+        '198.18.0.1/30',
+      );
+      expect(
+        RuntimeConfig.tunAddressFor(
+          YamlDoc.parse('dns:\n  fake-ip-range: 198.19.0.1/16\n'),
+        ),
+        '198.19.0.1/30',
+      );
+      expect(
+        RuntimeConfig.tunAddressFor(
+          YamlDoc.parse('dns:\n  enhanced-mode: redir-host\n'),
+        ),
+        '198.18.0.1/30',
+      );
+    });
+
+    test('堆栈缺省是 gvisor，ipv6 打开时补 v6 地址', () {
+      const src = '''
+mixed-port: 7890
+ipv6: true
+''';
+      final out = RuntimeConfig.buildRuntimeYaml(
+        YamlDoc.parse(src),
+        tunFileDescriptor: 9,
+      );
+      final tun = YamlDoc.parse(out).plainAt(['tun'])! as Map;
+      expect(tun['stack'], 'gvisor');
+      expect(tun['inet4-address'], isNull);
+      expect(tun['inet6-address'], ['fdfe:dcba:9876::1/126']);
     });
 
     test('fd=0（仅代理端口模式）显式关闭 tun', () {

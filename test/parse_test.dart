@@ -34,7 +34,8 @@ void main() {
 
   group('vless', () {
     test('vless + reality maps reality-opts, fingerprint and tls', () {
-      const String link = 'vless://8f7b4c1e-91a2-4d3e-8f45-0123456789ab'
+      const String link =
+          'vless://8f7b4c1e-91a2-4d3e-8f45-0123456789ab'
           '@203.0.113.10:443'
           '?type=tcp&security=reality&sni=www.microsoft.com&fp=chrome'
           '&pbk=Z84J2IelR9Z3Ct9Q8m3S8l8u9z0Jx7y6W5v4U3t2S1r&sid=ab12'
@@ -63,7 +64,8 @@ void main() {
     });
 
     test('vless + ws exposes path and Host header', () {
-      const String link = 'vless://11111111-2222-3333-4444-555555555555'
+      const String link =
+          'vless://11111111-2222-3333-4444-555555555555'
           '@hk.example.com:443'
           '?type=ws&security=tls&sni=hk.example.com&path=%2Fws'
           '&host=cdn.example.com&fp=chrome#HK-WS';
@@ -72,8 +74,7 @@ void main() {
       expect(node!['network'], 'ws');
       expect(node['tls'], true);
       expect(node['flow'], isNull);
-      final Map<String, Object?> ws =
-          node['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/ws');
       final Map<String, Object?> headers =
           ws['headers']! as Map<String, Object?>;
@@ -87,8 +88,7 @@ void main() {
         '?type=ws&security=tls#NOPATH',
       );
       expect(node, isNotNull);
-      final Map<String, Object?> ws =
-          node!['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node!['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/');
       expect(ws.containsKey('headers'), isFalse);
     });
@@ -100,8 +100,7 @@ void main() {
         '&ed=2048&eh=X-Early-Data#ED',
       );
       expect(node, isNotNull);
-      final Map<String, Object?> ws =
-          node!['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node!['ws-opts']! as Map<String, Object?>;
       expect(ws['max-early-data'], 2048);
       expect(ws['early-data-header-name'], 'X-Early-Data');
     });
@@ -156,8 +155,7 @@ void main() {
       );
       expect(node, isNotNull);
       expect(node!['network'], 'httpupgrade');
-      final Map<String, Object?> ws =
-          node['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/up');
       expect(ws['v2ray-http-upgrade'], true);
       final Map<String, Object?> headers =
@@ -198,16 +196,18 @@ void main() {
       expect(node!['name'], '东京 02');
     });
 
-    test('vless reality without pbk keeps tls but omits broken reality-opts',
-        () {
-      final Map<String, Object?>? node = parseShareLink(
-        'vless://11111111-2222-3333-4444-555555555555@a.example.com:443'
-        '?security=reality&sni=a.example.com&sid=ab12#NOPBK',
-      );
-      expect(node, isNotNull);
-      expect(node!['tls'], true);
-      expect(node['reality-opts'], isNull);
-    });
+    test(
+      'vless reality without pbk keeps tls but omits broken reality-opts',
+      () {
+        final Map<String, Object?>? node = parseShareLink(
+          'vless://11111111-2222-3333-4444-555555555555@a.example.com:443'
+          '?security=reality&sni=a.example.com&sid=ab12#NOPBK',
+        );
+        expect(node, isNotNull);
+        expect(node!['tls'], true);
+        expect(node['reality-opts'], isNull);
+      },
+    );
 
     test('vless treats xtls security as TLS', () {
       final Map<String, Object?>? node = parseShareLink(
@@ -232,7 +232,8 @@ void main() {
 
   group('vmess', () {
     test('vmess base64 JSON (ws + tls + aid 0)', () {
-      const String link = 'vmess://eyJ2IjoiMiIsInBzIjoidm1lc3Mtd3MiLCJhZGQiOiJ2Mi5leGFtcGxlLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6ImI4MzEzODFkLTYzMjQtNGQ1My1hZDRmLThjZGE0OGIzMDgxMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJjZG4uZXhhbXBsZS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoidjIuZXhhbXBsZS5jb20ifQ==';
+      const String link =
+          'vmess://eyJ2IjoiMiIsInBzIjoidm1lc3Mtd3MiLCJhZGQiOiJ2Mi5leGFtcGxlLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6ImI4MzEzODFkLTYzMjQtNGQ1My1hZDRmLThjZGE0OGIzMDgxMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJjZG4uZXhhbXBsZS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoidjIuZXhhbXBsZS5jb20ifQ==';
       final Map<String, Object?>? node = parseShareLink(link);
       expect(node, isNotNull);
       expect(node!['name'], 'vmess-ws');
@@ -248,8 +249,7 @@ void main() {
       expect(node['udp'], true);
       expect(node['tls'], true);
       expect(node['servername'], 'v2.example.com');
-      final Map<String, Object?> ws =
-          node['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/vm');
       final Map<String, Object?> headers =
           ws['headers']! as Map<String, Object?>;
@@ -271,21 +271,18 @@ void main() {
         'tls': 'tls',
         'sni': 'u.example.com',
       };
-      final String padded =
-          base64.encode(utf8.encode(jsonEncode(payload)));
+      final String padded = base64.encode(utf8.encode(jsonEncode(payload)));
       final String urlsafe = padded
           .replaceAll('=', '')
           .replaceAll('+', '-')
           .replaceAll('/', '_');
       expect(urlsafe.contains('='), isFalse);
-      final Map<String, Object?>? node =
-          parseShareLink('vmess://$urlsafe');
+      final Map<String, Object?>? node = parseShareLink('vmess://$urlsafe');
       expect(node, isNotNull);
       expect(node!['name'], 'urlsafe-vmess');
       expect(node['port'], 8443);
       expect(node['cipher'], 'aes-128-gcm');
-      final Map<String, Object?> ws =
-          node['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/u');
     });
 
@@ -306,14 +303,11 @@ void main() {
         'tls': 'tls',
         'sni': 'u.example.com',
       };
-      final String standard =
-          base64.encode(utf8.encode(jsonEncode(payload)));
+      final String standard = base64.encode(utf8.encode(jsonEncode(payload)));
       expect(standard.contains('+'), isTrue);
-      final String urlsafe =
-          standard.replaceAll('+', '-').replaceAll('/', '_');
+      final String urlsafe = standard.replaceAll('+', '-').replaceAll('/', '_');
       expect(urlsafe, isNot(standard));
-      final Map<String, Object?>? node =
-          parseShareLink('vmess://$urlsafe');
+      final Map<String, Object?>? node = parseShareLink('vmess://$urlsafe');
       expect(node, isNotNull);
       expect(node!['name'], '~~~');
       expect(node['port'], 8443);
@@ -321,8 +315,8 @@ void main() {
     });
 
     test('vmess + grpc maps grpc-service-name from path', () {
-      final Map<String, Object?>? node = parseShareLink(vmessLink(
-        <String, Object?>{
+      final Map<String, Object?>? node = parseShareLink(
+        vmessLink(<String, Object?>{
           'v': '2',
           'ps': 'vmess-grpc',
           'add': 'g.example.com',
@@ -333,8 +327,8 @@ void main() {
           'path': 'vmess-grpc-svc',
           'tls': 'tls',
           'sni': 'g.example.com',
-        },
-      ));
+        }),
+      );
       expect(node, isNotNull);
       expect(node!['network'], 'grpc');
       expect(node['grpc-opts'], <String, Object?>{
@@ -343,8 +337,8 @@ void main() {
     });
 
     test('vmess + h2 maps h2-opts', () {
-      final Map<String, Object?>? node = parseShareLink(vmessLink(
-        <String, Object?>{
+      final Map<String, Object?>? node = parseShareLink(
+        vmessLink(<String, Object?>{
           'v': '2',
           'ps': 'vmess-h2',
           'add': 'h2.example.com',
@@ -355,8 +349,8 @@ void main() {
           'path': '/vmess-h2',
           'host': 'h2.example.com',
           'tls': 'tls',
-        },
-      ));
+        }),
+      );
       expect(node, isNotNull);
       expect(node!['h2-opts'], <String, Object?>{
         'host': <String>['h2.example.com'],
@@ -365,15 +359,15 @@ void main() {
     });
 
     test('vmess defaults aid/cipher/net and accepts numeric port', () {
-      final Map<String, Object?>? node = parseShareLink(vmessLink(
-        <String, Object?>{
+      final Map<String, Object?>? node = parseShareLink(
+        vmessLink(<String, Object?>{
           'v': '2',
           'ps': 'vmess-min',
           'add': 'm.example.com',
           'port': 8080,
           'id': 'dddddddd-eeee-ffff-0000-111111111111',
-        },
-      ));
+        }),
+      );
       expect(node, isNotNull);
       expect(node!['port'], 8080);
       expect(node['alterId'], 0);
@@ -383,8 +377,8 @@ void main() {
     });
 
     test('vmess alpn and insecure fields are honoured', () {
-      final Map<String, Object?>? node = parseShareLink(vmessLink(
-        <String, Object?>{
+      final Map<String, Object?>? node = parseShareLink(
+        vmessLink(<String, Object?>{
           'v': '2',
           'ps': 'vmess-alpn',
           'add': 'a.example.com',
@@ -397,8 +391,8 @@ void main() {
           'sni': 'a.example.com',
           'alpn': 'h2,http/1.1',
           'allowInsecure': '1',
-        },
-      ));
+        }),
+      );
       expect(node, isNotNull);
       expect(node!['alpn'], <String>['h2', 'http/1.1']);
       expect(node['skip-cert-verify'], true);
@@ -407,7 +401,8 @@ void main() {
 
   group('trojan', () {
     test('trojan maps sni, insecure, ws and alpn', () {
-      const String link = 'trojan://p%40ssw0rd@tj.example.com:443'
+      const String link =
+          'trojan://p%40ssw0rd@tj.example.com:443'
           '?sni=tj.example.com&allowInsecure=1&type=ws&path=%2Ftj'
           '&host=cdn.example.com&alpn=h2%2Chttp%2F1.1&fp=chrome#TJ';
       final Map<String, Object?>? node = parseShareLink(link);
@@ -425,8 +420,7 @@ void main() {
       expect(node['skip-cert-verify'], true);
       expect(node['alpn'], <String>['h2', 'http/1.1']);
       expect(node['client-fingerprint'], 'chrome');
-      final Map<String, Object?> ws =
-          node['ws-opts']! as Map<String, Object?>;
+      final Map<String, Object?> ws = node['ws-opts']! as Map<String, Object?>;
       expect(ws['path'], '/tj');
       final Map<String, Object?> headers =
           ws['headers']! as Map<String, Object?>;
@@ -528,7 +522,8 @@ void main() {
 
   group('hysteria2', () {
     test('hysteria2 maps obfs, insecure, alpn and sni', () {
-      const String link = 'hysteria2://letmein@hy.example.com:443'
+      const String link =
+          'hysteria2://letmein@hy.example.com:443'
           '?sni=hy.example.com&insecure=1&obfs=salamander'
           '&obfs-password=salamanderpass&alpn=h3#HY2';
       final Map<String, Object?>? node = parseShareLink(link);
@@ -547,8 +542,9 @@ void main() {
     });
 
     test('hy2 alias produces a hysteria2 proxy', () {
-      final Map<String, Object?>? node =
-          parseShareLink('hy2://pw@hy.example.com:8443?insecure=1#H');
+      final Map<String, Object?>? node = parseShareLink(
+        'hy2://pw@hy.example.com:8443?insecure=1#H',
+      );
       expect(node, isNotNull);
       expect(node!['type'], 'hysteria2');
       expect(node['port'], 8443);
@@ -569,7 +565,8 @@ void main() {
 
   group('tuic', () {
     test('tuic maps congestion-controller and udp-relay-mode', () {
-      const String link = 'tuic://0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
+      const String link =
+          'tuic://0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
           ':secretpass@tu.example.com:443'
           '?congestion_control=bbr&alpn=h3&sni=tu.example.com'
           '&allow_insecure=1&udp_relay_mode=native#TUIC';
@@ -600,8 +597,9 @@ void main() {
 
   group('socks / http', () {
     test('socks5 with credentials', () {
-      final Map<String, Object?>? node =
-          parseShareLink('socks5://user:p%40ss@127.0.0.1:1080#SOCKS');
+      final Map<String, Object?>? node = parseShareLink(
+        'socks5://user:p%40ss@127.0.0.1:1080#SOCKS',
+      );
       expect(node, isNotNull);
       expect(node!['name'], 'SOCKS');
       expect(node['type'], 'socks5');
@@ -613,8 +611,9 @@ void main() {
     });
 
     test('socks alias without credentials', () {
-      final Map<String, Object?>? node =
-          parseShareLink('socks://127.0.0.1:1080#NoAuth');
+      final Map<String, Object?>? node = parseShareLink(
+        'socks://127.0.0.1:1080#NoAuth',
+      );
       expect(node, isNotNull);
       expect(node!['type'], 'socks5');
       expect(node.containsKey('username'), isFalse);
@@ -622,15 +621,17 @@ void main() {
     });
 
     test('http proxy (plain and TLS)', () {
-      final Map<String, Object?>? plain =
-          parseShareLink('http://127.0.0.1:8080#HTTP');
+      final Map<String, Object?>? plain = parseShareLink(
+        'http://127.0.0.1:8080#HTTP',
+      );
       expect(plain, isNotNull);
       expect(plain!['type'], 'http');
       expect(plain['port'], 8080);
       expect(plain.containsKey('tls'), isFalse);
 
-      final Map<String, Object?>? secure =
-          parseShareLink('https://user:pass@proxy.example.com:8443#HTTPS');
+      final Map<String, Object?>? secure = parseShareLink(
+        'https://user:pass@proxy.example.com:8443#HTTPS',
+      );
       expect(secure, isNotNull);
       expect(secure!['type'], 'http');
       expect(secure['tls'], true);
@@ -693,27 +694,25 @@ void main() {
         returnsNormally,
       );
       expect(
-        () => parseShareLink(
-          'trojan://pw@h.example.com:443?sni=%E9%A6%99%ZZ',
-        ),
+        () => parseShareLink('trojan://pw@h.example.com:443?sni=%E9%A6%99%ZZ'),
         returnsNormally,
       );
-      expect(
-        () => parseShareLinks('%E9%A6%99%ZZ\nss://'),
-        returnsNormally,
-      );
+      expect(() => parseShareLinks('%E9%A6%99%ZZ\nss://'), returnsNormally);
     });
 
     test('ss with a port-less host or missing credentials is rejected', () {
-      expect(parseShareLink('ss://YWVzLTI1Ni1nY206cGFzcw@host-without-port'),
-          isNull);
+      expect(
+        parseShareLink('ss://YWVzLTI1Ni1nY206cGFzcw@host-without-port'),
+        isNull,
+      );
       expect(parseShareLink('ss://@example.com:8388#NoCreds'), isNull);
     });
   });
 
   group('parseShareLinks', () {
     test('parses three lines, de-duplicates names and keeps order', () {
-      const String text = '\n'
+      const String text =
+          '\n'
           'vless://11111111-1111-1111-1111-111111111111@a.example.com:443'
           '?security=tls&sni=a.example.com#HK\n'
           'vless://22222222-2222-2222-2222-222222222222@b.example.com:443'
@@ -731,7 +730,8 @@ void main() {
     });
 
     test('skips a name that is already taken (HK, HK-2, HK)', () {
-      const String text = '\n'
+      const String text =
+          '\n'
           'vless://11111111-1111-1111-1111-111111111111@a.example.com:443'
           '?security=tls#HK\n'
           'vless://22222222-2222-2222-2222-222222222222@b.example.com:443'
@@ -746,7 +746,8 @@ void main() {
     });
 
     test('decodes a whole base64 subscription', () {
-      const String links = 'vless://11111111-1111-1111-1111-111111111111'
+      const String links =
+          'vless://11111111-1111-1111-1111-111111111111'
           '@a.example.com:443?security=tls&sni=a.example.com#A\n'
           'trojan://pw@b.example.com:443#B\n'
           'ss://YWVzLTI1Ni1nY206dGVzdDEyMzQ@c.example.com:8388#C\n';
@@ -762,7 +763,8 @@ void main() {
     });
 
     test('decodes a whole base64url (unpadded) subscription', () {
-      const String links = 'trojan://pw@b.example.com:443#B\n'
+      const String links =
+          'trojan://pw@b.example.com:443#B\n'
           'ss://YWVzLTI1Ni1nY206dGVzdDEyMzQ@c.example.com:8388#C\n'
           'vless://11111111-1111-1111-1111-111111111111@a.example.com:443'
           '?security=tls#A\n';
@@ -776,7 +778,8 @@ void main() {
     });
 
     test('skips comments, blank lines, junk and unsupported schemes', () {
-      const String text = '\n'
+      const String text =
+          '\n'
           '# ClashDeck subscription\n'
           '\n'
           'vless://11111111-1111-1111-1111-111111111111@a.example.com:443'
@@ -791,11 +794,11 @@ void main() {
     });
 
     test('vmess 认 `t` / `p` 短键（部分面板这么写）', () {
-      final String json = '{"v":"2","ps":"短键节点","t":"short.example.com",'
+      final String json =
+          '{"v":"2","ps":"短键节点","t":"short.example.com",'
           '"p":"8443","id":"cd0777c4-1adb-4a8c-8f21-906ba3fea8f8",'
           '"aid":"0","scy":"auto","net":"ws","type":"none","path":"/ws","tls":"tls"}';
-      final String link =
-          'vmess://${base64Encode(utf8.encode(json))}';
+      final String link = 'vmess://${base64Encode(utf8.encode(json))}';
       final Map<String, Object?>? node = parseShareLink(link);
       expect(node, isNotNull);
       expect(node!['name'], '短键节点');

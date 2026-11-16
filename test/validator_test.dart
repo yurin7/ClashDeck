@@ -2,7 +2,8 @@ import 'package:clashdeck/core/validate/validator.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-ValidationReport run(String text) => ConfigValidator.validate(YamlDoc.parse(text));
+ValidationReport run(String text) =>
+    ConfigValidator.validate(YamlDoc.parse(text));
 
 List<String> codes(String text) => run(text).issues.map((e) => e.code).toList();
 
@@ -54,7 +55,10 @@ proxies:
     });
 
     test('缺 type', () {
-      expect(codes('proxies:\n  - name: A\n    server: a\n'), contains('proxy-missing-type'));
+      expect(
+        codes('proxies:\n  - name: A\n    server: a\n'),
+        contains('proxy-missing-type'),
+      );
     });
 
     test('缺 server / port', () {
@@ -63,17 +67,23 @@ proxies:
     });
 
     test('vless 缺 uuid', () {
-      final c = codes('proxies:\n  - name: A\n    type: vless\n    server: a.example.com\n    port: 443\n');
+      final c = codes(
+        'proxies:\n  - name: A\n    type: vless\n    server: a.example.com\n    port: 443\n',
+      );
       expect(c, contains('proxy-missing-uuid'));
     });
 
     test('trojan 缺 password', () {
-      final c = codes('proxies:\n  - name: A\n    type: trojan\n    server: a\n    port: 443\n');
+      final c = codes(
+        'proxies:\n  - name: A\n    type: trojan\n    server: a\n    port: 443\n',
+      );
       expect(c, contains('proxy-missing-password'));
     });
 
     test('wireguard 不要求 server', () {
-      final c = codes('proxies:\n  - name: W\n    type: wireguard\n    private-key: k\n');
+      final c = codes(
+        'proxies:\n  - name: W\n    type: wireguard\n    private-key: k\n',
+      );
       expect(c, isNot(contains('proxy-missing-server')));
       expect(c, isNot(contains('wireguard-missing-key')));
     });
@@ -103,12 +113,17 @@ proxy-groups:
     });
 
     test('缺 type', () {
-      expect(codes('proxy-groups:\n  - name: G\n'), contains('group-missing-type'));
+      expect(
+        codes('proxy-groups:\n  - name: G\n'),
+        contains('group-missing-type'),
+      );
     });
 
     test('未知 type 是警告', () {
       final report = run('proxy-groups:\n  - name: G\n    type: weird\n');
-      final issue = report.issues.firstWhere((e) => e.code == 'unknown-group-type');
+      final issue = report.issues.firstWhere(
+        (e) => e.code == 'unknown-group-type',
+      );
       expect(issue.severity, IssueSeverity.warning);
     });
 
@@ -119,8 +134,10 @@ proxy-groups:
     type: select
     proxies: [GHOST]
 ''');
-      expect(warn.issues.firstWhere((e) => e.code == 'dangling-member').severity,
-          IssueSeverity.warning);
+      expect(
+        warn.issues.firstWhere((e) => e.code == 'dangling-member').severity,
+        IssueSeverity.warning,
+      );
 
       final info = run('''
 proxy-groups:
@@ -129,13 +146,17 @@ proxy-groups:
     include-all: true
     proxies: [GHOST]
 ''');
-      expect(info.issues.firstWhere((e) => e.code == 'dangling-member').severity,
-          IssueSeverity.info);
+      expect(
+        info.issues.firstWhere((e) => e.code == 'dangling-member').severity,
+        IssueSeverity.info,
+      );
     });
 
     test('use 引用未定义的 provider', () {
-      expect(codes('proxy-groups:\n  - name: G\n    type: select\n    use: [P1]\n'),
-          contains('unknown-provider'));
+      expect(
+        codes('proxy-groups:\n  - name: G\n    type: select\n    use: [P1]\n'),
+        contains('unknown-provider'),
+      );
       expect(
         codes('''
 proxy-providers:
@@ -164,11 +185,17 @@ proxy-groups:
 
   group('规则', () {
     test('缺目标', () {
-      expect(codes('rules:\n  - DOMAIN-SUFFIX,google.com\n'), contains('rule-missing-target'));
+      expect(
+        codes('rules:\n  - DOMAIN-SUFFIX,google.com\n'),
+        contains('rule-missing-target'),
+      );
     });
 
     test('目标不存在', () {
-      expect(codes('rules:\n  - DOMAIN-SUFFIX,google.com,NOPE\n'), contains('unknown-rule-target'));
+      expect(
+        codes('rules:\n  - DOMAIN-SUFFIX,google.com,NOPE\n'),
+        contains('unknown-rule-target'),
+      );
     });
 
     test('内置策略与节点都算合法目标', () {
@@ -199,7 +226,10 @@ rules:
     });
 
     test('没有兜底规则', () {
-      expect(codes('rules:\n  - DOMAIN,a.com,DIRECT\n'), contains('no-terminal-rule'));
+      expect(
+        codes('rules:\n  - DOMAIN,a.com,DIRECT\n'),
+        contains('no-terminal-rule'),
+      );
     });
   });
 

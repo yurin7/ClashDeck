@@ -98,6 +98,9 @@ void main() {
       tunFileDescriptor: 0,
     );
     expect(runtime, contains('ClashDeck'));
-    expect(runtime.indexOf('mixed-port'), lessThan(runtime.indexOf('proxies:')));
+    expect(
+      runtime.indexOf('mixed-port'),
+      lessThan(runtime.indexOf('proxies:')),
+    );
   });
 }

@@ -33,14 +33,11 @@ YamlDoc _doc([String text = _base]) => YamlDoc.parse(text);
 void main() {
   group('importRules：纯规则行', () {
     test('插入到 MATCH 之前，且能识别 no-resolve', () {
-      final out = importRules(
-        _doc(),
-        '''
+      final out = importRules(_doc(), '''
 # 我自己的规则
 DOMAIN-SUFFIX,google.com,PROXY
 IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
-''',
-      );
+''');
       expect(out.rulesAdded, 2);
       expect(out.warnings, isEmpty);
       final rules = Profile.from(out.doc).rules.map((r) => r.raw).toList();
@@ -54,14 +51,11 @@ IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
     });
 
     test('允许 YAML 列表前缀与重复规则去重', () {
-      final out = importRules(
-        _doc(),
-        '''
+      final out = importRules(_doc(), '''
 - DOMAIN-SUFFIX,google.com,PROXY
 - domain-suffix, google.com , proxy
 - GEOIP,CN,DIRECT
-''',
-      );
+''');
       expect(out.rulesAdded, 1);
       expect(out.rulesSkipped, 2, reason: '大小写/空格不同的同一条规则 + 已有规则');
     });
@@ -159,9 +153,7 @@ rules:
     });
 
     test('合并 rule-providers / proxy-providers', () {
-      final out = importRules(
-        _doc(),
-        '''
+      final out = importRules(_doc(), '''
 rule-providers:
   cn:
     type: http
@@ -173,9 +165,11 @@ proxy-providers:
     url: https://example.com/sub.yaml
 rules:
   - RULE-SET,cn,DIRECT
-''',
-      );
-      expect(out.providersAdded, ['rule-providers/cn', 'proxy-providers/airport']);
+''');
+      expect(out.providersAdded, [
+        'rule-providers/cn',
+        'proxy-providers/airport',
+      ]);
       final root = out.doc.plainRoot;
       expect((root['rule-providers'] as Map)['cn'], isA<Map>());
       expect((root['proxy-providers'] as Map)['airport'], isA<Map>());
@@ -190,16 +184,13 @@ rules:
     });
 
     test('YAML 片段解析失败时回退到逐行解析并留提示', () {
-      final out = importRules(
-        _doc(),
-        '''
+      final out = importRules(_doc(), '''
 proxy-groups:
   - name: 组
    bad indent
 rules:
   - DOMAIN,x.example.com,PROXY
-''',
-      );
+''');
       expect(out.rulesAdded, 1);
       expect(out.warnings.any((w) => w.contains('按 YAML 解析失败')), isTrue);
     });

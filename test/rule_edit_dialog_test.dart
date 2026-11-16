@@ -12,30 +12,32 @@ Future<Object? Function()> _open(
 }) async {
   Object? captured;
   var done = false;
-  await tester.pumpWidget(MaterialApp(
-    home: Builder(
-      builder: (ctx) => Scaffold(
-        body: Center(
-          child: FilledButton(
-            onPressed: () async {
-              captured = await showDialog<Object>(
-                context: ctx,
-                builder: (_) => RuleEditDialog(
-                  isNew: isNew,
-                  initialType: type,
-                  initialPayload: payload,
-                  initialTarget: target,
-                  targets: const ['DIRECT', 'PROXY'],
-                ),
-              );
-              done = true;
-            },
-            child: const Text('open'),
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (ctx) => Scaffold(
+          body: Center(
+            child: FilledButton(
+              onPressed: () async {
+                captured = await showDialog<Object>(
+                  context: ctx,
+                  builder: (_) => RuleEditDialog(
+                    isNew: isNew,
+                    initialType: type,
+                    initialPayload: payload,
+                    initialTarget: target,
+                    targets: const ['DIRECT', 'PROXY'],
+                  ),
+                );
+                done = true;
+              },
+              child: const Text('open'),
+            ),
           ),
         ),
       ),
     ),
-  ));
+  );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
   return () => done ? captured : throw StateError('对话框还没关闭');
@@ -100,7 +102,12 @@ void main() {
   });
 
   testWidgets('MATCH 不需要匹配内容', (tester) async {
-    final result = await _open(tester, isNew: false, type: 'MATCH', target: 'DIRECT');
+    final result = await _open(
+      tester,
+      isNew: false,
+      type: 'MATCH',
+      target: 'DIRECT',
+    );
     expect(find.text('匹配内容'), findsNothing);
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();

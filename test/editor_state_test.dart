@@ -25,7 +25,16 @@ void main() {
     expect(s.dirty, isFalse);
     expect(s.canUndo, isFalse);
 
-    expect(s.addProxy({'name': 'B', 'type': 'vless', 'server': 'b', 'port': 1, 'uuid': 'u'}), isTrue);
+    expect(
+      s.addProxy({
+        'name': 'B',
+        'type': 'vless',
+        'server': 'b',
+        'port': 1,
+        'uuid': 'u',
+      }),
+      isTrue,
+    );
     expect(s.dirty, isTrue);
     expect(s.canUndo, isTrue);
     expect(s.profile.proxies.map((e) => e.name), ['A', 'B']);
@@ -50,17 +59,35 @@ void main() {
 
   test('新操作会清空重做栈', () {
     final s = EditorState.fromText(base);
-    s.addProxy({'name': 'B', 'type': 'vless', 'server': 'b', 'port': 1, 'uuid': 'u'});
+    s.addProxy({
+      'name': 'B',
+      'type': 'vless',
+      'server': 'b',
+      'port': 1,
+      'uuid': 'u',
+    });
     s.undo();
     expect(s.canRedo, isTrue);
-    s.addProxy({'name': 'C', 'type': 'vless', 'server': 'c', 'port': 1, 'uuid': 'u'});
+    s.addProxy({
+      'name': 'C',
+      'type': 'vless',
+      'server': 'c',
+      'port': 1,
+      'uuid': 'u',
+    });
     expect(s.canRedo, isFalse);
   });
 
   test('撤销栈有上限', () {
     final s = EditorState.fromText(base, historyLimit: 2);
     for (final n in ['1', '2', '3']) {
-      s.addProxy({'name': n, 'type': 'vless', 'server': n, 'port': 1, 'uuid': 'u'});
+      s.addProxy({
+        'name': n,
+        'type': 'vless',
+        'server': n,
+        'port': 1,
+        'uuid': 'u',
+      });
     }
     s.undo();
     s.undo();
@@ -73,7 +100,13 @@ void main() {
     final store = ProfileStore(tmp);
 
     final s = EditorState.fromText(base);
-    s.addProxy({'name': 'B', 'type': 'vless', 'server': 'b', 'port': 1, 'uuid': 'u'});
+    s.addProxy({
+      'name': 'B',
+      'type': 'vless',
+      'server': 'b',
+      'port': 1,
+      'uuid': 'u',
+    });
     await s.saveAs(store, '测试配置');
     expect(s.dirty, isFalse);
     expect(s.fileName, '测试配置.yaml');
@@ -87,7 +120,10 @@ void main() {
     final s = EditorState.fromText('rules:\n  - DOMAIN,a.com,DIRECT\n');
     expect(s.report.issues.map((e) => e.code), contains('no-terminal-rule'));
     s.addRule('MATCH,DIRECT');
-    expect(s.report.issues.map((e) => e.code), isNot(contains('no-terminal-rule')));
+    expect(
+      s.report.issues.map((e) => e.code),
+      isNot(contains('no-terminal-rule')),
+    );
   });
 
   test('replaceText 重置文档并保留撤销', () {

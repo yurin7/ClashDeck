@@ -35,19 +35,21 @@ class _HostState extends State<_Host> {
 void main() {
   testWidgets('保存时把键排成 name/type/server/port/uuid 的可读顺序', (tester) async {
     Map<String, Object?>? captured;
-    await tester.pumpWidget(MaterialApp(
-      home: _Host(
-        initial: const <String, Object?>{
-          // 故意用乱序 + 表单会补 default 的字段
-          'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
-          'port': 443,
-          'server': '198.51.100.7',
-          'type': 'vless',
-          'name': 'n1',
-        },
-        onResult: (r) => captured = r,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _Host(
+          initial: const <String, Object?>{
+            // 故意用乱序 + 表单会补 default 的字段
+            'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
+            'port': 443,
+            'server': '198.51.100.7',
+            'type': 'vless',
+            'name': 'n1',
+          },
+          onResult: (r) => captured = r,
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('保存'));

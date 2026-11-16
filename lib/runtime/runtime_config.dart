@@ -14,6 +14,28 @@ class RuntimeConfig {
 
   static const String defaultStack = 'gvisor';
 
+  /// TUN 网卡地址由**内核**决定，而不是配置里的 `inet4-address`。
+  ///
+  /// mihomo 的 `parseTun()`（`config/config.go`）完全忽略用户写的 `inet4-address`，
+  /// 而是把 `dns.fake-ip-range` 的地址截成 `/30` 当 tun 地址（默认
+  /// `198.18.0.1/16` → `198.18.0.1/30`）。`system` / `mixed` 栈要在网卡上 bind
+  /// 这个地址，所以 `VpnService.Builder` 必须配同一个地址；`gVisor` 只读写 fd、
+  /// 不看地址，因此以前地址不一致时只有它"能用"。
+  ///
+  /// 这里返回内核会算出来的那个地址，交给 Kotlin 侧建网卡，避免两边再对不上。
+  static String tunAddressFor(YamlDoc doc) {
+    final raw = doc.plainAt(['dns', 'fake-ip-range']);
+    final text = raw is String ? raw.trim() : '';
+    if (text.isEmpty) return '198.18.0.1/30';
+    final addr = text.contains('/')
+        ? text.substring(0, text.indexOf('/'))
+        : text;
+    if (addr.isEmpty) return '198.18.0.1/30';
+    return '$addr/30';
+  }
+
+  static const String tunAddress6 = 'fdfe:dcba:9876::1/126';
+
   /// 默认用明文 UDP DNS：DoH 在内核里走 Go 自己的 TLS 栈，某些 ROM / 模拟器
   /// 上会匹配不到系统根证书（实测 `x509: certificate signed by unknown
   /// authority`），一旦 DNS 全废整条链路就废；UDP 53 由 mihomo 自己的
@@ -50,20 +72,28 @@ class RuntimeConfig {
     next = _setIfAbsent(next, ['mode'], 'rule');
 
     if (tunFileDescriptor > 0) {
-      // 栈固定 gVisor：fd 由系统 VpnService 提供、地址也由系统配好，sing-tun 的
-      // system / mixed 栈要自己给网卡套地址再 bind，实测报
-      //   listen tcp4 198.18.0.1:0: bind: cannot assign requested address
-      // 只有 gVisor 能在「别人给的 fd」上跑。MTU 仍以用户配置为准。
+      // fd 由系统 VpnService 提供：v4 地址由内核从 fake-ip-range 推导（写
+      // inet4-address 也没用，见 tunAddressFor 的注释），所以这里不写；v6 地址
+      // 内核是认的，得和 VpnService 配的一致。
       final configuredMtu = doc.plainAt(['tun', 'mtu']);
       final effectiveMtu = configuredMtu is num ? configuredMtu.toInt() : null;
+      final configuredStack = doc.plainAt(['tun', 'stack']);
+      final stack =
+          configuredStack is String && configuredStack.trim().isNotEmpty
+          ? configuredStack.trim().toLowerCase()
+          : defaultStack;
+      final ipv6 = doc.plainAt(['ipv6']);
       final tunOptions = <String, Object?>{
         'enable': true,
-        'stack': defaultStack,
+        'stack': stack,
         'file-descriptor': tunFileDescriptor,
         'auto-route': false,
         'auto-detect-interface': false,
         'dns-hijack': <Object?>['any:53'],
       };
+      if (ipv6 == true) {
+        tunOptions['inet6-address'] = <Object?>[tunAddress6];
+      }
       // 用户没写 mtu 就交给内核默认值，不要强行塞一个数进去。
       if (effectiveMtu != null) tunOptions['mtu'] = effectiveMtu;
       next = _set(next, ['tun'], tunOptions);

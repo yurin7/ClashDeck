@@ -24,7 +24,8 @@ void main() {
   });
 
   test('多行混合链接 + 注释 + 垃圾行，一次导入只取能解析的', () {
-    final text = '''
+    final text =
+        '''
 # 我的机场
 $_vless
 $_trojan
@@ -33,9 +34,7 @@ $_hy2
 ''';
     final out = importLinks(starter(), text, group: 'PROXY');
     expect(out.added, ['香港 01', '美国 01', '台湾 01']);
-    final types = EditorState.fromText(out.doc.text)
-        .profile
-        .proxies
+    final types = EditorState.fromText(out.doc.text).profile.proxies
         .map((p) => p.type)
         .toList();
     expect(types, ['vless', 'trojan', 'hysteria2']);
@@ -66,14 +65,23 @@ $_hy2
 
   test('skipExisting 时按名字跳过已有节点（订阅刷新用）', () {
     final first = importLinks(starter(), _vless);
-    final again = importProxies(
-      first.doc,
-      [
-        {'name': '香港 01', 'type': 'vless', 'server': 'new.example.com', 'port': 443, 'uuid': 'u'},
-        {'name': '新节点', 'type': 'ss', 'server': 'n.example.com', 'port': 8388, 'cipher': 'aes-128-gcm', 'password': 'p'},
-      ],
-      skipExisting: true,
-    );
+    final again = importProxies(first.doc, [
+      {
+        'name': '香港 01',
+        'type': 'vless',
+        'server': 'new.example.com',
+        'port': 443,
+        'uuid': 'u',
+      },
+      {
+        'name': '新节点',
+        'type': 'ss',
+        'server': 'n.example.com',
+        'port': 8388,
+        'cipher': 'aes-128-gcm',
+        'password': 'p',
+      },
+    ], skipExisting: true);
     expect(again.added, ['新节点']);
     expect(again.skipped, ['香港 01']);
     final profile = EditorState.fromText(again.doc.text).profile;

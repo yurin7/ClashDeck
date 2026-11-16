@@ -33,13 +33,11 @@ void main() {
   Future<Object?> callFromNative(MethodCall call) async {
     Object? reply;
     await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .handlePlatformMessage(
-      channelName,
-      codec.encodeMethodCall(call),
-      (data) {
-        reply = data == null ? null : codec.decodeEnvelope(data);
-      },
-    );
+        .handlePlatformMessage(channelName, codec.encodeMethodCall(call), (
+          data,
+        ) {
+          reply = data == null ? null : codec.decodeEnvelope(data);
+        });
     return reply;
   }
 
@@ -61,7 +59,11 @@ void main() {
 
     test('buildRuntimeConfig 用真实 fd 生成运行配置', () async {
       final reply = await callFromNative(
-        const MethodCall('buildRuntimeConfig', {'fd': 7, 'port': 9090, 'secret': 'tok'}),
+        const MethodCall('buildRuntimeConfig', {
+          'fd': 7,
+          'port': 9090,
+          'secret': 'tok',
+        }),
       );
       expect(reply, isA<String>());
       final yaml = reply! as String;
@@ -79,7 +81,9 @@ void main() {
     });
 
     test('onRuntimeState starting → running 会刷新阶段', () async {
-      await callFromNative(const MethodCall('onRuntimeState', {'state': 'starting'}));
+      await callFromNative(
+        const MethodCall('onRuntimeState', {'state': 'starting'}),
+      );
       expect(controller.phase, RuntimePhase.starting);
 
       // running 会开始轮询（回环 9090 上没有内核，ping 会失败并被吞掉）。
@@ -92,15 +96,22 @@ void main() {
 
     test('内核退出会把阶段置为 error 并带原因', () async {
       await callFromNative(
-        const MethodCall('onRuntimeState', {'state': 'exited', 'message': '内核退出（code=2）'}),
+        const MethodCall('onRuntimeState', {
+          'state': 'exited',
+          'message': '内核退出（code=2）',
+        }),
       );
       expect(controller.phase, RuntimePhase.error);
       expect(controller.lastError, contains('code=2'));
     });
 
     test('停止状态回到 idle', () async {
-      await callFromNative(const MethodCall('onRuntimeState', {'state': 'running'}));
-      await callFromNative(const MethodCall('onRuntimeState', {'state': 'stopped'}));
+      await callFromNative(
+        const MethodCall('onRuntimeState', {'state': 'running'}),
+      );
+      await callFromNative(
+        const MethodCall('onRuntimeState', {'state': 'stopped'}),
+      );
       expect(controller.phase, RuntimePhase.idle);
     });
 

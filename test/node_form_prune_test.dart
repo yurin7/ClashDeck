@@ -52,7 +52,11 @@ void main() {
     });
 
     test('未知类型不做任何删改', () {
-      final values = <String, Object?>{'name': 'n1', 'type': 'nope', 'uuid': 'u'};
+      final values = <String, Object?>{
+        'name': 'n1',
+        'type': 'nope',
+        'uuid': 'u',
+      };
       final removed = pruneValuesToSchema('nope', values);
       expect(removed, isEmpty);
       expect(values['uuid'], 'u');
@@ -72,14 +76,21 @@ void main() {
       final removed = pruneValuesToSchema('ss', values);
       expect(removed, containsAll(<String>['uuid', 'reality-opts', 'flow']));
       // client-fingerprint 是 ss 也支持的键
-      expect(
-        values.keys.toSet(),
-        <String>{'name', 'type', 'server', 'port', 'client-fingerprint'},
-      );
+      expect(values.keys.toSet(), <String>{
+        'name',
+        'type',
+        'server',
+        'port',
+        'client-fingerprint',
+      });
     });
 
     test('修改的是传入的 map 本身（调用方依赖这一点）', () {
-      final values = <String, Object?>{'name': 'n1', 'type': 'vless', 'flow': 'x'};
+      final values = <String, Object?>{
+        'name': 'n1',
+        'type': 'vless',
+        'flow': 'x',
+      };
       final removed = pruneValuesToSchema('ss', values);
       expect(removed, ['flow']);
       expect(values.containsKey('flow'), isFalse);

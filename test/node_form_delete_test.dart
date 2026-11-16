@@ -14,20 +14,21 @@ void main() {
             body: Center(
               child: ElevatedButton(
                 onPressed: () async {
-                  popValue = await Navigator.of(context).push<Map<String, Object?>>(
-                    MaterialPageRoute(
-                      builder: (_) => NodeFormPage(
-                        initial: const <String, Object?>{
-                          'name': 'n1',
-                          'type': 'vless',
-                          'server': 'a.example.com',
-                          'port': 443,
-                          'uuid': '11111111-1111-1111-1111-111111111111',
-                        },
-                        onDelete: () async => deleted = true,
-                      ),
-                    ),
-                  );
+                  popValue = await Navigator.of(context)
+                      .push<Map<String, Object?>>(
+                        MaterialPageRoute(
+                          builder: (_) => NodeFormPage(
+                            initial: const <String, Object?>{
+                              'name': 'n1',
+                              'type': 'vless',
+                              'server': 'a.example.com',
+                              'port': 443,
+                              'uuid': '11111111-1111-1111-1111-111111111111',
+                            },
+                            onDelete: () async => deleted = true,
+                          ),
+                        ),
+                      );
                 },
                 child: const Text('open'),
               ),

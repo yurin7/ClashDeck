@@ -200,12 +200,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   await _applyRestart(() => state.setRoutePackages(picked));
                 },
               ),
+              // 技术背景（只给维护者看）：system / mixed 栈会自己给网卡套地址再 bind，
+              // 而本项目的 TUN 是 VpnService 建好、把 fd 传来的，内核只把它当既有网卡
+              // （sing-tun: FileDescriptor != 0 时仅 os.NewFile 包装，stack_system.go /
+              // stack_mixed.go 依赖 interfaceFinder/bindInterface）。实测两个栈能启动、
+              // ip addr 有 198.18.0.1/30，但 core.log 没有任何连接、网页空白；gvisor 正常。
               _ChoiceRow<String>(
                 label: 'TUN 协议栈',
-                description:
-                    'gvisor：纯用户态，已验证可用；system / mixed 在 VpnService 传入 fd 的模式下'
-                    '会出现「能启动但收不到包」（模拟器实测，见 README 的 TUN 说明）。'
-                    '改动需重启内核生效',
+                description: '默认 gvisor；system / mixed 可能无法转发流量',
                 value: state.tunStack,
                 items: const ['gvisor', 'system', 'mixed'],
                 labelOf: (v) => v,

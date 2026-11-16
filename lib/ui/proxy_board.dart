@@ -568,6 +568,15 @@ IconData groupIcon(String type) => switch (type) {
   _ => Icons.account_tree_outlined,
 };
 
+/// 内置出站（DIRECT / REJECT / PASS…）用的小图标。
+IconData _builtinIcon(String name) => switch (name) {
+  'DIRECT' => Icons.arrow_outward,
+  'REJECT' => Icons.block,
+  'REJECT-DROP' => Icons.bolt,
+  'PASS' => Icons.subdirectory_arrow_right,
+  _ => Icons.public,
+};
+
 /// 拖拽高亮时的边框色。
 Color _dropBorder(ColorScheme scheme, bool active) =>
     active ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.7);
@@ -846,6 +855,21 @@ class _GroupCard extends StatelessWidget {
                                 color: scheme.primary,
                               ),
                               label: Text(name),
+                              onDeleted: () => onRemove(name),
+                              deleteButtonTooltipMessage: '从组里移除',
+                            ),
+                          )
+                        else if (Profile.builtinTargets.contains(name))
+                          Tooltip(
+                            message: '内置出站「$name」：由内核直接处理，不是配置里的节点',
+                            child: InputChip(
+                              avatar: Icon(
+                                _builtinIcon(name),
+                                size: 15,
+                                color: scheme.tertiary,
+                              ),
+                              label: Text(name),
+                              labelStyle: mono(12, color: scheme.tertiary),
                               onDeleted: () => onRemove(name),
                               deleteButtonTooltipMessage: '从组里移除',
                             ),

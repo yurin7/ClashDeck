@@ -42,7 +42,7 @@ Clash 系客户端大多只让你旁路改 YAML 文本：想加一个 vless 节�
 
 | 模块 | 状态 |
 | --- | --- |
-| YAML 无损编辑 / 模型 / 30 类体检 / 10 种链接解析 / 链接与订阅导入 | ✅ 229 个单测全绿 |
+| YAML 无损编辑 / 模型 / 30 类体检 / 10 种链接解析 / 链接与订阅导入 | ✅ 239 个单测全绿 |
 | 三页 IA：底部悬浮岛切换「概览 / 配置 / 设置」，一个 `AppShell` 持有唯一内核控制器 | ✅ |
 | 配置列表、导入、分组拖拽、节点动态表单、规则编辑、YAML 视图 | ✅ |
 | mihomo 子进程 + VpnService 传 fd + 运行页 | ✅ 模拟器（Android 16 / x86_64）跑通：TUN 监听 `tun0(fd=158)`、REST 在线、测速 87–148 ms；待真机复验 |
@@ -74,6 +74,10 @@ fork/exec，见 §5）；`GOOS=linux` 会漏掉 mihomo 的 android netlink 修�
 - 组内芯片的删除图标 = 从组移除（节点仍在「节点列表」里），组卡片「添加成员」再拉回来；组里已经包含全部节点和策略组时再点 ⊕ 会给提示；
 - 「添加规则」插到 `MATCH` **之前**（追加到最后内核根本不读），保存后磁盘上的 YAML 是
   `GEOIP,CN,DIRECT` / `DOMAIN-SUFFIX,google.com,PROXY` / `MATCH,PROXY`；
+- 「导入规则」能吃整段 Clash 片段，不只是规则行：`rules` 之外还会把 `proxy-groups`
+  （新建组、给已有的组补成员、成员在当前配置里不存在就跳过并提示）、
+  `rule-providers` / `proxy-providers` 一起合并；规则目标若在配置里不存在，会顺手建一个
+  只含 `DIRECT` 的 `select` 组，保证导入完就能跑；
 - 长按拖拽本身没法用 `adb input` 合成手势可靠触发（每次 `input` 都是独立进程，指针会话不连续），
   测试走的是同一套 `ConfigOps` 的「移除成员 / 添加成员」两条路径。
 
@@ -137,7 +141,7 @@ mihomo 子进程直接拿到同一个 fd 号 → 内核按 `tun.file-descriptor`
 . D:\dev\env.ps1          # Flutter 3.50 / JDK 17 / Go 1.25 / Android SDK 环境变量
 cd E:\project\Agents\ClashAndroid
 
-flutter test              # 229 个单测（Windows 上直接跑，不用设备）
+flutter test              # 239 个单测（Windows 上直接跑，不用设备）
 flutter analyze
 flutter build apk --debug # 产物 build\app\outputs\flutter-apk\app-debug.apk
 ```

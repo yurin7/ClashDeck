@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-import 'rules_tab.dart' show kRuleTypes, kNoResolveTypes, kTerminalRuleTypes;
+import '../core/model/rule_types.dart';
 
 /// 规则编辑对话框的输入结果。
 class RuleDraft {

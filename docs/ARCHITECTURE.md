@@ -59,6 +59,7 @@ lib/
     parse/share_link.dart   vless:// 等 10 种分享链接 + 整段 base64 订阅解析
     parse/subscription.dart 订阅 URL 拉取：明文 / base64 / 整份 YAML 三种订阅体 + subscription-userinfo
     edit/import_links.dart  把链接或订阅节点批量并入**已有**文档（重名去重、可选进组）
+edit/import_rules.dart   导入规则行或整段 Clash 片段（rules + proxy-groups + providers 一起并，缺目标自动建组）
     validate/validator.dart 配置体检：重名、悬空引用、必填缺失、规则兜底等 30 类问题
   data/profile_store.dart   配置文件的落盘（tmp+rename 原子写）、骨架配置生成、订阅地址 sidecar meta
   state/editor_state.dart   ChangeNotifier：当前文档 + 撤销栈 + 脏标记 + 保存
@@ -72,7 +73,7 @@ state/                    editor_state(撤销/重做) + settings_state(读 YAML 
 data/                     profile_store(YAML + <名字>.yaml.meta.json) + app_prefs(app_prefs.json: 运行配置/上次订阅更新)
 core/model/               profile / config_summary / app_settings(ProxyMode/AppRouteMode 等)
   runtime/                  mihomo 子进程编排：mihomo_api / runtime_config / runtime_controller
-test/                       与 core 一一对应的单测 + widget 回归（229 个）
+test/                       与 core 一一对应的单测 + widget 回归（239 个）
 android/app/src/main/kotlin/dev/clashdeck/
   ClashVpnService.kt        VpnService：建 TUN → 把 fd 交给内核
   MihomoCore.kt             mihomo 子进程生命周期 + 日志环
@@ -199,7 +200,7 @@ VpnService.Builder.establish() -> ParcelFileDescriptor
 
 | 阶段 | 交付 | 状态 |
 | --- | --- | --- |
-| M1 | 配置读取 + 模型 + 编辑操作 + 体检 + 分享链接/订阅解析 + 单测 | ✅ 229 个测试全绿 |
+| M1 | 配置读取 + 模型 + 编辑操作 + 体检 + 分享链接/订阅解析 + 单测 | ✅ 239 个测试全绿 |
 | M2 | Flutter UI：配置列表、分组视图（跨组拖拽）、节点动态表单、规则编辑、YAML 视图 | ✅ 已实现，模拟器逐条走通（新增节点、组内移除/添加成员、新增规则落在 MATCH 之前、保存落盘） |
 | M3 | 导入（粘贴链接/订阅/YAML）、另存为、原子保存 | ✅ 已实现 |
 | M4 | 内核：mihomo 子进程 + VpnService 传 fd + 运行页（状态/流量/延迟/日志/热重载） | ✅ 模拟器（x86_64 / Android 16）跑通：TUN 监听成功、REST 在线、延迟 87–148 ms；待真机复验 |

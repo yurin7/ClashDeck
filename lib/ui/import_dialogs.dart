@@ -58,6 +58,58 @@ Future<String?> showPasteLinksDialog(
   );
 }
 
+/// 「导入规则」对话框：粘贴规则行或 Clash 配置片段，返回原文；取消返回 null。
+Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
+  final ctrl = TextEditingController(text: initial ?? '');
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('导入规则'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              minLines: 8,
+              maxLines: 14,
+              autofocus: true,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              decoration: const InputDecoration(
+                labelText: '一行一条规则，也可以粘贴配置片段',
+                hintText:
+                    'DOMAIN-SUFFIX,google.com,PROXY\n'
+                    'GEOIP,CN,DIRECT,no-resolve\n'
+                    'MATCH,PROXY',
+                alignLabelWithHint: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '认 YAML 片段里的 rules / proxy-groups / rule-providers / '
+              'proxy-providers：策略组会一起合并（成员在当前配置里不存在就跳过），'
+              '规则会插到 MATCH 之前，重复的自动跳过。',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, ctrl.text),
+          child: const Text('导入'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// 「从订阅链接导入」对话框的返回值。
 class SubscriptionInput {
   const SubscriptionInput({required this.url, this.result});

@@ -1,48 +1,15 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
+import '../core/edit/import_rules.dart';
 import '../core/model/profile.dart';
+import '../core/model/rule_types.dart';
+import '../core/yaml/yaml_doc.dart';
 import '../state/editor_state.dart';
+import 'import_dialogs.dart';
 import 'rule_edit_dialog.dart';
 import 'theme.dart';
 import 'widgets.dart';
-
-/// 常见规则类型（顺序 = 下拉顺序）。
-const List<String> kRuleTypes = [
-  'DOMAIN',
-  'DOMAIN-SUFFIX',
-  'DOMAIN-KEYWORD',
-  'DOMAIN-REGEX',
-  'GEOSITE',
-  'GEOIP',
-  'IP-CIDR',
-  'IP-CIDR6',
-  'SRC-IP-CIDR',
-  'SRC-GEOIP',
-  'DST-PORT',
-  'SRC-PORT',
-  'PROCESS-NAME',
-  'PROCESS-PATH',
-  'PROCESS-NAME-REGEX',
-  'RULE-SET',
-  'NETWORK',
-  'IN-TYPE',
-  'AND',
-  'OR',
-  'NOT',
-  'MATCH',
-];
-
-/// 支持 no-resolve 的规则类型。
-const Set<String> kNoResolveTypes = {
-  'IP-CIDR',
-  'IP-CIDR6',
-  'SRC-IP-CIDR',
-  'GEOIP',
-  'SRC-GEOIP',
-};
-
-const Set<String> kTerminalRuleTypes = {'MATCH', 'FINAL'};
 
 class RulesTab extends StatefulWidget {
   const RulesTab({super.key, required this.state});
@@ -104,6 +71,45 @@ class _RulesTabState extends State<RulesTab> {
         ? s.addRule(rule, at: terminalAt < 0 ? null : terminalAt)
         : s.apply((d) => ConfigOps.updateRule(d, index, rule));
     if (!ok) _fail();
+  }
+
+  /// 导入规则：支持纯规则行，也支持带 proxy-groups / provider 的配置片段。
+  Future<void> _importRules() async {
+    final text = await showRuleImportDialog(context);
+    if (text == null || text.trim().isEmpty) return;
+    final RuleImportOutcome outcome;
+    try {
+      outcome = importRules(s.doc, text);
+    } on ConfigEditException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+    if (outcome.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              outcome.warnings.isEmpty
+                  ? '没有可导入的规则'
+                  : '没有可导入的规则：${outcome.warnings.first}',
+            ),
+          ),
+        );
+      return;
+    }
+    if (!s.apply((_) => outcome.doc)) {
+      _fail();
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text('已导入：${outcome.summary}')));
   }
 
   @override
@@ -207,13 +213,22 @@ class _RulesTabState extends State<RulesTab> {
               Insets.lg,
               Insets.md,
             ),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                onPressed: () => _editRule(),
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('添加规则'),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _editRule(),
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('添加规则'),
+                  ),
+                ),
+                const SizedBox(width: Insets.sm),
+                OutlinedButton.icon(
+                  onPressed: _importRules,
+                  icon: const Icon(Icons.file_download_outlined, size: 20),
+                  label: const Text('导入规则'),
+                ),
+              ],
             ),
           ),
         ),

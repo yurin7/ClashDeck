@@ -119,6 +119,24 @@ git clone --depth 1 -b Alpha https://github.com/MetaCubeX/mihomo D:\dev\_downloa
 
 产物会直接写进 `jniLibs/<abi>/libmihomo.so`。armeabi-v7a 没有内核，32 位设备上无法启动。
 
+## 发布
+
+打 tag 就会自动发版（不需要本地打包）：
+
+```powershell
+git tag -a v0.1.1 -m "ClashDeck v0.1.1"
+git push origin v0.1.1
+```
+
+GitHub Actions 会：
+
+1. 在 runner 上用 `tool/build_core.sh` 现编 mihomo 内核（arm64-v8a / x86_64，含 anet 构建约束补丁）；
+2. `flutter analyze` + `flutter test`；
+3. `flutter build apk --release --split-per-abi`，只产出有内核的两个 ABI；
+4. 把 `ClashDeck-<版本>-<abi>.apk` 挂到该 tag 的 Release 上，并生成变更说明。
+
+流水线页面：<https://github.com/yurin7/ClashDeck/actions>
+
 ## 目录
 
 ```

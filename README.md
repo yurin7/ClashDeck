@@ -8,7 +8,7 @@ Clash 系客户端大多只让你旁路改 YAML 文本：想加一个 vless 节�
 - **可视化加节点**：13 种协议（vless / vmess / trojan / ss / ssr / socks5 / http / hysteria2 /
   tuic / wireguard / snell / ssh / anytls）的字段表内建，表单按协议动态生成，TLS / 传输层
   （ws / grpc / h2 / http / reality / ech）分组折叠；
-- **跨组拖拽**：长按节点芯片拖到别的策略组，或拖回"未归类节点"池；
+- **跨组拖拽**：长按节点芯片拖到别的策略组；拖到顶部「节点列表」= 从当前组移除。顶部「节点列表」默认折叠，展开后能看到**全部**节点（不管在不在组里）；
 - **规则可视化**：拖动排序、点选改目标、`no-resolve` 勾选、`MATCH` 兜底检查；
 - **粘贴即导入**：`vless://` `vmess://` `ss://` `trojan://` … 分享链接、整段 base64 订阅、
   或者一份完整 YAML，一种输入框全接；**导入可以落到已有配置里**（不是只能新建），
@@ -46,7 +46,7 @@ Clash 系客户端大多只让你旁路改 YAML 文本：想加一个 vless 节�
 | 三页 IA：底部悬浮岛切换「概览 / 配置 / 设置」，一个 `AppShell` 持有唯一内核控制器 | ✅ |
 | 配置列表、导入、分组拖拽、节点动态表单、规则编辑、YAML 视图 | ✅ |
 | mihomo 子进程 + VpnService 传 fd + 运行页 | ✅ 模拟器（Android 16 / x86_64）跑通：TUN 监听 `tun0(fd=158)`、REST 在线、测速 87–148 ms；待真机复验 |
-| 代理设置开关化（TUN/仅端口、分应用代理、TUN 栈与 MTU、DNS、分流模式、局域网、IPv6、订阅自动更新、日志级别） | ✅ 逐项写进 YAML 或 sidecar 并验证生效 |
+| 代理设置开关化（TUN/仅端口、分应用代理、TUN MTU、DNS、分流模式、局域网、IPv6、订阅自动更新、日志级别） | ✅ 逐项写进 YAML 或 sidecar 并验证生效 |
 
 关于 TUN：**支持**，而且是默认模式——`VpnService.Builder` 建 TUN、`detachFd()` 后把 fd 交给
 mihomo（`tun.file-descriptor`），内核在子进程里从 TUN 收包。协议栈固定 **gVisor**：system /
@@ -71,7 +71,7 @@ fork/exec，见 §5）；`GOOS=linux` 会漏掉 mihomo 的 android netlink 修�
 
 - 「添加节点」按协议渲染 schema 表单 → 保存 → 选择加入哪个组；写出的 YAML 键序是人读的顺序
   （`name / type / server / port / uuid …`），注释与顶层顺序原样保留；
-- 组内芯片的删除图标 = 从组移除（节点回到「未归类节点」池），组卡片「添加成员」再拉回来；
+- 组内芯片的删除图标 = 从组移除（节点仍在「节点列表」里），组卡片「添加成员」再拉回来；组里已经包含全部节点和策略组时再点 ⊕ 会给提示；
 - 「添加规则」插到 `MATCH` **之前**（追加到最后内核根本不读），保存后磁盘上的 YAML 是
   `GEOIP,CN,DIRECT` / `DOMAIN-SUFFIX,google.com,PROXY` / `MATCH,PROXY`；
 - 长按拖拽本身没法用 `adb input` 合成手势可靠触发（每次 `input` 都是独立进程，指针会话不连续），
@@ -100,7 +100,7 @@ fork/exec，见 §5）；`GOOS=linux` 会漏掉 mihomo 的 android netlink 修�
 | --- | --- | --- |
 | 运行 | 代理模式：**TUN 模式** / **仅代理端口** | meta `app.proxyMode`；决定起不起 VPN 与 TUN |
 | 运行 | 分应用代理：全部应用 / 仅选中的应用 / 排除选中的应用 + 选择应用（`listApps` 读已安装应用） | meta `app.routeMode` + `app.routePackages` |
-| 运行 | TUN 栈：gvisor / system / mixed | YAML `tun.stack` |
+| 运行 | TUN 协议栈：固定 gVisor（只读说明，不可选） | YAML `tun.stack`（运行时统一强制 gvisor） |
 | 运行 | TUN MTU：1500 / 4064 / 9000 | YAML `tun.mtu` |
 | 分流 | 模式：规则 / 全局 / 直连 | YAML `mode` |
 | 分流 | 允许局域网 | YAML `allow-lan`（开启后同 Wi-Fi 可用本机 7890） |
@@ -182,3 +182,5 @@ lib/runtime/  mihomo REST 客户端、运行配置生成、子进程控制器、
 android/app/src/main/kotlin/dev/clashdeck/   VpnService、内核进程、MethodChannel 桥
 assets/geo/    随包携带的 mihomo GEOIP/GEOSITE 数据（8.0 + 4.2 MB），首启铺到内核工作目录
 ```
+
+

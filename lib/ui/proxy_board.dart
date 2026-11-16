@@ -442,7 +442,6 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final profile = s.profile;
-    final ungrouped = profile.ungroupedNodes;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
@@ -456,8 +455,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
             style: mono(11, color: scheme.onSurfaceVariant, letterSpacing: 0.3),
           ),
         ),
-        _PoolCard(
-          nodes: ungrouped,
+        _NodeListCard(
+          nodes: profile.proxies,
           onOpen: _editNode,
           onMove: (n) => _moveDialog(n, null),
           onDelete: _deleteNode,
@@ -479,6 +478,19 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
               onAddMember: () async {
+                final hasCandidate =
+                    profile.proxies.any(
+                      (p) => !group.members.contains(p.name),
+                    ) ||
+                    profile.groups.any(
+                      (g) =>
+                          g.name != group.name &&
+                          !group.members.contains(g.name),
+                    );
+                if (!hasCandidate) {
+                  _toast('「${group.name}」里已经包含所有节点和策略组，没有可添加的了');
+                  return;
+                }
                 final picked = await _pickNode(profile, group);
                 if (picked == null) return;
                 if (!s.addGroupMember(group.name, picked)) _fail();
@@ -560,8 +572,12 @@ IconData groupIcon(String type) => switch (type) {
 Color _dropBorder(ColorScheme scheme, bool active) =>
     active ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.7);
 
-class _PoolCard extends StatelessWidget {
-  const _PoolCard({
+/// 全部节点列表：默认折叠，点标题展开。
+///
+/// 这里列出 `proxies:` 里的所有节点，不管它有没有被加进某个策略组；
+/// 从组里把芯片拖到这张卡上 = 从那个组移除（节点本身保留）。
+class _NodeListCard extends StatefulWidget {
+  const _NodeListCard({
     required this.nodes,
     required this.onOpen,
     required this.onMove,
@@ -576,11 +592,19 @@ class _PoolCard extends StatelessWidget {
   final void Function(_DragData) onDrop;
 
   @override
+  State<_NodeListCard> createState() => _NodeListCardState();
+}
+
+class _NodeListCardState extends State<_NodeListCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final count = widget.nodes.length;
     return DragTarget<_DragData>(
       onWillAcceptWithDetails: (d) => d.data.fromGroup != null,
-      onAcceptWithDetails: (d) => onDrop(d.data),
+      onAcceptWithDetails: (d) => widget.onDrop(d.data),
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
         return AppCard(
@@ -590,49 +614,61 @@ class _PoolCard extends StatelessWidget {
             Insets.lg,
             Insets.md,
             Insets.lg,
-            Insets.lg,
+            Insets.md,
           ),
+          onTap: () => setState(() => _expanded = !_expanded),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Icon(
-                    active ? Icons.move_to_inbox : Icons.inbox_outlined,
+                    active ? Icons.move_to_inbox : Icons.list_alt_outlined,
                     size: 17,
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: Insets.sm),
-                  Text('未归类节点', style: display(15, weight: 600)),
-                  const Spacer(),
+                  Text('节点列表', style: display(15, weight: 600)),
+                  const SizedBox(width: Insets.sm),
                   Text(
-                    '${nodes.length}',
+                    '$count',
                     style: mono(11.5, color: scheme.onSurfaceVariant),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ],
               ),
               const SizedBox(height: 3),
               Text(
-                active ? '松手就从当前组移除' : '不在任何组里的节点',
+                active
+                    ? '松手就从当前组移除'
+                    : (_expanded ? '点节点编辑，长按拖到组里' : '点这里展开；所有节点都在，不管有没有进组'),
                 style: hintStyle(context),
               ),
-              if (nodes.isNotEmpty) ...[
+              if (_expanded) ...[
                 const SizedBox(height: Insets.md),
-                Wrap(
-                  spacing: Insets.sm,
-                  runSpacing: Insets.sm,
-                  children: [
-                    for (final n in nodes)
-                      NodeChip(
-                        node: n,
-                        fromGroup: null,
-                        onOpen: () => onOpen(n),
-                        onMove: () => onMove(n),
-                        onDelete: () => onDelete(n),
-                        onRemove: null,
-                      ),
-                  ],
-                ),
+                if (count == 0)
+                  Text('还没有节点：点下面「添加节点」。', style: hintStyle(context))
+                else
+                  Wrap(
+                    spacing: Insets.sm,
+                    runSpacing: Insets.sm,
+                    children: [
+                      for (final n in widget.nodes)
+                        NodeChip(
+                          node: n,
+                          fromGroup: null,
+                          onOpen: () => widget.onOpen(n),
+                          onMove: () => widget.onMove(n),
+                          onDelete: () => widget.onDelete(n),
+                          onRemove: null,
+                        ),
+                    ],
+                  ),
               ],
             ],
           ),

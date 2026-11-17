@@ -1,11 +1,24 @@
 # 一次性生成固定的发布签名，让后续每个 APK 都能覆盖安装升级。
 # 用法：在仓库根目录执行  pwsh -File tool\setup_signing.ps1
-# 生成的 android/app/clashdeck-release.jks 与 android/key.properties 要一起提交进仓库，
-# CI 才会用同一个 key 签名（否则每次都是新 key，装新包前必须先卸载旧包）。
+#
+# 【绝不提交】keystore 与 key.properties 都只放在仓库外的用户目录
+# （默认 $env:USERPROFILE\.clashdeck\），本仓库是公开的，任何 jks / key.properties
+# 出现在仓库里都等于把发布私钥公开。CI 不从仓库读 key，而是从
+# GitHub Actions Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS /
+# KEY_PASSWORD）还原同一把 key。
+# 已经有一把生产 key 时不要重跑本脚本，改用 key.properties 指向那把 key。
+
+[CmdletBinding()]
+param(
+    # 已经有生产 key 时不要加这个参数：脚本默认只补 key.properties，不覆盖已有 keystore。
+    [switch]$Force
+)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$keystore = Join-Path $root 'android\app\clashdeck-release.jks'
+$outDir = Join-Path $env:USERPROFILE '.clashdeck'
+if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+$keystore = Join-Path $outDir 'clashdeck-release.jks'
 $propsFile = Join-Path $root 'android\key.properties'
 
 $alias = 'clashdeck'
@@ -13,9 +26,10 @@ $storePass = 'clashdeck2026'
 $keyPass = 'clashdeck2026'
 $dname = 'CN=ClashDeck, OU=dev, O=ClashDeck, L=NA, ST=NA, C=CN'
 
-if (Test-Path $keystore) {
-    Write-Host "keystore 已存在，跳过生成：$keystore"
+if ((Test-Path $keystore) -and -not $Force) {
+    Write-Host "keystore 已存在，保留原 key（要重新生成请加 -Force，但那会让已发布的包无法覆盖升级）：$keystore"
 } else {
+    if (Test-Path $keystore) { Write-Host "按 -Force 覆盖已有 keystore：$keystore" }
     $keytool = (Get-Command keytool -ErrorAction SilentlyContinue).Source
     if (-not $keytool) {
         foreach ($cand in @(
@@ -38,16 +52,29 @@ $props = @(
     "storePassword=$storePass",
     "keyPassword=$keyPass",
     "keyAlias=$alias",
-    "storeFile=clashdeck-release.jks"
+    "storeFile=$($keystore -replace '\\','/')"
 ) -join "`r`n"
+# key.properties 已在 .gitignore 里，只用于本地 release 构建。
 [System.IO.File]::WriteAllText($propsFile, $props + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "已写入：$propsFile"
+Write-Host "已写入：$propsFile（本文件不进仓库）"
+
+$secretsFile = Join-Path $outDir 'signing-secrets.txt'
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($keystore))
+@(
+    'KEYSTORE_BASE64 (一整行，别换行)='
+    $b64
+    ''
+    "KEYSTORE_PASSWORD=$storePass"
+    "KEY_ALIAS=$alias"
+    "KEY_PASSWORD=$keyPass"
+) -join "`r`n" | Set-Content -Path $secretsFile -Encoding ascii
 Write-Host ''
 Write-Host '本地构建现在就会用这把 key 签名，可以直接覆盖安装旧版本。'
-Write-Host '要让 GitHub Actions 也用同一把 key，把下面这条命令的输出存进仓库的 Secrets：'
-Write-Host "  [Convert]::ToBase64String([IO.File]::ReadAllBytes('$keystore'))"
-Write-Host '对应变量（Settings → Secrets and variables → Actions → New repository secret）：'
-Write-Host '  KEYSTORE_BASE64    = 上面命令输出的一整行 base64'
-Write-Host '  KEYSTORE_PASSWORD  = clashdeck2026'
-Write-Host '  KEY_ALIAS          = clashdeck'
-Write-Host '  KEY_PASSWORD       = clashdeck2026'
+Write-Host "base64 已写到仓库外：$secretsFile"
+Write-Host '把它贴进仓库的 Secrets（Settings → Secrets and variables → Actions）：'
+Write-Host '  KEYSTORE_BASE64    = 上面文件里的 base64 一整行'
+Write-Host '  KEYSTORE_PASSWORD  = 见文件'
+Write-Host '  KEY_ALIAS          = 见文件'
+Write-Host '  KEY_PASSWORD       = 见文件'
+Write-Host ''
+Write-Host '记住：keystore 与 key.properties 都不要提交，也不要贴到 issue/聊天里。'

@@ -10,6 +10,7 @@ import '../core/edit/rule_presets.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import '../core/net/fetch_text.dart';
+import '../data/rule_cache.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
@@ -235,6 +236,9 @@ class _RulesTabState extends State<RulesTab> {
         _toast('已取消导入');
         return;
       }
+      // 拉到就落本地缓存：内核自己拉 provider 在部分网络下会 EOF，
+      // 所以规则集一律走 file provider，运行时不再依赖出网。
+      final cache = await RuleCache.open();
       for (final item in fetched) {
         final body = item.body;
         if (body == null) {
@@ -242,6 +246,13 @@ class _RulesTabState extends State<RulesTab> {
           failedPresets.add(item.preset);
           continue;
         }
+        await cache.write(
+          item.preset.id,
+          item.text == null
+              ? ruleCacheBody(body.entries, body.behavior)
+              : ruleCacheBodyFromRaw(item.text!, body.behavior),
+          sourceUrl: item.preset.url,
+        );
         final groupName = choice.groupFor(item.preset);
         try {
           final outcome = importRuleProvider(
@@ -252,6 +263,7 @@ class _RulesTabState extends State<RulesTab> {
             // 目标写固定代理组会让「同名组」形同虚设。
             target: groupName,
             url: item.preset.url,
+            filePath: cache.pathFor(item.preset.id),
             groupName: groupName,
             groupMembers: allProxies,
           );
@@ -369,7 +381,12 @@ class _RulesTabState extends State<RulesTab> {
       if (parsed == null) {
         return _PresetFetch(preset, error: '没识别出规则集内容', url: fetched.url);
       }
-      return _PresetFetch(preset, body: parsed, url: fetched.url);
+      return _PresetFetch(
+        preset,
+        body: parsed,
+        url: fetched.url,
+        text: fetched.text,
+      );
     } on ConfigEditException catch (e) {
       return _PresetFetch(preset, error: e.message);
     }
@@ -717,10 +734,13 @@ class _RuleRow extends StatelessWidget {
 
 /// 抓取一个预设规则集的结果。
 class _PresetFetch {
-  const _PresetFetch(this.preset, {this.body, this.error, this.url});
+  const _PresetFetch(this.preset, {this.body, this.error, this.url, this.text});
 
   final RulePreset preset;
   final RuleProviderBody? body;
+
+  /// 拉到手的原文。缓存直接写原文：ACL 的 classical 行不能经过 payload 重排。
+  final String? text;
   final String? error;
 
   /// 实际拉到内容的地址（可能是镜像）。写 rule-providers 时用它。
@@ -776,6 +796,40 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
   /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
   final Map<String, String> _rowGroups = <String, String>{};
   int _tab = 0;
+
+  /// 「缓存于 <时间>」：本地规则集缓存最近一次写入时间。
+  String _cacheLabel = '';
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCacheLabel());
+  }
+
+  Future<void> _loadCacheLabel() async {
+    try {
+      final cache = await RuleCache.open();
+      DateTime? latest;
+      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
+        final at = await cache.fetchedAt(preset.id);
+        if (at != null && (latest == null || at.isAfter(latest))) latest = at;
+      }
+      if (!mounted) return;
+      setState(() {
+        _cacheLabel = latest == null
+            ? '规则集尚未缓存，点「导入」会下载并缓存到本机'
+            : '缓存于 ${_formatCacheTime(latest)}（再次导入会刷新）';
+      });
+    } catch (_) {
+      // 缓存时间只是提示，读不到就不显示。
+    }
+  }
+
+  String _formatCacheTime(DateTime at) {
+    final local = at.toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${local.month}/${local.day} ${two(local.hour)}:${two(local.minute)}';
+  }
 
   /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
   String _groupFor(RulePreset preset) => _rowGroups[preset.id] ?? '';
@@ -858,7 +912,15 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                           '每条写成 GEOSITE（插在 MATCH 之前）。',
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: Insets.sm),
+              if (_cacheLabel.isNotEmpty) ...[
+                const SizedBox(height: Insets.xs),
+                Text(
+                  _cacheLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
               const SizedBox(height: Insets.sm),
               Row(
                 children: [

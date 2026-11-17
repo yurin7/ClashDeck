@@ -295,6 +295,14 @@ class _StatusCard extends StatelessWidget {
               ),
             ),
           ],
+          if (runtime.missingRuleCaches > 0) ...[
+            const SizedBox(height: Insets.md),
+            Text(
+              '规则缓存缺失，${runtime.missingRuleCaches} 个规则集未生效；'
+              '重新导入该配置的规则集即可补齐。',
+              style: TextStyle(fontSize: 12, height: 1.4, color: semantic.warn),
+            ),
+          ],
         ],
       ),
     );

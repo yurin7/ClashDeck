@@ -611,7 +611,8 @@ String? _nameFromUrl(String? url) {
 
 /// 把一份规则集写进 `rule-providers`，并在兜底规则之前加一条 `RULE-SET`。
 ///
-/// - 给了 [url]：写成 `type: http`（内核按 interval 自动更新），path 用
+/// - 给了 [filePath]：写成 `type: file`，内核直接读本地缓存，运行时不联网。
+/// - 只给 [url] 不给 [filePath]：写成 `type: http`（内核按 interval 自动更新）；
 ///   `./ruleset/<name>.yaml`，和社区配置的习惯一致；
 /// - 没给 URL：写成 `type: inline`，条目直接嵌进配置。
 RuleImportOutcome importRuleProvider(
@@ -620,6 +621,9 @@ RuleImportOutcome importRuleProvider(
   required String name,
   required String target,
   String? url,
+
+  /// 本地缓存文件的绝对路径；给了就写 `type: file`。
+  String? filePath,
   bool createMissingGroups = true,
   int interval = 86400,
   String? groupName,
@@ -645,22 +649,32 @@ RuleImportOutcome importRuleProvider(
       ? existingProviders[providerName]
       : null;
   if (existing is Map) {
-    // 同名 provider 已存在：behavior 一致就沿用，不一致就纠正。
+    // 同名 provider 已存在：behavior / 来源不一致就纠正。
     // 老配置里 ACL4SSR 这类 classical 列表曾被写成 domain，内核按 domain
     // 解析带类型前缀的行会失败，所以这里必须覆盖而不是静默跳过。
     final current = existing['behavior'];
     final currentBehavior = current is String ? current : null;
     final existingUrl = existing['url'];
     final currentUrl = existingUrl is String ? existingUrl.trim() : '';
+    final existingPath = existing['path'];
+    final currentPath = existingPath is String ? existingPath.trim() : '';
+    final existingType = existing['type'];
+    final currentType = existingType is String ? existingType.trim() : '';
+    final wantedPath = filePath == null ? '' : filePath.trim();
     // 手机上的内核运行时也要来拉这个 provider，raw.githubusercontent
-    // 在国内经常拉不动，所以落盘一律写成镜像地址；老配置里的直连地址
-    // 也要借这次导入顺手纠正，否则内核跑起来还是拉不动。
+    // 在国内经常拉不动，所以 http 回退也一律写镜像地址。
     final wantedUrl = url == null || url.trim().isEmpty
         ? currentUrl
         : GithubMirror.preferred(url);
     final behaviorChanged = currentBehavior != body.behavior;
-    final urlChanged = wantedUrl.isNotEmpty && wantedUrl != currentUrl;
-    if (!behaviorChanged && !urlChanged) {
+    final useFile = wantedPath.isNotEmpty;
+    final typeChanged = useFile
+        ? (currentType != 'file' ||
+              currentPath != wantedPath ||
+              currentUrl.isNotEmpty)
+        : (wantedUrl.isNotEmpty &&
+              (currentType != 'http' || wantedUrl != currentUrl));
+    if (!behaviorChanged && !typeChanged) {
       warnings.add('rule-providers 里已有「$providerName」，沿用原有定义');
     } else {
       final merged = <String, Object?>{
@@ -668,7 +682,13 @@ RuleImportOutcome importRuleProvider(
           if (entry.key is String) entry.key as String: entry.value,
       };
       if (behaviorChanged) merged['behavior'] = body.behavior;
-      if (wantedUrl.isNotEmpty) {
+      if (useFile) {
+        merged['type'] = 'file';
+        merged['path'] = wantedPath;
+        // 换成 file 之后内核不该再联网，url / interval 一并清掉。
+        merged.remove('url');
+        merged.remove('interval');
+      } else if (wantedUrl.isNotEmpty) {
         merged['type'] = 'http';
         merged['url'] = wantedUrl;
         merged['path'] = merged['path'] ?? './ruleset/$providerName.yaml';
@@ -685,13 +705,23 @@ RuleImportOutcome importRuleProvider(
           '改成 ${body.behavior}（旧定义会让内核解析失败）',
         );
       }
-      if (urlChanged) {
+      if (useFile && currentUrl.isNotEmpty) {
+        warnings.add('「$providerName」改用本地缓存（内核不再联网拉取）');
+      } else if (!useFile && typeChanged) {
         warnings.add('「$providerName」的地址换成镜像（内核运行时也要拉得动）');
       }
     }
   } else {
     final Map<String, Object?> provider;
-    if (url != null && url.trim().isNotEmpty) {
+    final cachedPath = filePath == null ? '' : filePath.trim();
+    if (cachedPath.isNotEmpty) {
+      // 规则集正文已经落盘，内核直接读文件，运行时不依赖出网。
+      provider = {
+        'type': 'file',
+        'behavior': body.behavior,
+        'path': cachedPath,
+      };
+    } else if (url != null && url.trim().isNotEmpty) {
       provider = {
         'type': 'http',
         'behavior': body.behavior,

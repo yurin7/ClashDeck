@@ -5,7 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/edit/import_rules.dart';
 import '../core/model/app_settings.dart';
+import '../core/net/fetch_text.dart';
+import '../data/rule_cache.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'geodata.dart';
 import 'mihomo_api.dart';
@@ -62,6 +65,9 @@ class RuntimeController extends ChangeNotifier {
 
   /// 本次启动是否已经把设置里的全局出口应用过（只做一次）。
   bool _globalExitApplied = false;
+
+  /// 规则集缓存缺失（补拉也失败）的个数，供 UI 提示「N 个规则集未生效」。
+  int _missingRuleCaches = 0;
   int _up = 0;
   int _down = 0;
 
@@ -89,6 +95,9 @@ class RuntimeController extends ChangeNotifier {
   int get up => _up;
   int get down => _down;
 
+  /// 本次启动时补拉也失败的规则集缓存个数（UI 用来提示「N 个规则集未生效」）。
+  int get missingRuleCaches => _missingRuleCaches;
+
   bool get isBusy =>
       _phase == RuntimePhase.starting || _phase == RuntimePhase.stopping;
 
@@ -102,6 +111,53 @@ class RuntimeController extends ChangeNotifier {
     _stopPolling();
     _channel.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  /// 配置里 `type: file` 的规则集，缓存文件丢了就用镜像链补拉一次。
+  ///
+  /// 失败不阻塞启动：内核只是少这几条规则，个数留给 UI 提示。
+  Future<void> _backfillRuleCaches() async {
+    _missingRuleCaches = 0;
+    try {
+      final providers = configProvider().plainAt(['rule-providers']);
+      if (providers is! Map) return;
+      RuleCache? cache;
+      var missing = 0;
+      for (final entry in providers.entries) {
+        final value = entry.value;
+        if (value is! Map || '${value['type']}' != 'file') continue;
+        final path = value['path'];
+        if (path is! String || path.isEmpty) continue;
+        if (await File(path).exists()) continue;
+        cache ??= await RuleCache.open();
+        if (!await _refillRuleCache(cache, '${entry.key}', path)) missing += 1;
+      }
+      _missingRuleCaches = missing;
+      if (missing > 0) notifyListeners();
+    } catch (_) {
+      // 补拉纯属兜底，任何异常都不该挡住启动。
+    }
+  }
+
+  Future<bool> _refillRuleCache(RuleCache cache, String id, String path) async {
+    final url = await cache.sourceUrl(id);
+    if (url == null || url.isEmpty) return false;
+    try {
+      final fetched = await fetchTextWithMirrors(url, attemptsPerMirror: 1);
+      final body = parseRuleProviderBody(fetched.text, url: fetched.url);
+      if (body == null) return false;
+      final text = ruleCacheBody(body.entries, body.behavior);
+      final target = File(path);
+      if (target.path == cache.pathFor(id)) {
+        await cache.write(id, text, sourceUrl: url);
+      } else {
+        await target.parent.create(recursive: true);
+        await target.writeAsString(text, flush: true);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> start() async {
@@ -120,6 +176,9 @@ class RuntimeController extends ChangeNotifier {
       // 先把 GEOIP/GEOSITE 数据铺进工作目录：内核缺数据会同步去 GitHub 下载，
       // 国内基本必定超时，带 GEOIP 规则的配置会直接启动失败。
       await Geodata.ensure(Directory(_workDir!));
+      // 换机/清数据后 `type: file` 的规则集会找不到文件，这里先补一次；
+      // 补不上也不阻塞启动，只把个数报给 UI。
+      await _backfillRuleCaches();
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
       final config = configProvider();
       final rawMtu = config.plainAt(['tun', 'mtu']);

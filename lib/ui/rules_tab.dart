@@ -1460,25 +1460,11 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     setState(() => _rowGroups[preset.id] = value);
   }
 
-  /// 这条 GEOSITE 当前要写进的组名（没选 = 清洗后的标签名）。
-  String _geositeGroupFor(GeositePick pick) =>
-      (_geositeGroups[pick.code] ?? '').isEmpty
-      ? sanitizeGroupName(pick.label)
-      : _geositeGroups[pick.code]!;
-
-  void _setGeositeGroup(GeositePick pick, String value) {
-    setState(() => _geositeGroups[pick.code] = value);
-  }
-
-  int get _total => _picked.length + _geosites.length;
+  int get _total => _picked.length;
 
   int get _pickedCount => _picked.length;
 
   int get _presetTotal => kLoyalRulesPresets.length + kAclRulesPresets.length;
-
-  int get _geositeCount => _geosites.length;
-
-  int get _geositeTotal => kGeositePicks.length;
 
   /// 当前页签全选。
   void _selectAll() {
@@ -1528,20 +1514,11 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  _tabButton(context, 0, '精选', '规则集'),
-                  const SizedBox(width: Insets.sm),
-                  _tabButton(context, 1, '服务', 'GEOSITE'),
-                ],
-              ),
+              Row(children: [_tabButton(context, 0, '精选', '规则集')]),
               const SizedBox(height: Insets.sm),
               Text(
-                _tab == 0
-                    ? 'Loyalsoldier 与 ACL4SSR 的规则集，勾选后写成 rule-providers '
-                          '并各加一条 RULE-SET（插在 MATCH 之前）。'
-                    : '直接用配置里内置的 geosite 数据，离线命中、不额外下载，'
-                          '每条写成 GEOSITE（插在 MATCH 之前）。',
+                'Loyalsoldier 与 ACL4SSR 的规则集，勾选后写成 rule-providers '
+                '并各加一条 RULE-SET（插在 MATCH 之前）。',
                 style: theme.textTheme.bodySmall,
               ),
               if (_cacheLabel.isNotEmpty) ...[
@@ -1560,17 +1537,12 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                   TextButton(onPressed: _clearAll, child: const Text('清空')),
                   const Spacer(),
                   Text(
-                    _tab == 0
-                        ? '已选 $_pickedCount / $_presetTotal'
-                        : '已选 $_geositeCount / $_geositeTotal',
+                    '已选 $_pickedCount / $_presetTotal',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
               ),
-              if (_tab == 0)
-                ..._buildPresets(theme)
-              else
-                ..._buildGeosites(theme),
+              ..._buildPresets(theme),
             ],
           ),
         ),
@@ -1593,10 +1565,8 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                       ])
                         if (_picked.contains(p.id)) p,
                     ],
-                    [
-                      for (final p in kGeositePicks)
-                        if (_geosites.contains(p.code)) p,
-                    ],
+                    const <GeositePick>[],
+
                     _proxyGroup,
                     {
                       for (final p in [
@@ -1608,9 +1578,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                     _geositeGroups,
                   ),
                 ),
-          child: Text(
-            '导入 $_total 项（$_pickedCount 规则集 + $_geositeCount GEOSITE）',
-          ),
+          child: Text('导入 $_total 项（$_pickedCount 规则集）'),
         ),
       ],
     );
@@ -1803,92 +1771,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
 
     // 窄屏（手机竖屏）一行放不下勾选框 + 组下拉，中文会被压成逐字竖排；
     // 这种宽度下改成两行：上面整行勾选，下面右对齐放组下拉。
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 420) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              tile,
-              Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox(width: 160, child: groupPicker),
-              ),
-              const SizedBox(height: Insets.xs),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: tile),
-            SizedBox(width: 150, child: groupPicker),
-          ],
-        );
-      },
-    );
-  }
-
-  List<Widget> _buildGeosites(ThemeData theme) {
-    final scheme = theme.colorScheme;
-    final groups = <String, List<GeositePick>>{};
-    for (final pick in kGeositePicks) {
-      groups.putIfAbsent(pick.group, () => []).add(pick);
-    }
-    // 固定顺序：常用的 AI / 流媒体在最上面，未知分类沉底。
-    const order = ['AI', '流媒体', '社交', '游戏', '厂商', '合集'];
-    final keys = groups.keys.toList()
-      ..sort((a, b) {
-        final ia = order.indexOf(a);
-        final ib = order.indexOf(b);
-        return (ia < 0 ? order.length : ia).compareTo(
-          ib < 0 ? order.length : ib,
-        );
-      });
-    return [
-      for (final key in keys)
-        _sectionBlock(
-          theme,
-          key,
-          '${groups[key]!.length} 项',
-          [for (final pick in groups[key]!) pick.code],
-          _geosites,
-          [for (final pick in groups[key]!) _geositeTile(theme, scheme, pick)],
-        ),
-    ];
-  }
-
-  Widget _geositeTile(ThemeData theme, ColorScheme scheme, GeositePick pick) {
-    final group = _geositeGroups[pick.code] ?? '';
-    final target = _geositeGroupFor(pick);
-    final tile = CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      value: _geosites.contains(pick.code),
-      onChanged: (v) => _toggle(_geosites, pick.code, v),
-      title: Text(
-        '${pick.label}  ·  ${pick.code}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${pick.description} → $target',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodySmall,
-      ),
-      secondary: Icon(Icons.dns_outlined, size: 18, color: scheme.primary),
-    );
-    final groupPicker = AppDropdown<String>(
-      compact: true,
-      value: group,
-      options: [
-        DropdownOption('', '新建同名组'),
-        for (final name in widget.groupNames) DropdownOption(name, name),
-      ],
-      onChanged: (value) => _setGeositeGroup(pick, value),
-    );
-
-    // 和规则集那行同构：窄屏两行，避免中文被压成竖排。
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 420) {

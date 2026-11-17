@@ -353,7 +353,7 @@ class _RulesTabState extends State<RulesTab> {
         }
         newProviders.add(name);
       }
-      final target = choice.groupFor(item.preset);
+      final target = _resolveTarget(choice.groupFor(item.preset));
       if (groupNames.contains(target)) {
         if (!reusedGroups.contains(target)) reusedGroups.add(target);
       } else if (!newGroups.contains(target)) {
@@ -406,6 +406,14 @@ class _RulesTabState extends State<RulesTab> {
     return ok == true;
   }
 
+  /// 规则集/GEOSITE 的目标组：没显式选组就落到「默认」组。
+  ///
+  /// 不再按规则集名字新建同名组——组是用户的组织单位，规则只是指向它。
+  String _resolveTarget(String? chosen) {
+    final name = (chosen ?? '').trim();
+    return name.isEmpty ? kDefaultGroupName : name;
+  }
+
   Future<void> _applyPresetChoice(
     _PresetChoice choice, {
     List<RulePreset> only = const <RulePreset>[],
@@ -416,7 +424,6 @@ class _RulesTabState extends State<RulesTab> {
     final failed = <String>[];
     final failedPresets = <RulePreset>[];
     final hints = <String>[];
-    final allProxies = [for (final p in s.profile.proxies) p.name];
     var updated = 0;
     var groupsMade = 0;
     var groupsReused = 0;
@@ -463,19 +470,15 @@ class _RulesTabState extends State<RulesTab> {
               : ruleCacheBodyFromRaw(item.text!, body.behavior),
           sourceUrl: item.preset.url,
         );
-        final groupName = choice.groupFor(item.preset);
+        final target = _resolveTarget(choice.groupFor(item.preset));
         try {
           final outcome = importRuleProvider(
             doc,
             body: body,
             name: item.preset.id,
-            // 目标直接指向这个规则集自己的组：内核按 first-match 走，
-            // 目标写固定代理组会让「同名组」形同虚设。
-            target: groupName,
+            target: target,
             url: item.preset.url,
             filePath: cache.pathFor(item.preset.id),
-            groupName: groupName,
-            groupMembers: allProxies,
           );
           doc = outcome.doc;
           applied.add(item.preset.label);
@@ -496,22 +499,7 @@ class _RulesTabState extends State<RulesTab> {
       // 一次最多 50 条，免得一口气把规则列表撑得太长。
       final lines = <String>[];
       for (final pick in choice.geosites.take(50)) {
-        final target = choice.geositeGroupFor(pick);
-        // 服务默认建同名组：组不存在就补一个，成员是全部节点。
-        try {
-          if (Profile.from(doc).group(target) == null) {
-            doc = ConfigOps.addGroup(doc, {
-              'name': target,
-              'type': 'select',
-            }, members: allProxies);
-            groupsMade += 1;
-          } else {
-            groupsReused += 1;
-          }
-        } on ConfigEditException catch (e) {
-          failed.add('${pick.label}（${e.message}）');
-          continue;
-        }
+        final target = _resolveTarget(choice.geositeGroupFor(pick));
         lines.add('GEOSITE,${pick.code},$target');
       }
       if (lines.isEmpty) {

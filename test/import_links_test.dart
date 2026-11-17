@@ -1,3 +1,4 @@
+import 'package:clashdeck/core/edit/config_ops.dart';
 import 'package:clashdeck/core/edit/import_links.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
 import 'package:clashdeck/data/profile_store.dart';
@@ -14,12 +15,12 @@ void main() {
   YamlDoc starter() => YamlDoc.parse(ProfileStore.starterConfig(name: 't'));
 
   test('单条 vless 链接导入，并加入指定组', () {
-    final out = importLinks(starter(), _vless, group: 'PROXY');
+    final out = importLinks(starter(), _vless, group: kDefaultGroupName);
     expect(out.added, ['香港 01']);
     expect(out.renamed, isEmpty);
     final profile = EditorState.fromText(out.doc.text).profile;
     expect(profile.proxyByName.containsKey('香港 01'), isTrue);
-    expect(profile.groupByName['PROXY']!.members, contains('香港 01'));
+    expect(profile.groupByName[kDefaultGroupName]!.members, contains('香港 01'));
     expect(out.doc.text.contains('type: vless'), isTrue);
   });
 
@@ -32,7 +33,7 @@ $_trojan
 不是链接的一行
 $_hy2
 ''';
-    final out = importLinks(starter(), text, group: 'PROXY');
+    final out = importLinks(starter(), text, group: kDefaultGroupName);
     expect(out.added, ['香港 01', '美国 01', '台湾 01']);
     final types = EditorState.fromText(out.doc.text).profile.proxies
         .map((p) => p.type)
@@ -41,17 +42,17 @@ $_hy2
   });
 
   test('重名自动加后缀，且不会撞上策略组名', () {
-    final first = importLinks(starter(), _vless, group: 'PROXY');
-    final second = importLinks(first.doc, _vless, group: 'PROXY');
+    final first = importLinks(starter(), _vless, group: kDefaultGroupName);
+    final second = importLinks(first.doc, _vless, group: kDefaultGroupName);
     expect(second.added, ['香港 01-2']);
     expect(second.renamed, {'香港 01': '香港 01-2'});
 
     // 节点名与组名同名也要避开（内核要求 proxies/proxy-groups 名字全局唯一）
     final groupClash = importLinks(
       second.doc,
-      'vless://b831381d-6324-4d53-ad4f-8cda48b30811@x.example.com:443?encryption=none#PROXY',
+      'vless://b831381d-6324-4d53-ad4f-8cda48b30811@x.example.com:443?encryption=none#DEFAULT',
     );
-    expect(groupClash.added, ['PROXY-2']);
+    expect(groupClash.added, ['DEFAULT-2']);
   });
 
   test('解析不出任何节点时抛 ConfigEditException，且不改文档', () {
@@ -89,13 +90,16 @@ $_hy2
   });
 
   test('删除节点时组成员自动同步（这是用户明确要的行为）', () {
-    final out = importLinks(starter(), _vless, group: 'PROXY');
+    final out = importLinks(starter(), _vless, group: kDefaultGroupName);
     final state = EditorState.fromText(out.doc.text);
-    expect(state.profile.groupByName['PROXY']!.members, contains('香港 01'));
+    expect(
+      state.profile.groupByName[kDefaultGroupName]!.members,
+      contains('香港 01'),
+    );
     expect(state.deleteProxy('香港 01'), isTrue);
     expect(state.profile.proxyNames, isEmpty);
     expect(
-      state.profile.groupByName['PROXY']!.members,
+      state.profile.groupByName[kDefaultGroupName]!.members,
       isNot(contains('香港 01')),
     );
   });

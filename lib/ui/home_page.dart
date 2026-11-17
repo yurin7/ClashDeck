@@ -318,7 +318,11 @@ class _HomePageState extends State<HomePage> {
     final whole = result.yamlConfig;
     if (whole != null) return whole;
     final doc = YamlDoc.parse(ProfileStore.starterConfig(name: name));
-    final outcome = importProxies(doc, result.proxies, group: 'PROXY');
+    final outcome = importProxies(
+      doc,
+      result.proxies,
+      group: kDefaultGroupName,
+    );
     if (outcome.isEmpty) {
       throw ConfigEditException('订阅里没有可导入的节点');
     }
@@ -956,7 +960,7 @@ String buildConfigFromText(String text, {String name = '导入的配置'}) {
   }
   var doc = YamlDoc.parse(ProfileStore.starterConfig(name: name));
   for (final proxy in links) {
-    doc = ConfigOps.addProxy(doc, proxy, intoGroups: const ['PROXY']);
+    doc = ConfigOps.addProxy(doc, proxy, intoGroups: const [kDefaultGroupName]);
   }
   return doc.text;
 }

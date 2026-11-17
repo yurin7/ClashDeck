@@ -1631,7 +1631,13 @@ class _GroupRulesCardState extends State<_GroupRulesCard> {
     }
     if (!mounted) return;
     setState(() {});
-    showToast(context, '已把 ${picked.length} 条规则挂到「${widget.group.name}」');
+    final ruleSets = picked.where((rule) => rule.type == 'RULE-SET').length;
+    showToast(
+      context,
+      ruleSets == 0
+          ? '已把 ${picked.length} 条规则挂到「${widget.group.name}」'
+          : '已把 ${picked.length} 条规则挂到「${widget.group.name}」（含 $ruleSets 条规则集）',
+    );
   }
 
   Future<void> _edit({RuleEntry? initial}) async {
@@ -1742,6 +1748,13 @@ class _GroupRulesCardState extends State<_GroupRulesCard> {
                   '本组规则 ${rules.length}',
                   style: mono(12, color: scheme.onSurfaceVariant),
                 ),
+                if (rules.isEmpty) ...[
+                  const SizedBox(width: Insets.sm),
+                  Text(
+                    '还没有规则',
+                    style: hintStyle(context)?.copyWith(fontSize: 11.5),
+                  ),
+                ],
                 const Spacer(),
                 if (rules.isNotEmpty)
                   Icon(

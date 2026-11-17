@@ -12,6 +12,9 @@ proxies:
     port: 443
     uuid: u
 proxy-groups:
+  - name: DEFAULT
+    type: select
+    proxies: [A, DIRECT, REJECT]
   - name: G
     type: select
     proxies: [A]

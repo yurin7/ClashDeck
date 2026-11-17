@@ -219,13 +219,23 @@ class _RulePickerSheetState extends State<_RulePickerSheet> {
                         value: _picked.contains(rule.index),
                         onChanged: (_) => _toggle(rule),
                         controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(
-                          rule.payload.isEmpty
-                              ? rule.type
-                              : '${rule.type} · ${rule.payload}',
-                          style: mono(12, color: scheme.onSurface),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                rule.payload.isEmpty
+                                    ? rule.type
+                                    : '${rule.type} · ${rule.payload}',
+                                style: mono(12, color: scheme.onSurface),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (rule.type == 'RULE-SET') ...[
+                              const SizedBox(width: Insets.sm),
+                              const Pill(label: '规则集'),
+                            ],
+                          ],
                         ),
                         subtitle: Text(
                           '现在指向 ${rule.target}',

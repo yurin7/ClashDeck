@@ -861,22 +861,23 @@ const List<GeositePick> kGeositePicks = [
 String presetTargetFor(RulePreset preset, String proxyGroup) {
   final target = preset.defaultTarget;
   if (target != kProxyPlaceholder) return target;
-  return proxyGroup.isEmpty ? 'PROXY' : proxyGroup;
+  return proxyGroup.isEmpty ? 'DEFAULT' : proxyGroup;
 }
 
 /// 把 GEOSITE 项的默认目标解析成真正的组名。
 String geositeTargetFor(GeositePick pick, String proxyGroup) {
   final target = pick.defaultTarget;
   if (target != kProxyPlaceholder) return target;
-  return proxyGroup.isEmpty ? 'PROXY' : proxyGroup;
+  return proxyGroup.isEmpty ? 'DEFAULT' : proxyGroup;
 }
 
-/// 预设列表里第一个合适的「代理组」名字（没有就回退 `PROXY`）。
+/// 预设列表里第一个合适的「代理组」名字（没有就回退 DEFAULT）。
 String suggestProxyGroup(Iterable<String> groupNames) {
   final names = groupNames.toList(growable: false);
+  if (names.contains('DEFAULT')) return 'DEFAULT';
   if (names.contains('PROXY')) return 'PROXY';
   if (names.isNotEmpty) return names.first;
-  return 'PROXY';
+  return 'DEFAULT';
 }
 
 /// 把中文标签清洗成能当策略组名的字符串。
@@ -888,7 +889,7 @@ String sanitizeGroupName(String raw) {
   var text = raw.replaceAll(RegExp(r'[（(【\[][^）)】\]]*[）)】\]]'), ' ');
   text = text.replaceAll(RegExp(r'[\\/、]'), ' ');
   text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (text.isEmpty) return 'PROXY';
+  if (text.isEmpty) return 'DEFAULT';
   if (text.length <= 24) return text;
   return text.substring(0, 24).trim();
 }

@@ -12,6 +12,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'editor_page.dart';
 import 'home_page.dart';
+import '../core/edit/config_ops.dart';
 import 'import_dialogs.dart';
 import 'overview_page.dart';
 import 'settings_page.dart';
@@ -374,7 +375,7 @@ class _AppShellState extends State<AppShell> {
         final outcome = links.importProxies(
           base,
           result.proxies,
-          group: 'PROXY',
+          group: kDefaultGroupName,
         );
         text = outcome.doc.text;
       }

@@ -19,23 +19,35 @@ class EditorState extends ChangeNotifier {
     this.fileName,
     String? savedText,
     this.historyLimit = 50,
+    this.migratedDefaultGroup = false,
   }) : _doc = doc,
        _savedText = savedText ?? doc.text;
 
+  /// 解析文本；旧配置缺「默认」组时自动迁移，并把迁移前的文本当作"已保存"，
+  /// 这样编辑器会显示成未保存，用户保存后才会真正落盘。
   factory EditorState.fromText(
     String text, {
     String? fileName,
     String? savedText,
     int historyLimit = 50,
-  }) => EditorState(
-    doc: YamlDoc.parse(text),
-    fileName: fileName,
-    savedText: savedText,
-    historyLimit: historyLimit,
-  );
+  }) {
+    final parsed = YamlDoc.parse(text);
+    final migrated = ConfigOps.migrateDefaultGroup(parsed);
+    final changed = !identical(migrated.text, parsed.text);
+    return EditorState(
+      doc: migrated,
+      fileName: fileName,
+      savedText: changed ? (savedText ?? text) : savedText,
+      historyLimit: historyLimit,
+      migratedDefaultGroup: changed,
+    );
+  }
 
   /// 撤销栈上限。
   final int historyLimit;
+
+  /// 这次加载是否补建了「默认」组（旧配置迁移）。
+  final bool migratedDefaultGroup;
 
   YamlDoc _doc;
   String? fileName;

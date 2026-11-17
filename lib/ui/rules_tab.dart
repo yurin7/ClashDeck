@@ -428,7 +428,17 @@ class _RulesTabState extends State<RulesTab> {
   /// 不再按规则集名字新建同名组——组是用户的组织单位，规则只是指向它。
   String _resolveTarget(String? chosen) {
     final name = (chosen ?? '').trim();
-    return name.isEmpty ? kDefaultGroupName : name;
+    final groups = s.profile.groups;
+    if (name.isNotEmpty && groups.any((g) => g.name == name)) return name;
+    // 目标组可能已被删掉：回落到默认组，再退到第一个 select 组，避免写出
+    // 内核不认识的 target（会变成 unknown proxy 使整份配置解析失败）。
+    if (groups.any((g) => g.name == kDefaultGroupName)) {
+      return kDefaultGroupName;
+    }
+    for (final group in groups) {
+      if (group.type == 'select') return group.name;
+    }
+    return kDefaultGroupName;
   }
 
   Future<void> _applyPresetChoice(

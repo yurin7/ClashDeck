@@ -15,9 +15,9 @@ void main() {
       expect(sanitizeGroupName('  广告与跟踪  '), '广告与跟踪');
     });
 
-    test('全空回退到 PROXY', () {
-      expect(sanitizeGroupName('   '), 'PROXY');
-      expect(sanitizeGroupName('（只有说明）'), 'PROXY');
+    test('全空回退到 DEFAULT', () {
+      expect(sanitizeGroupName('   '), 'DEFAULT');
+      expect(sanitizeGroupName('（只有说明）'), 'DEFAULT');
     });
 
     test('超长截断到 24 个字符且去尾空格', () {

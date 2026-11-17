@@ -37,8 +37,8 @@ void main() {
       profile.proxies.map((p) => p.name),
       containsAll(['香港 WS', '日本 Reality', '新加坡 gRPC', '美国 SS']),
     );
-    // 现在还有自动生成的「默认」组，这里只看链接导入建出来的那个组。
-    final group = profile.groups.firstWhere((g) => g.name != kDefaultGroupName);
+    // 模板自带的 DEFAULT 组会收下所有导入节点。
+    final group = profile.groupByName[kDefaultGroupName]!;
     expect(
       group.members,
       containsAll(['香港 WS', '日本 Reality', '新加坡 gRPC', '美国 SS']),

@@ -2,7 +2,10 @@ import '../model/profile.dart';
 import '../yaml/yaml_doc.dart';
 
 /// 默认 select 组的名字：规则默认指向它，新节点也自动加入。
-const String kDefaultGroupName = '默认';
+const String kDefaultGroupName = 'DEFAULT';
+
+/// 上一批自动建的旧名，只用于迁移识别。
+const String kLegacyDefaultGroupName = '默认';
 
 /// 所有编辑操作：`旧文档 -> 新文档` 的纯函数，失败抛 [ConfigEditException]。
 ///
@@ -26,7 +29,7 @@ class ConfigOps {
     for (final g in intoGroups) {
       next = addGroupMember(next, g, name, missingGroupOk: true);
     }
-    // 新节点一律进「默认」组：它带着全部节点 + DIRECT + REJECT，是规则的默认出口。
+    // 新节点一律进默认组：它带着全部节点 + DIRECT + REJECT，是规则的默认出口。
     next = addGroupMember(next, kDefaultGroupName, name, missingGroupOk: true);
     return ensureDefaultGroup(next);
   }
@@ -34,7 +37,7 @@ class ConfigOps {
   /// 默认组的名字。规则默认指向它，新节点也会自动加入。
   static const String defaultGroupName = kDefaultGroupName;
 
-  /// 保证配置里有「默认」select 组，且成员覆盖全部节点 + DIRECT + REJECT。
+  /// 保证配置里有默认 select 组，且成员覆盖全部节点 + DIRECT + REJECT。
   ///
   /// 规则默认 target 指向它，所以缺了会让新规则无处可去；这里按需创建/补齐，
   /// 已有的成员顺序尽量保持（新节点追加在末尾）。
@@ -63,6 +66,31 @@ class ConfigOps {
       );
     }
     return next;
+  }
+
+  /// 加载旧配置时的迁移：把上一批自动建的「默认」组并入 `DEFAULT`，或者补建。
+  ///
+  /// 与 [ensureDefaultGroup] 的区别：这里**不补齐**已有组的成员（用户可能
+  /// 故意把 DIRECT 移出去），只解决"规则默认 target 没有落脚点"的问题。
+  static YamlDoc migrateDefaultGroup(YamlDoc doc) {
+    var profile = Profile.from(doc);
+    if (profile.group(kDefaultGroupName) != null) return doc;
+    // 上一批把默认组叫「默认」；改名时同步改写所有 target 引用。
+    if (profile.group(kLegacyDefaultGroupName) != null) {
+      return renameGroup(doc, kLegacyDefaultGroupName, kDefaultGroupName);
+    }
+    final group = <String, Object?>{
+      'name': kDefaultGroupName,
+      'type': 'select',
+      'proxies': <Object?>[
+        for (final proxy in profile.proxies) proxy.name,
+        'DIRECT',
+        'REJECT',
+      ],
+    };
+    final current = doc.plainAt(['proxy-groups']);
+    final groups = <Object?>[group, if (current is List) ...current];
+    return doc.apply((e) => e.update(['proxy-groups'], groups));
   }
 
   /// 就地替换整个节点（保持位置）。

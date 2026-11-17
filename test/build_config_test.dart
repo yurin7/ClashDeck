@@ -1,3 +1,4 @@
+import 'package:clashdeck/core/edit/config_ops.dart';
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/validate/validator.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
@@ -63,9 +64,9 @@ rules:
         'cdn.example.com',
       );
 
-      // 节点被加入了 PROXY 组，且空 flow 列表已被展开成块状列表。
-      final group = profile.groupByName['PROXY']!;
-      expect(group.members, ['DIRECT', '香港 01']);
+      // 节点被加入了默认组，且空 flow 列表已被展开成块状列表。
+      final group = profile.groupByName[kDefaultGroupName]!;
+      expect(group.members, ['DIRECT', 'REJECT', '香港 01']);
       expect(out.contains('proxies: []'), isFalse);
       // 风格：必须是块状列表，不能是 flow 风格 `proxies: [{...}]`。
       expect(out.contains('proxies: ['), isFalse);
@@ -93,8 +94,9 @@ vless://aaaa-bbbb@example.com:443?security=tls&sni=a.com#%E9%A6%99%E6%B8%AF%2001
       final profile = Profile.from(YamlDoc.parse(out));
       expect(profile.proxies, hasLength(2));
       expect(profile.proxies.map((p) => p.name), ['香港 01', '香港 01-2']);
-      expect(profile.groupByName['PROXY']!.members, [
+      expect(profile.groupByName[kDefaultGroupName]!.members, [
         'DIRECT',
+        'REJECT',
         '香港 01',
         '香港 01-2',
       ]);

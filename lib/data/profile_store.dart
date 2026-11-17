@@ -218,14 +218,15 @@ dns:
 proxies: []
 
 proxy-groups:
-  - name: PROXY
+  - name: DEFAULT
     type: select
     proxies:
       - DIRECT
+      - REJECT
 
 rules:
   - GEOIP,CN,DIRECT
-  - MATCH,PROXY
+  - MATCH,DEFAULT
 ''';
 
   /// 用 [jsonEncode] 做备份/导出（方便分享给别的设备）。

@@ -206,11 +206,20 @@ class _SettingsPageState extends State<SettingsPage> {
               // ip addr 有 198.18.0.1/30，但 core.log 没有任何连接、网页空白；gvisor 正常。
               _ChoiceRow<String>(
                 label: 'TUN 协议栈',
-                description: '默认 gvisor；换成其他栈可能上不了网',
+                description: '默认 gvisor；system / mixed 是实验项，暂时不可用',
                 value: state.tunStack,
                 items: const ['gvisor', 'system', 'mixed'],
-                labelOf: (v) => v,
-                onChanged: (v) => _applyRestart(() => state.setTunStack(v)),
+                labelOf: (v) => v == 'gvisor' ? v : '$v（实验）',
+                onChanged: (v) {
+                  if (v != 'gvisor') {
+                    showToast(
+                      context,
+                      '实验项：fd 模式下 system / mixed 目前无法联网，后续版本再支持',
+                    );
+                    return;
+                  }
+                  _applyRestart(() => state.setTunStack(v));
+                },
               ),
               _ChoiceRow<int>(
                 label: 'TUN MTU',

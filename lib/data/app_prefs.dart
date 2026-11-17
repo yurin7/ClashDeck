@@ -43,6 +43,22 @@ class AppPrefs {
   Future<void> setLastSubscriptionUpdate(DateTime? time) =>
       _put('lastSubscriptionUpdate', time?.toIso8601String());
 
+  /// 在线规则集是否自动更新。默认开。
+  bool get ruleAutoUpdate => _data['ruleAutoUpdate'] as bool? ?? true;
+
+  /// 自动更新间隔（小时）。只认 12 / 24 / 168，其它值按 24。
+  int get ruleUpdateIntervalHours {
+    final raw = _data['ruleUpdateIntervalHours'];
+    final hours = raw is int ? raw : 24;
+    return const {12, 24, 168}.contains(hours) ? hours : 24;
+  }
+
+  Future<void> setRuleAutoUpdate(bool enabled) =>
+      _put('ruleAutoUpdate', enabled);
+
+  Future<void> setRuleUpdateIntervalHours(int hours) =>
+      _put('ruleUpdateIntervalHours', hours);
+
   Future<void> _put(String key, Object? value) async {
     if (value == null) {
       _data.remove(key);

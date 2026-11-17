@@ -42,10 +42,11 @@ IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
       expect(out.rulesAdded, 2);
       expect(out.warnings, isEmpty);
       final rules = Profile.from(out.doc).rules.map((r) => r.raw).toList();
+      // 本地精确规则统一排在在线（GEOIP/RULE-SET/GEOSITE）之前。
       expect(rules, [
-        'GEOIP,CN,DIRECT',
         'DOMAIN-SUFFIX,google.com,PROXY',
         'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
+        'GEOIP,CN,DIRECT',
         'MATCH,PROXY',
       ]);
       expect(out.summary, contains('新增 2 条规则'));
@@ -128,10 +129,11 @@ rules:
       final profile = Profile.from(out.doc);
       expect(profile.group('媒体')?.members, ['n1', 'n2']);
       expect(profile.group('PROXY')?.members, ['n1', 'DIRECT', 'n2']);
+      // 两条 DOMAIN-SUFFIX 属本地精确规则，排在 GEOIP（在线区）之前。
       expect(profile.rules.map((r) => r.target), [
-        'DIRECT',
         '媒体',
         'PROXY',
+        'DIRECT',
         'PROXY',
       ]);
       expect(out.rulesAdded, 2);

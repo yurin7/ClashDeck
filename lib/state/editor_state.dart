@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/edit/config_ops.dart';
+import '../core/edit/rule_layout.dart';
 import '../core/edit/import_links.dart';
 import '../core/model/profile.dart';
 import '../core/parse/share_link.dart';
@@ -142,8 +143,16 @@ class EditorState extends ChangeNotifier {
   bool removeGroupMember(String group, String member) =>
       apply((d) => ConfigOps.removeGroupMember(d, group, member));
 
-  bool addRule(String rule, {int? at}) =>
-      apply((d) => ConfigOps.addRule(d, rule, at: at));
+  /// 新增一条规则。默认按分区插到所属区块的第一位（本地精确 / 在线 / 兜底）；
+  /// 显式给 [at] 时按旧行为插到指定下标（测试与特殊场景用）。
+  bool addRule(String rule, {int? at}) => at == null
+      ? apply((d) => RuleLayout.insertRuleDoc(d, rule))
+      : apply((d) => ConfigOps.addRule(d, rule, at: at));
+
+  /// 把 rules 段按「本地精确 → 在线 → 兜底」重排一遍。
+  ///
+  /// 幂等：已经排好时文本不变，[apply] 会当成空操作，不置脏、不进 undo。
+  bool normalizeRules() => apply((d) => RuleLayout.normalizeDoc(d));
 
   bool deleteRule(int index) => apply((d) => ConfigOps.deleteRule(d, index));
 

@@ -358,15 +358,23 @@ class _QuickControls extends StatelessWidget {
                       _Segmented<String>(
                         values: const ['gvisor', 'system', 'mixed'],
                         selected: state.tunStack,
-                        labelOf: (stack) => stack,
+                        labelOf: (stack) =>
+                            stack == 'gvisor' ? stack : '$stack（实验）',
                         onSelected: (stack) async {
+                          if (stack != 'gvisor') {
+                            showToast(
+                              context,
+                              '实验项：fd 模式下 system / mixed 目前无法联网，后续版本再支持',
+                            );
+                            return;
+                          }
                           await state.setTunStack(stack);
                           onChanged();
                         },
                       ),
                       const SizedBox(height: Insets.xs),
                       Text(
-                        '默认 gvisor；换成其他栈可能上不了网。改动需重启内核生效。',
+                        '默认 gvisor；system / mixed 是实验项，暂时不可用。改动需重启内核生效。',
                         style: hintStyle(context),
                       ),
                     ],

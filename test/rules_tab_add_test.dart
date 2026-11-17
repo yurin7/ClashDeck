@@ -35,8 +35,9 @@ void main() {
 
     expect(state.lastError, isNull);
     expect(state.profile.rules.length, 3);
-    expect(state.profile.rules[1].type, 'DOMAIN-SUFFIX');
-    expect(state.profile.rules[1].payload, 'google.com');
+    // 新增规则按分区插到「本地精确规则」区首位，旧的 GEOIP 往后站。
+    expect(state.profile.rules[0].type, 'DOMAIN-SUFFIX');
+    expect(state.profile.rules[0].payload, 'google.com');
     expect(state.profile.rules.last.isTerminal, isTrue);
   });
 }

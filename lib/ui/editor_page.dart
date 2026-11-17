@@ -81,6 +81,9 @@ class _EditorPageState extends State<EditorPage> {
     if (state == null) return;
     setState(() => _saving = true);
     try {
+      // 写盘前把 rules 段按「本地精确 → 在线 → 兜底」排一次；
+      // 已经排好时是空操作，文本不变，不会白触发内核 reload。
+      state.normalizeRules();
       await state.save(widget.store);
       if (!mounted) return;
       showToast(context, '已保存');
@@ -454,7 +457,7 @@ class _EditorPageState extends State<EditorPage> {
                         runtime: widget.runtime,
                         onSubscriptionSaved: _rememberSubscription,
                       ),
-                      RulesTab(state: state),
+                      RulesTab(state: state, runtime: widget.runtime),
                       RawYamlTab(state: state),
                     ],
                   ),

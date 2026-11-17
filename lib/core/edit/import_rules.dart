@@ -2,6 +2,7 @@ import '../model/profile.dart';
 import '../model/rule_types.dart';
 import '../yaml/yaml_doc.dart';
 import 'config_ops.dart';
+import 'rule_layout.dart';
 import '../net/github_mirror.dart';
 
 /// 一次规则导入的结果。只描述「发生了什么」，不负责提示文案的排版。
@@ -210,14 +211,13 @@ RuleImportOutcome importRules(
         }
       }
     }
-    final terminalAt = Profile.from(next).rules.indexWhere((r) => r.isTerminal);
-    next = ConfigOps.addRule(
-      next,
-      rule,
-      at: terminalAt < 0 ? null : terminalAt,
-    );
+    // 批量导入插到所属区块末尾：顺序与输入一致，又不会插进别的区块。
+    next = RuleLayout.insertRuleDoc(next, rule, atZoneEnd: true);
     rulesAdded++;
   }
+
+  // 导入完统一按「本地精确 → 在线 → 兜底」排一次；已排好时是空操作。
+  next = RuleLayout.normalizeDoc(next);
 
   return RuleImportOutcome(
     doc: next,
@@ -347,14 +347,13 @@ RuleImportOutcome insertRuleLines(
         }
       }
     }
-    final terminalAt = Profile.from(next).rules.indexWhere((r) => r.isTerminal);
-    next = ConfigOps.addRule(
-      next,
-      rule,
-      at: terminalAt < 0 ? null : terminalAt,
-    );
+    // 批量导入插到所属区块末尾：顺序与输入一致，又不会插进别的区块。
+    next = RuleLayout.insertRuleDoc(next, rule, atZoneEnd: true);
     rulesAdded++;
   }
+
+  // 导入完统一按「本地精确 → 在线 → 兜底」排一次；已排好时是空操作。
+  next = RuleLayout.normalizeDoc(next);
 
   return RuleImportOutcome(
     doc: next,

@@ -6,12 +6,16 @@ import 'package:flutter/foundation.dart';
 import '../core/edit/config_ops.dart';
 import '../core/edit/geosite_index.dart';
 import '../core/edit/import_rules.dart';
+import '../core/edit/rule_layout.dart';
 import '../core/edit/rule_presets.dart';
 import '../core/model/profile.dart';
+import '../core/model/rule_zone.dart';
 import '../core/model/rule_types.dart';
 import '../core/net/fetch_text.dart';
 import '../data/rule_cache.dart';
+import '../data/app_prefs.dart';
 import '../core/yaml/yaml_doc.dart';
+import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'rule_edit_dialog.dart';
@@ -20,7 +24,9 @@ import 'theme.dart';
 import 'widgets.dart';
 
 class RulesTab extends StatefulWidget {
-  const RulesTab({super.key, required this.state});
+  const RulesTab({super.key, required this.state, this.runtime});
+
+  final RuntimeController? runtime;
 
   final EditorState state;
 
@@ -30,6 +36,36 @@ class RulesTab extends StatefulWidget {
 
 class _RulesTabState extends State<RulesTab> {
   EditorState get s => widget.state;
+
+  /// 在线规则集的自动更新设置（默认开、24 小时）。
+  bool _autoUpdate = true;
+  int _intervalHours = 24;
+  bool _autoChecked = false;
+
+  /// 正在批量刷新缓存：期间禁用按钮，避免并发打同一批 URL。
+  bool _refreshing = false;
+
+  /// 每个规则集最近一次缓存时间，用来在行里显示「缓存于 …」。
+  final Map<String, DateTime?> _cacheTimes = <String, DateTime?>{};
+
+  /// 这次会话里刷新失败的规则集，行尾标「更新失败」。
+  final Set<String> _failedProviders = <String>{};
+
+  bool _localOpen = true;
+  bool _onlineOpen = true;
+  bool _terminalOpen = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRulePrefs());
+  }
+
+  String _formatCacheTime(DateTime at) {
+    final local = at.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${local.month}/${local.day} ${two(local.hour)}:${two(local.minute)}';
+  }
 
   void _fail() {
     final msg = s.lastError;
@@ -70,11 +106,10 @@ class _RulesTabState extends State<RulesTab> {
       ...?initial?.options.where((o) => o != 'no-resolve'),
     ];
     final rule = parts.where((p) => p.isNotEmpty).join(',');
-    // 新规则插到兜底规则（MATCH/FINAL）之前——追加到最后会让 MATCH 后面还有
-    // 规则，内核根本不读，校验器也会报「MATCH 必须最后一条」。
-    final terminalAt = s.profile.rules.indexWhere((r) => r.isTerminal);
+    // 新规则按分区插到所属区块的第一位（本地精确 / 在线 / 兜底）；
+    // 顺带保证 MATCH 永远在最后一条。编辑既有规则时原地改。
     final ok = index == null
-        ? s.addRule(rule, at: terminalAt < 0 ? null : terminalAt)
+        ? s.addRule(rule)
         : s.apply((d) => ConfigOps.updateRule(d, index, rule));
     if (!ok) _fail();
   }
@@ -381,6 +416,389 @@ class _RulesTabState extends State<RulesTab> {
     }
   }
 
+  Future<void> _loadRulePrefs() async {
+    final prefs = await AppPrefs.load();
+    if (!mounted) return;
+    setState(() {
+      _autoUpdate = prefs.ruleAutoUpdate;
+      _intervalHours = prefs.ruleUpdateIntervalHours;
+    });
+    await _refreshCacheTimes();
+    if (!_autoChecked) {
+      _autoChecked = true;
+      await _maybeAutoRefresh();
+    }
+  }
+
+  Future<void> _refreshCacheTimes() async {
+    final cache = await RuleCache.open();
+    final times = <String, DateTime?>{};
+    for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
+      times[preset.id] = await cache.fetchedAt(preset.id);
+    }
+    if (!mounted) return;
+    setState(() {
+      _cacheTimes
+        ..clear()
+        ..addAll(times);
+    });
+  }
+
+  /// 启动时静默刷新：缓存超过 12 小时就后台拉一遍，失败保留旧文件。
+  Future<void> _maybeAutoRefresh() async {
+    if (!_autoUpdate || _refreshing) return;
+    DateTime? latest;
+    for (final at in _cacheTimes.values) {
+      if (at == null) continue;
+      if (latest == null || at.isAfter(latest)) latest = at;
+    }
+    if (latest == null) return;
+    if (DateTime.now().difference(latest) < const Duration(hours: 12)) {
+      return;
+    }
+    final stale = <RulePreset>[
+      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets])
+        if (_cacheTimes[preset.id] != null) preset,
+    ];
+    await _refreshPresets(stale, silent: true);
+  }
+
+  Future<void> _setAutoUpdate(bool enabled) async {
+    setState(() => _autoUpdate = enabled);
+    final prefs = await AppPrefs.load();
+    await prefs.setRuleAutoUpdate(enabled);
+  }
+
+  Future<void> _setInterval(int hours) async {
+    setState(() => _intervalHours = hours);
+    final prefs = await AppPrefs.load();
+    await prefs.setRuleUpdateIntervalHours(hours);
+  }
+
+  /// 重新拉一批规则集并写缓存。只动缓存文件，不动 YAML。
+  Future<void> _refreshPresets(
+    List<RulePreset> presets, {
+    bool silent = false,
+  }) async {
+    if (presets.isEmpty || _refreshing) return;
+    setState(() => _refreshing = true);
+    final cache = await RuleCache.open();
+    var ok = 0;
+    final failed = <String>{};
+    _cancelled = false;
+    try {
+      final fetched = await _runWithConcurrency([
+        for (final preset in presets) () => _fetchPreset(preset),
+      ]);
+      for (final item in fetched) {
+        final body = item.body;
+        if (body == null) {
+          failed.add(item.preset.id);
+          continue;
+        }
+        await cache.write(
+          item.preset.id,
+          item.text == null
+              ? ruleCacheBody(body.entries, body.behavior)
+              : ruleCacheBodyFromRaw(item.text!, body.behavior),
+          sourceUrl: item.preset.url,
+        );
+        ok++;
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+    if (!mounted) return;
+    setState(() {
+      _failedProviders
+        ..removeAll([for (final preset in presets) preset.id])
+        ..addAll(failed);
+    });
+    await _refreshCacheTimes();
+    if (silent) return;
+    if (ok == 0) {
+      _toast('全部更新失败：${failed.length} 个规则集拉不下来');
+      return;
+    }
+    _toast(failed.isEmpty ? '已更新 $ok 个规则集' : '成功 $ok 个，失败 ${failed.length} 个');
+    if (widget.runtime?.phase == RuntimePhase.running) {
+      _toast('规则已更新，重启内核生效');
+    }
+  }
+
+  List<RulePreset> _onlinePresets() {
+    final ids = <String>{
+      for (final rule in s.profile.rules)
+        if (rule.type == 'RULE-SET') rule.payload,
+    };
+    return [
+      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets])
+        if (ids.contains(preset.id)) preset,
+    ];
+  }
+
+  RulePreset? _presetOf(String id) {
+    for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
+      if (preset.id == id) return preset;
+    }
+    return null;
+  }
+
+  Widget? _rowTrailing(BuildContext context, RuleEntry rule) {
+    if (rule.type != 'RULE-SET') return null;
+    final preset = _presetOf(rule.payload);
+    if (preset == null) return null;
+    final scheme = Theme.of(context).colorScheme;
+    final at = _cacheTimes[preset.id];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_failedProviders.contains(preset.id))
+          Pill(label: '更新失败', color: scheme.error, dense: true)
+        else
+          Text(
+            at == null ? '未缓存' : '缓存于 ${_formatCacheTime(at)}',
+            style: hintStyle(context),
+          ),
+        IconButton(
+          tooltip: '更新这个规则集',
+          visualDensity: VisualDensity.compact,
+          onPressed: _refreshing ? null : () => _refreshPresets([preset]),
+          icon: const Icon(Icons.refresh, size: 18),
+        ),
+      ],
+    );
+  }
+
+  Widget _onlineToolbar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: Insets.xs),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: Insets.xs,
+        runSpacing: Insets.xs,
+        children: [
+          Switch(
+            value: _autoUpdate,
+            onChanged: _refreshing ? null : (v) => _setAutoUpdate(v),
+          ),
+          Text('自动更新', style: hintStyle(context)),
+          for (final hours in const [12, 24, 168])
+            TextButton(
+              onPressed: _refreshing ? null : () => _setInterval(hours),
+              child: Text(
+                hours == 168 ? '7 天' : '${hours}h',
+                style:
+                    monoStyle(
+                      context,
+                      size: 12,
+                      color: hours == _intervalHours
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                    ).copyWith(
+                      fontWeight: hours == _intervalHours
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                    ),
+              ),
+            ),
+          FilledButton.tonalIcon(
+            onPressed: _refreshing
+                ? null
+                : () => _refreshPresets(_onlinePresets()),
+            icon: const Icon(Icons.cloud_sync_outlined, size: 18),
+            label: Text(_refreshing ? '更新中…' : '全部更新'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleList(
+    BuildContext context, {
+    required List<RuleEntry> local,
+    required List<RuleEntry> online,
+    required List<RuleEntry> terminal,
+    required bool terminalLate,
+  }) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        Insets.lg,
+        Insets.xs,
+        Insets.lg,
+        Insets.md,
+      ),
+      children: [
+        _buildZone(
+          context,
+          title: '本地精确规则',
+          subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
+          rules: local,
+          zone: RuleZone.local,
+          open: _localOpen,
+          onToggle: () => setState(() => _localOpen = !_localOpen),
+        ),
+        _buildZone(
+          context,
+          title: '在线规则集',
+          subtitle: '按整包匹配，排在本地规则之后',
+          rules: online,
+          zone: RuleZone.online,
+          open: _onlineOpen,
+          onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
+          terminalLate: terminalLate,
+        ),
+        _buildZone(
+          context,
+          title: '兜底规则',
+          subtitle: 'MATCH / FINAL，必须在最后',
+          rules: terminal,
+          zone: RuleZone.terminal,
+          open: _terminalOpen,
+          onToggle: () => setState(() => _terminalOpen = !_terminalOpen),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildZone(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<RuleEntry> rules,
+    required RuleZone zone,
+    required bool open,
+    required VoidCallback onToggle,
+    bool terminalLate = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Insets.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: Insets.xs,
+                horizontal: Insets.xs,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    open ? Icons.expand_more : Icons.chevron_right,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: Insets.xs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: monoStyle(
+                            context,
+                            size: 12,
+                          ).copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(subtitle, style: hintStyle(context)),
+                      ],
+                    ),
+                  ),
+                  Pill(label: '${rules.length} 条', dense: true),
+                ],
+              ),
+            ),
+          ),
+          if (zone == RuleZone.online) ...[
+            _onlineToolbar(context),
+            if (terminalLate)
+              Padding(
+                padding: const EdgeInsets.only(top: Insets.xs),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 14, color: scheme.error),
+                    const SizedBox(width: Insets.xs),
+                    Expanded(
+                      child: Text(
+                        '检测到 MATCH 不在末尾，内核会先命中它后面的规则',
+                        style: hintStyle(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (open) ...[
+            const SizedBox(height: Insets.xs),
+            if (rules.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Insets.sm),
+                child: Text('（这一区还没有规则）', style: hintStyle(context)),
+              )
+            else
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                itemCount: rules.length,
+                onReorderItem: (oldIndex, newIndex) {
+                  if (oldIndex == newIndex) return;
+                  final from = rules[oldIndex].index;
+                  final to = rules[newIndex].index;
+                  if (!s.moveRule(from, to)) _fail();
+                },
+                itemBuilder: (context, i) {
+                  final rule = rules[i];
+                  return Padding(
+                    key: ValueKey('rule-${rule.index}'),
+                    padding: const EdgeInsets.only(bottom: Insets.sm),
+                    child: _RuleRow(
+                      rule: rule,
+                      trailing: _rowTrailing(context, rule),
+                      dragHandle: ReorderableDragStartListener(
+                        index: i,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.grab,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Insets.xs,
+                              vertical: Insets.sm,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.drag_indicator,
+                                  size: 17,
+                                  color: scheme.onSurfaceVariant.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                ),
+                                Text(
+                                  '${i + 1}',
+                                  style: monoStyle(context, size: 10),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      onTap: () => _editRule(initial: rule, index: rule.index),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _toast(String message, {SnackBarAction? action}) {
     if (!mounted) return;
     showToast(
@@ -456,6 +874,20 @@ class _RulesTabState extends State<RulesTab> {
   Widget build(BuildContext context) {
     final rules = s.profile.rules;
     final scheme = Theme.of(context).colorScheme;
+    final local = <RuleEntry>[];
+    final online = <RuleEntry>[];
+    final terminal = <RuleEntry>[];
+    for (final rule in rules) {
+      switch (ruleZoneOf(rule.raw)) {
+        case RuleZone.local:
+          local.add(rule);
+        case RuleZone.online:
+          online.add(rule);
+        case RuleZone.terminal:
+          terminal.add(rule);
+      }
+    }
+    final terminalLate = RuleLayout.hasTerminalNotLast(s.doc.text);
     return Column(
       children: [
         Padding(
@@ -487,61 +919,12 @@ class _RulesTabState extends State<RulesTab> {
                   message: '内核按从上到下的顺序匹配，最后用一条 MATCH 兜底。',
                   compact: true,
                 )
-              : ReorderableListView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    Insets.lg,
-                    Insets.xs,
-                    Insets.lg,
-                    Insets.md,
-                  ),
-                  itemCount: rules.length,
-                  buildDefaultDragHandles: false,
-                  // onReorderItem 已经把"移除后下标"算好，不必再 -1。
-                  onReorderItem: (oldIndex, newIndex) {
-                    if (oldIndex == newIndex) return;
-                    if (!s.moveRule(oldIndex, newIndex)) _fail();
-                  },
-                  itemBuilder: (context, i) {
-                    final rule = rules[i];
-                    return Padding(
-                      key: ValueKey('rule-${rule.index}'),
-                      padding: const EdgeInsets.only(bottom: Insets.sm),
-                      child: _RuleRow(
-                        rule: rule,
-
-                        dragHandle: ReorderableDragStartListener(
-                          index: i,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.grab,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: Insets.xs,
-                                vertical: Insets.sm,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.drag_indicator,
-                                    size: 17,
-                                    color: scheme.onSurfaceVariant.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${i + 1}',
-                                    style: monoStyle(context, size: 10),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        onTap: () =>
-                            _editRule(initial: rule, index: rule.index),
-                      ),
-                    );
-                  },
+              : _buildRuleList(
+                  context,
+                  local: local,
+                  online: online,
+                  terminal: terminal,
+                  terminalLate: terminalLate,
                 ),
         ),
         SafeArea(
@@ -608,12 +991,16 @@ class _RuleRow extends StatelessWidget {
 
     required this.dragHandle,
     required this.onTap,
+    this.trailing,
   });
 
   final RuleEntry rule;
 
   final Widget dragHandle;
   final VoidCallback onTap;
+
+  /// 行尾附加信息（在线规则集的来源 / 缓存时间 / 更新按钮）。
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -700,6 +1087,7 @@ class _RuleRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                ?trailing,
                 Padding(
                   padding: const EdgeInsets.only(right: Insets.sm),
                   child: Icon(

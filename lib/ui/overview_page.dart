@@ -540,8 +540,7 @@ class _GlobalExitRow extends StatelessWidget {
       if (member != null) await runtime.selectNode(picked, member);
       final ok = await runtime.selectNode('GLOBAL', picked);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已保存；内核没有确认切换，可能已经退出')));
+        showToast(context, '已保存；内核没有确认切换，可能已经退出');
       }
     }
     onChanged();

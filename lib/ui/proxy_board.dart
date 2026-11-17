@@ -51,9 +51,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
   void _fail() {
     final msg = s.lastError;
     if (msg == null) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg);
   }
 
   // ---------------------------------------------------------------- 操作
@@ -166,9 +164,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg);
   }
 
   Future<void> _editNode(ProxyEntry node) async {

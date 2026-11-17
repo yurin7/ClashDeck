@@ -327,7 +327,7 @@ class _HomePageState extends State<HomePage> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg);
   }
 
   Future<void> _rename(StoredProfile item) async {

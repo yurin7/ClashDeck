@@ -53,8 +53,7 @@ class _SettingsPageState extends State<SettingsPage> {
       await action();
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('写入失败：$error')));
+        showToast(context, '写入失败：$error');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -89,8 +88,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _applyRestart(Future<void> Function() action) async {
     await _run(action);
     if (!mounted || !_running) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('这项改动需要重启内核才生效')));
+    showToast(context, '这项改动需要重启内核才生效');
   }
 
   @override

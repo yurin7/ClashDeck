@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
+import 'toast.dart';
 
 /// 规则编辑对话框的输入结果。
 class RuleDraft {
@@ -116,8 +117,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
     final payload = _payloadCtrl.text.trim();
     final custom = _customCtrl.text.trim();
     if (_needsPayload && payload.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请填写匹配内容')));
+      showToast(context, '请填写匹配内容');
       return;
     }
     Navigator.of(context).pop(

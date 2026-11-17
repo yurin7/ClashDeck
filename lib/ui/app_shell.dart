@@ -35,7 +35,17 @@ class _AppShellState extends State<AppShell> {
   static const double _islandHeight = 66;
   static const double _bottomInset = 108;
 
+  /// 当前页（底部岛屿的高亮位置以此为准）。
   int _index = 0;
+
+  /// 三页左右滑动的控制器。
+  late final PageController _pager;
+
+  /// 连续的小数页号：滑动过程中岛屿高亮跟着手指走。
+  double _page = 0;
+
+  /// 正在做切页动画。此时禁止触发切换配置这类重操作，避免中途换内核。
+  bool _pagerBusy = false;
   AppPrefs? _prefs;
   List<StoredProfile> _profiles = const [];
   String? _activeFileName;
@@ -52,11 +62,43 @@ class _AppShellState extends State<AppShell> {
       configProvider: _currentDoc,
       settingsProvider: () => _settings?.app ?? AppSettings.defaults,
     );
+    _pager = PageController()..addListener(_onPagerScroll);
     unawaited(_boot());
+  }
+
+  void _onPagerScroll() {
+    if (!_pager.hasClients) return;
+    final page = _pager.page;
+    if (page == null || (page - _page).abs() < 0.001) return;
+    setState(() => _page = page);
+  }
+
+  /// 切到第 [target] 页。点底部按钮走这里，保证是"滑过去"而不是瞬跳。
+  Future<void> _goTo(int target) async {
+    if (target == _index) return;
+    if (!_pager.hasClients) {
+      setState(() {
+        _index = target;
+        _page = target.toDouble();
+      });
+      return;
+    }
+    _pagerBusy = true;
+    try {
+      await _pager.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+      if (mounted && _index != target) setState(() => _index = target);
+    } finally {
+      _pagerBusy = false;
+    }
   }
 
   @override
   void dispose() {
+    _pager.dispose();
     _runtime.dispose();
     super.dispose();
   }
@@ -141,6 +183,11 @@ class _AppShellState extends State<AppShell> {
   /// 内核在跑的时候要真的把流量切过去：先停（否则旧配置的 TUN/端口还占着，
   /// 新配置起不来），换好配置再重新启动，全程对用户只表现为「停顿一下」。
   Future<void> _setActive(String fileName) async {
+    // 切页动画期间别换内核：用户在本页看到的内容会和实际跑的对不上。
+    if (_pagerBusy) {
+      _toast('正在切换页面，稍后再试');
+      return;
+    }
     if (fileName == _activeFileName) return;
     final wasRunning =
         _runtime.phase == RuntimePhase.running ||
@@ -172,6 +219,11 @@ class _AppShellState extends State<AppShell> {
   /// 删除一份配置。删的是当前运行配置时按「停内核 → 切到下一份 → 再删」
   /// 的顺序处理，避免内核还指着已经不存在的文件。
   Future<void> _deleteProfile(String fileName) async {
+    // 切页动画期间别换内核：用户在本页看到的内容会和实际跑的对不上。
+    if (_pagerBusy) {
+      _toast('正在切换页面，稍后再试');
+      return;
+    }
     final wasActive = fileName == _activeFileName;
     final wasRunning =
         _runtime.phase == RuntimePhase.running ||
@@ -262,7 +314,7 @@ class _AppShellState extends State<AppShell> {
     final fileName = _activeFileName;
     if (fileName == null) {
       _toast('还没有配置，先去「配置」页新建一份');
-      setState(() => _index = 1);
+      unawaited(_goTo(1));
       return;
     }
     await Navigator.of(context).push(
@@ -459,9 +511,7 @@ class _AppShellState extends State<AppShell> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   // ------------------------------------------------------------------ 视图
@@ -489,43 +539,50 @@ class _AppShellState extends State<AppShell> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: IndexedStack(
-              index: _index,
+            child: PageView(
+              controller: _pager,
+              onPageChanged: (i) => setState(() => _index = i),
               children: [
-                SafeArea(
-                  bottom: false,
-                  child: OverviewPage(
+                _KeepAlivePage(
+                  child: SafeArea(
+                    bottom: false,
+                    child: OverviewPage(
+                      runtime: _runtime,
+                      settings: _settings,
+                      activeProfile: _activeFileName,
+                      profileName: _activeName,
+                      profileCount: _profiles.length,
+                      onOpenEditor: _openEditor,
+                      onPickProfile: _pickProfile,
+                      onRefreshProfiles: _reloadProfiles,
+                      bottomInset: _bottomInset,
+                    ),
+                  ),
+                ),
+                _KeepAlivePage(
+                  child: HomePage(
+                    activeFileName: _activeFileName,
+                    onSetActive: _setActive,
+                    onProfilesChanged: _reloadProfiles,
+                    onDeleteProfile: _deleteProfile,
                     runtime: _runtime,
-                    settings: _settings,
-                    activeProfile: _activeFileName,
-                    profileName: _activeName,
-                    profileCount: _profiles.length,
-                    onOpenEditor: _openEditor,
-                    onPickProfile: _pickProfile,
-                    onRefreshProfiles: _reloadProfiles,
+                    autoSave: _settings?.autoSave ?? false,
                     bottomInset: _bottomInset,
                   ),
                 ),
-                HomePage(
-                  activeFileName: _activeFileName,
-                  onSetActive: _setActive,
-                  onProfilesChanged: _reloadProfiles,
-                  onDeleteProfile: _deleteProfile,
-                  runtime: _runtime,
-                  autoSave: _settings?.autoSave ?? false,
-                  bottomInset: _bottomInset,
-                ),
-                SafeArea(
-                  bottom: false,
-                  child: SettingsPage(
-                    settings: _settings,
-                    runtime: _runtime,
-                    lastSubscriptionUpdate: _lastSubscriptionUpdate,
-                    onUpdateSubscription: _updateSubscription,
-                    onImportText: _importText,
-                    onImportUrl: _importUrl,
-                    onOpenSubscription: _openSubscription,
-                    bottomInset: _bottomInset,
+                _KeepAlivePage(
+                  child: SafeArea(
+                    bottom: false,
+                    child: SettingsPage(
+                      settings: _settings,
+                      runtime: _runtime,
+                      lastSubscriptionUpdate: _lastSubscriptionUpdate,
+                      onUpdateSubscription: _updateSubscription,
+                      onImportText: _importText,
+                      onImportUrl: _importUrl,
+                      onOpenSubscription: _openSubscription,
+                      bottomInset: _bottomInset,
+                    ),
                   ),
                 ),
               ],
@@ -538,7 +595,8 @@ class _AppShellState extends State<AppShell> {
             child: _FloatingIsland(
               height: _islandHeight,
               index: _index,
-              onChanged: (i) => setState(() => _index = i),
+              page: _page,
+              onChanged: (i) => unawaited(_goTo(i)),
             ),
           ),
         ],
@@ -552,11 +610,16 @@ class _FloatingIsland extends StatelessWidget {
   const _FloatingIsland({
     required this.height,
     required this.index,
+    required this.page,
     required this.onChanged,
   });
 
   final double height;
   final int index;
+
+  /// 连续的小数页号（0…2），滑动过程中高亮跟着手指走。
+  final double page;
+
   final ValueChanged<int> onChanged;
 
   static const _items = <({IconData icon, String label})>[
@@ -576,54 +639,96 @@ class _FloatingIsland extends StatelessWidget {
         borderRadius: const BorderRadius.all(Radius.circular(Insets.xl)),
         border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < _items.length; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(i),
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    decoration: BoxDecoration(
-                      gradient: i == index
-                          ? LinearGradient(colors: semantic.accentGradient)
-                          : null,
-                      borderRadius: const BorderRadius.all(
-                        Radius.circular(Insets.md),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _items[i].icon,
-                          size: 19,
-                          color: i == index
-                              ? Colors.white
-                              : scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _items[i].label,
-                          style: display(
-                            10.5,
-                            weight: 600,
-                            color: i == index
-                                ? Colors.white
-                                : scheme.onSurfaceVariant,
-                          ).copyWith(letterSpacing: 0.4),
-                        ),
-                      ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 6.0;
+          final unit = constraints.maxWidth / _items.length;
+          return Stack(
+            children: [
+              // 高亮胶囊：跟着手指在小数页号之间滑动。
+              Positioned(
+                left: unit * page + gap,
+                top: gap,
+                bottom: gap,
+                width: unit - gap * 2,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: semantic.accentGradient),
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(Insets.md),
                     ),
                   ),
                 ),
               ),
-            ),
+              Row(
+                children: [
+                  for (var i = 0; i < _items.length; i++)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onChanged(i),
+                        child: _item(
+                          _items[i],
+                          // 1 = 完全选中，0 = 完全没选中；滑动时连续过渡。
+                          (1 - (page - i).abs()).clamp(0.0, 1.0),
+                          scheme,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _item(
+    ({IconData icon, String label}) item,
+    double t,
+    ColorScheme scheme,
+  ) {
+    final color = Color.lerp(scheme.onSurfaceVariant, Colors.white, t)!;
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(item.icon, size: 19, color: color),
+          const SizedBox(height: 2),
+          Text(
+            item.label,
+            style: display(
+              10.5,
+              weight: 600,
+              color: color,
+            ).copyWith(letterSpacing: 0.4),
+          ),
         ],
       ),
     );
+  }
+}
+
+/// 让 `PageView` 里的页面在切走后保留状态（滚动位置、输入中的内容等）。
+class _KeepAlivePage extends StatefulWidget {
+  const _KeepAlivePage({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

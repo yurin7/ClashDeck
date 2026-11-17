@@ -34,9 +34,7 @@ class _RulesTabState extends State<RulesTab> {
   void _fail() {
     final msg = s.lastError;
     if (msg == null) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showToast(context, msg);
   }
 
   Future<void> _editRule({RuleEntry? initial, int? index}) async {
@@ -107,24 +105,17 @@ class _RulesTabState extends State<RulesTab> {
       outcome = importRules(s.doc, input.text);
     } on ConfigEditException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(e.message)));
+      showToast(context, e.message);
       return;
     }
     if (outcome.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              outcome.warnings.isEmpty
-                  ? '没有可导入的规则'
-                  : '没有可导入的规则：${outcome.warnings.first}',
-            ),
-          ),
-        );
+      showToast(
+        context,
+        outcome.warnings.isEmpty
+            ? '没有可导入的规则'
+            : '没有可导入的规则：${outcome.warnings.first}',
+      );
       return;
     }
     if (!s.apply((_) => outcome.doc)) {
@@ -132,9 +123,7 @@ class _RulesTabState extends State<RulesTab> {
       return;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text('已导入：${outcome.summary}')));
+    showToast(context, '已导入：${outcome.summary}');
   }
 
   static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
@@ -394,17 +383,14 @@ class _RulesTabState extends State<RulesTab> {
 
   void _toast(String message, {SnackBarAction? action}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: action,
-          duration: action == null
-              ? const Duration(seconds: 3)
-              : const Duration(seconds: 8),
-        ),
-      );
+    showToast(
+      context,
+      message,
+      // 带动作的多留一会儿，够用户点「重试失败项」。
+      duration: Duration(milliseconds: action == null ? 2600 : 8000),
+      actionLabel: action?.label,
+      onAction: action?.onPressed,
+    );
   }
 
   /// 跑一个异步任务，期间盖一层「正在…」的对话框。

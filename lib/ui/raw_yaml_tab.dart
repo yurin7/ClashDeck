@@ -46,13 +46,7 @@ class RawYamlTab extends StatelessWidget {
     state.replaceText(result);
     if (!context.mounted) return;
     if (!state.isValidYaml) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('YAML 解析失败：${state.doc.error?.message ?? '未知错误'}'),
-          ),
-        );
+      showToast(context, 'YAML 解析失败：${state.doc.error?.message ?? '未知错误'}');
     }
   }
 

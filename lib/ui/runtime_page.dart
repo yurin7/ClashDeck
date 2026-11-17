@@ -471,9 +471,7 @@ class _RuntimePageState extends State<RuntimePage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   static String _formatRate(int bytesPerSecond) {

@@ -83,14 +83,10 @@ class _EditorPageState extends State<EditorPage> {
     try {
       await state.save(widget.store);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('已保存')));
+      showToast(context, '已保存');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      showToast(context, '保存失败：$e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -184,14 +180,10 @@ class _EditorPageState extends State<EditorPage> {
     try {
       await state.saveAs(widget.store, name);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text('已另存为「$name」')));
+      showToast(context, '已另存为「$name」');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text('另存为失败：$e')));
+      showToast(context, '另存为失败：$e');
     }
   }
 
@@ -222,25 +214,19 @@ class _EditorPageState extends State<EditorPage> {
     final result = input.result;
     if (result == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('订阅地址已保存')));
+      showToast(context, '订阅地址已保存');
       return;
     }
     // 刷新语义：同名节点跳过，新节点追加（不覆盖用户改过的节点）。
     if (!state.importProxyList(result.proxies, skipExisting: true)) {
       final err = state.lastError;
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(err ?? '导入失败')));
+      showToast(context, err ?? '导入失败');
       return;
     }
     final added = state.profile.proxies.length;
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text('订阅已更新：现有 $added 个节点（同名跳过）')));
+    showToast(context, '订阅已更新：现有 $added 个节点（同名跳过）');
   }
 
   Future<void> _showIssues(ValidationReport report) async {

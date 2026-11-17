@@ -878,3 +878,17 @@ String suggestProxyGroup(Iterable<String> groupNames) {
   if (names.isNotEmpty) return names.first;
   return 'PROXY';
 }
+
+/// 把中文标签清洗成能当策略组名的字符串。
+///
+/// 标签里常带括号说明（`OpenAI（含 ChatGPT）`）和斜杠（`内网 / 本机地址`），
+/// 直接拿来建组会让组名又长又难认；规则里带逗号也会把 YAML 写坏，所以：
+/// 去掉括号及其内容 → 斜杠换空格 → 压缩空白 → 限制长度。
+String sanitizeGroupName(String raw) {
+  var text = raw.replaceAll(RegExp(r'[（(【\[][^）)】\]]*[）)】\]]'), ' ');
+  text = text.replaceAll(RegExp(r'[\\/、]'), ' ');
+  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (text.isEmpty) return 'PROXY';
+  if (text.length <= 24) return text;
+  return text.substring(0, 24).trim();
+}

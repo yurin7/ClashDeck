@@ -56,12 +56,47 @@ class AppDropdown<T> extends StatefulWidget {
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
 }
 
-class _AppDropdownState<T> extends State<AppDropdown<T>> {
+class _AppDropdownState<T> extends State<AppDropdown<T>>
+    with SingleTickerProviderStateMixin {
   final OverlayPortalController _portal = OverlayPortalController();
   final LayerLink _link = LayerLink();
   final GlobalKey _fieldKey = GlobalKey();
   double _fieldWidth = 0;
   double _offsetDx = 0;
+
+  /// 展开/收起动画。收起不能直接 `_portal.hide()`，否则浮层是硬切消失。
+  late final AnimationController _vis = AnimationController(
+    vsync: this,
+    duration: _openDuration,
+    reverseDuration: _closeDuration,
+  )..addStatusListener(_onVisStatus);
+
+  /// 正在播收起动画：这期间忽略再次点开，避免叠加两层浮层。
+  bool _closing = false;
+
+  static const Duration _openDuration = Duration(milliseconds: 130);
+  static const Duration _closeDuration = Duration(milliseconds: 140);
+
+  late final Animation<double> _curved = CurvedAnimation(
+    parent: _vis,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  void _onVisStatus(AnimationStatus status) {
+    if (status != AnimationStatus.dismissed) return;
+    if (!_portal.isShowing) return;
+    _portal.hide();
+    _closing = false;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _vis.removeStatusListener(_onVisStatus);
+    _vis.dispose();
+    super.dispose();
+  }
 
   String get _current {
     for (final option in widget.options) {
@@ -87,17 +122,21 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       _offsetDx = overflow > 0 ? -overflow : 0;
     }
     if (_portal.isShowing) {
-      _portal.hide();
-    } else {
-      _portal.show();
+      _close();
+      return;
     }
+    _portal.show();
+    _closing = false;
+    _vis.forward(from: 0);
     setState(() {});
   }
 
+  /// 播完收起动画再真正移除浮层。
   void _close() {
-    if (!_portal.isShowing) return;
-    _portal.hide();
+    if (!_portal.isShowing || _closing) return;
+    _closing = true;
     setState(() {});
+    _vis.reverse();
   }
 
   @override
@@ -138,19 +177,21 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
             offset: Offset(_offsetDx, 6),
             child: Align(
               alignment: Alignment.topLeft,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 130),
-                curve: Curves.easeOutCubic,
-                builder: (context, t, child) => Opacity(
-                  opacity: t,
-                  child: Transform.scale(
-                    scale: 0.97 + 0.03 * t,
-                    alignment: Alignment.topCenter,
-                    child: child,
+              child: IgnorePointer(
+                // 收起过程中不再响应点击，免得点出第二层浮层。
+                ignoring: _closing,
+                child: AnimatedBuilder(
+                  animation: _curved,
+                  builder: (context, child) => Opacity(
+                    opacity: _curved.value,
+                    child: Transform.scale(
+                      scale: 0.98 + 0.02 * _curved.value,
+                      alignment: Alignment.topCenter,
+                      child: child,
+                    ),
                   ),
+                  child: _menu(context, scheme),
                 ),
-                child: _menu(context, scheme),
               ),
             ),
           ),
@@ -266,8 +307,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
     final selected = option.value == widget.value;
     return InkWell(
       onTap: () {
-        _portal.hide();
-        setState(() {});
+        _close();
         if (!selected) widget.onChanged(option.value);
       },
       child: Container(

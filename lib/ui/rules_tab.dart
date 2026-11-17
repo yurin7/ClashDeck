@@ -336,17 +336,37 @@ class _RulesTabState extends State<RulesTab> {
     var geoAdded = 0;
     if (only.isEmpty && choice.geosites.isNotEmpty) {
       // 一次最多 50 条，免得一口气把规则列表撑得太长。
-      final lines = [
-        for (final pick in choice.geosites.take(50))
-          'GEOSITE,${pick.code},${geositeTargetFor(pick, choice.proxyGroup)}',
-      ];
-      try {
-        final outcome = insertRuleLines(doc, lines);
-        doc = outcome.doc;
-        geoAdded = outcome.rulesAdded;
-        hints.addAll(outcome.warnings);
-      } on ConfigEditException catch (e) {
-        failed.add('GEOSITE（${e.message}）');
+      final lines = <String>[];
+      for (final pick in choice.geosites.take(50)) {
+        final target = choice.geositeGroupFor(pick);
+        // 服务默认建同名组：组不存在就补一个，成员是全部节点。
+        try {
+          if (Profile.from(doc).group(target) == null) {
+            doc = ConfigOps.addGroup(doc, {
+              'name': target,
+              'type': 'select',
+            }, members: allProxies);
+            groupsMade += 1;
+          } else {
+            groupsReused += 1;
+          }
+        } on ConfigEditException catch (e) {
+          failed.add('${pick.label}（${e.message}）');
+          continue;
+        }
+        lines.add('GEOSITE,${pick.code},$target');
+      }
+      if (lines.isEmpty) {
+        // 全部建组失败，下面统一走失败分支。
+      } else {
+        try {
+          final outcome = insertRuleLines(doc, lines);
+          doc = outcome.doc;
+          geoAdded = outcome.rulesAdded;
+          hints.addAll(outcome.warnings);
+        } on ConfigEditException catch (e) {
+          failed.add('GEOSITE（${e.message}）');
+        }
       }
     }
 
@@ -1196,6 +1216,7 @@ class _PresetChoice {
     this.geosites,
     this.proxyGroup,
     this.rowGroups,
+    this.geositeGroups,
   );
 
   final List<RulePreset> presets;
@@ -1207,10 +1228,19 @@ class _PresetChoice {
   /// 每个规则集要写进的节点组：空串 = 新建同名组，否则 = 复用的已有组。
   final Map<String, String> rowGroups;
 
+  /// 每条 GEOSITE 要写进的节点组：空串 = 新建同名组（名字取标签清洗后）。
+  final Map<String, String> geositeGroups;
+
   /// 这个规则集该用哪个组名。
   String groupFor(RulePreset preset) => (rowGroups[preset.id] ?? '').isEmpty
       ? preset.label
       : rowGroups[preset.id]!;
+
+  /// 这条 GEOSITE 该用哪个组名：没选就用标签清洗后的同名组。
+  String geositeGroupFor(GeositePick pick) =>
+      (geositeGroups[pick.code] ?? '').isEmpty
+      ? sanitizeGroupName(pick.label)
+      : geositeGroups[pick.code]!;
 }
 
 /// 「常用规则集」面板：精选（Loyalsoldier + ACL4SSR）与 GEOSITE 服务两组。
@@ -1237,6 +1267,12 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
 
   /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
   final Map<String, String> _rowGroups = <String, String>{};
+
+  /// 每条 GEOSITE 要写进的组：没记录 = 用清洗后的标签建同名组。
+  final Map<String, String> _geositeGroups = <String, String>{};
+
+  /// 折叠起来的区块名（精选两段、服务各分类）。
+  final Set<String> _collapsed = <String>{};
   int _tab = 0;
 
   /// 「缓存于 <时间>」：本地规则集缓存最近一次写入时间。
@@ -1278,6 +1314,16 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
 
   void _setGroup(RulePreset preset, String value) {
     setState(() => _rowGroups[preset.id] = value);
+  }
+
+  /// 这条 GEOSITE 当前要写进的组名（没选 = 清洗后的标签名）。
+  String _geositeGroupFor(GeositePick pick) =>
+      (_geositeGroups[pick.code] ?? '').isEmpty
+      ? sanitizeGroupName(pick.label)
+      : _geositeGroups[pick.code]!;
+
+  void _setGeositeGroup(GeositePick pick, String value) {
+    setState(() => _geositeGroups[pick.code] = value);
   }
 
   int get _total => _picked.length + _geosites.length;
@@ -1415,6 +1461,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                       ])
                         if (_picked.contains(p.id)) p.id: _groupFor(p),
                     },
+                    _geositeGroups,
                   ),
                 ),
           child: Text(
@@ -1474,32 +1521,101 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
   List<Widget> _buildPresets(ThemeData theme) {
     final scheme = theme.colorScheme;
     return [
-      _sectionTitle(theme, 'Loyalsoldier', '通用、体积小，优先用这批'),
-      for (final preset in kLoyalRulesPresets)
-        _presetTile(theme, scheme, preset),
-      const SizedBox(height: Insets.sm),
-      _sectionTitle(theme, 'ACL4SSR', '厂商与流媒体细分，classical 格式'),
-      for (final preset in kAclRulesPresets) _presetTile(theme, scheme, preset),
+      _sectionBlock(
+        theme,
+        'Loyalsoldier',
+        '通用、体积小，优先用这批',
+        [for (final p in kLoyalRulesPresets) p.id],
+        _picked,
+        [for (final p in kLoyalRulesPresets) _presetTile(theme, scheme, p)],
+      ),
+      _sectionBlock(
+        theme,
+        'ACL4SSR',
+        '厂商与流媒体细分，classical 格式',
+        [for (final p in kAclRulesPresets) p.id],
+        _picked,
+        [for (final p in kAclRulesPresets) _presetTile(theme, scheme, p)],
+      ),
     ];
   }
 
-  Widget _sectionTitle(ThemeData theme, String title, String hint) {
-    return Padding(
-      padding: const EdgeInsets.only(top: Insets.sm, bottom: 2),
-      child: Row(
-        children: [
-          Text(title, style: display(12, weight: 600)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              hint,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
+  /// 一个可折叠分区：标题 + 已选/总数 + 区级三态全选。
+  ///
+  /// 三态框只显示推导状态，点击永远在「全选 / 清空」之间跳，不会停在半选；
+  /// 半选态只是「本区选了一部分」的视觉反馈。
+  Widget _sectionBlock(
+    ThemeData theme,
+    String title,
+    String hint,
+    List<String> ids,
+    Set<String> selected,
+    List<Widget> tiles,
+  ) {
+    final scheme = theme.colorScheme;
+    final count = ids.where(selected.contains).length;
+    final collapsed = _collapsed.contains(title);
+    final all = count == ids.length && ids.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() {
+            if (collapsed) {
+              _collapsed.remove(title);
+            } else {
+              _collapsed.add(title);
+            }
+          }),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Row(
+              children: [
+                Icon(
+                  collapsed ? Icons.chevron_right : Icons.expand_more,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 2),
+                Text(title, style: display(12, weight: 600)),
+                const SizedBox(width: 6),
+                Text(
+                  '$count/${ids.length}',
+                  style: mono(11, color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Checkbox(
+                    tristate: true,
+                    value: count == 0 ? false : (all ? true : null),
+                    onChanged: (_) => setState(() {
+                      if (all) {
+                        selected.removeAll(ids);
+                      } else {
+                        selected.addAll(ids);
+                      }
+                    }),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        if (!collapsed) ...tiles,
+        const SizedBox(height: Insets.xs),
+        Hairline(),
+      ],
     );
   }
 
@@ -1574,31 +1690,83 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     for (final pick in kGeositePicks) {
       groups.putIfAbsent(pick.group, () => []).add(pick);
     }
+    // 固定顺序：常用的 AI / 流媒体在最上面，未知分类沉底。
+    const order = ['AI', '流媒体', '社交', '游戏', '厂商', '合集'];
+    final keys = groups.keys.toList()
+      ..sort((a, b) {
+        final ia = order.indexOf(a);
+        final ib = order.indexOf(b);
+        return (ia < 0 ? order.length : ia).compareTo(
+          ib < 0 ? order.length : ib,
+        );
+      });
     return [
-      for (final entry in groups.entries) ...[
-        _sectionTitle(theme, entry.key, '${entry.value.length} 项'),
-        for (final pick in entry.value)
-          CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            value: _geosites.contains(pick.code),
-            onChanged: (v) => _toggle(_geosites, pick.code, v),
-            title: Text(
-              '${pick.label}  ·  ${pick.code}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${pick.description} → ${geositeTargetFor(pick, _proxyGroup)}',
-              style: theme.textTheme.bodySmall,
-            ),
-            secondary: Icon(
-              Icons.dns_outlined,
-              size: 18,
-              color: scheme.primary,
-            ),
-          ),
-      ],
+      for (final key in keys)
+        _sectionBlock(
+          theme,
+          key,
+          '${groups[key]!.length} 项',
+          [for (final pick in groups[key]!) pick.code],
+          _geosites,
+          [for (final pick in groups[key]!) _geositeTile(theme, scheme, pick)],
+        ),
     ];
+  }
+
+  Widget _geositeTile(ThemeData theme, ColorScheme scheme, GeositePick pick) {
+    final group = _geositeGroups[pick.code] ?? '';
+    final target = _geositeGroupFor(pick);
+    final tile = CheckboxListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      value: _geosites.contains(pick.code),
+      onChanged: (v) => _toggle(_geosites, pick.code, v),
+      title: Text(
+        '${pick.label}  ·  ${pick.code}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${pick.description} → $target',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall,
+      ),
+      secondary: Icon(Icons.dns_outlined, size: 18, color: scheme.primary),
+    );
+    final groupPicker = AppDropdown<String>(
+      compact: true,
+      value: group,
+      options: [
+        DropdownOption('', '新建同名组'),
+        for (final name in widget.groupNames) DropdownOption(name, name),
+      ],
+      onChanged: (value) => _setGeositeGroup(pick, value),
+    );
+
+    // 和规则集那行同构：窄屏两行，避免中文被压成竖排。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              tile,
+              Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(width: 160, child: groupPicker),
+              ),
+              const SizedBox(height: Insets.xs),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: tile),
+            SizedBox(width: 150, child: groupPicker),
+          ],
+        );
+      },
+    );
   }
 }

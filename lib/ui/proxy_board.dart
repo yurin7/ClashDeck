@@ -448,22 +448,18 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
               onAddMember: () async {
-                final hasCandidate =
-                    profile.proxies.any(
-                      (p) => !group.members.contains(p.name),
-                    ) ||
-                    profile.groups.any(
-                      (g) =>
-                          g.name != group.name &&
-                          !group.members.contains(g.name),
-                    );
-                if (!hasCandidate) {
-                  _toast('「${group.name}」里已经包含所有节点和策略组，没有可添加的了');
+                final picked = await _pickMembers(profile, group);
+                if (picked == null || picked.isEmpty) return;
+                var added = 0;
+                for (final name in picked) {
+                  if (s.addGroupMember(group.name, name)) added++;
+                }
+                if (added == 0) {
+                  _fail();
                   return;
                 }
-                final picked = await _pickNode(profile, group);
-                if (picked == null) return;
-                if (!s.addGroupMember(group.name, picked)) _fail();
+                // 组头计数直接读 state，刷新一次就能看到新成员。
+                if (mounted) setState(() {});
               },
               onDrop: (data) {
                 final ok = data.fromGroup == null
@@ -490,29 +486,23 @@ class _ProxyBoardState extends State<ProxyBoard> {
     );
   }
 
-  Future<String?> _pickNode(Profile profile, GroupEntry group) {
-    final candidates = profile.proxies
-        .where((p) => !group.members.contains(p.name))
-        .toList();
-    final groupCandidates = profile.groups.where(
-      (g) => g.name != group.name && !group.members.contains(g.name),
-    );
-    final all = <String>[
-      ...candidates.map((e) => e.name),
-      ...groupCandidates.map((e) => e.name),
-    ];
-    if (all.isEmpty) return Future.value(null);
-    return showAppDialog<String>(
-      context,
-      builder: (ctx) => SimpleDialog(
-        title: Text('向「${group.name}」添加成员'),
-        children: [
-          for (final name in all)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, name),
-              child: Text(name),
-            ),
-        ],
+  /// 「选择要加入的节点」底部弹窗。
+  ///
+  /// 返回要加进这个组的成员；返回 `null` 表示放弃。三种情况都要能走下去：
+  /// 有候选就多选、全局没节点就引导去新建、全在组里也要给新建入口。
+  Future<List<String>?> _pickMembers(Profile profile, GroupEntry group) {
+    return showModalBottomSheet<List<String>>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => _AddMemberSheet(
+        profile: profile,
+        groupName: group.name,
+        members: group.members,
+        onCreateNode: () {
+          Navigator.pop(ctx);
+          _addNodeForm();
+        },
       ),
     );
   }
@@ -1278,6 +1268,190 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
           child: const Text('保存'),
         ),
       ],
+    );
+  }
+}
+
+/// 组头「+」打开的底部弹窗：多选把节点/策略组加进这个组。
+///
+/// 三个状态都要能走：
+/// - 有候选：多选后点「加入」；
+/// - 整个配置没有任何节点：空态 + 直达「新建节点」；
+/// - 该组已经包含所有候选：提示「全部节点已在组内」，但保留「新建节点」入口。
+class _AddMemberSheet extends StatefulWidget {
+  const _AddMemberSheet({
+    required this.profile,
+    required this.groupName,
+    required this.members,
+    required this.onCreateNode,
+  });
+
+  final Profile profile;
+  final String groupName;
+  final List<String> members;
+  final VoidCallback onCreateNode;
+
+  @override
+  State<_AddMemberSheet> createState() => _AddMemberSheetState();
+}
+
+class _AddMemberSheetState extends State<_AddMemberSheet> {
+  final Set<String> _picked = <String>{};
+
+  bool _inGroup(String name) => widget.members.contains(name);
+
+  List<String> get _candidates => <String>[
+    for (final proxy in widget.profile.proxies)
+      if (!_inGroup(proxy.name)) proxy.name,
+    for (final group in widget.profile.groups)
+      if (group.name != widget.groupName && !_inGroup(group.name)) group.name,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final candidates = _candidates;
+    final noNodes = widget.profile.proxies.isEmpty;
+    final allInside = !noNodes && candidates.isEmpty;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          Insets.xl,
+          Insets.md,
+          Insets.xl,
+          Insets.xl + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('选择要加入的节点', style: display(17, weight: 700)),
+              const SizedBox(height: 2),
+              Text('向「${widget.groupName}」添加成员', style: hintStyle(context)),
+              if (allInside) ...[
+                const SizedBox(height: Insets.md),
+                Pill(
+                  label: '全部节点已在组内',
+                  icon: Icons.check_circle_outline,
+                  color: scheme.primary,
+                ),
+              ],
+              const SizedBox(height: Insets.md),
+              Flexible(
+                child: noNodes
+                    ? _emptyState(context)
+                    : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final proxy in widget.profile.proxies)
+                            _row(proxy.name, scheme),
+                          if (widget.profile.groups.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: Insets.sm,
+                                bottom: 2,
+                              ),
+                              child: MicroLabel(
+                                '策略组',
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          for (final group in widget.profile.groups)
+                            if (group.name != widget.groupName)
+                              _row(group.name, scheme, isGroup: true),
+                        ],
+                      ),
+              ),
+              const SizedBox(height: Insets.sm),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: widget.onCreateNode,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('新建节点'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: Insets.sm),
+                  FilledButton(
+                    onPressed: _picked.isEmpty
+                        ? null
+                        : () => Navigator.pop(context, _picked.toList()),
+                    child: Text('加入（${_picked.length}）'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String name, ColorScheme scheme, {bool isGroup = false}) {
+    final inside = _inGroup(name);
+    return CheckboxListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      value: inside || _picked.contains(name),
+      onChanged: inside
+          ? null
+          : (value) {
+              setState(() {
+                if (value ?? false) {
+                  _picked.add(name);
+                } else {
+                  _picked.remove(name);
+                }
+              });
+            },
+      title: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: hintStyle(
+          context,
+        )?.copyWith(color: inside ? scheme.onSurfaceVariant : scheme.onSurface),
+      ),
+      secondary: Icon(
+        isGroup ? Icons.account_tree_outlined : Icons.dns_outlined,
+        size: 18,
+        color: scheme.onSurfaceVariant,
+      ),
+      subtitle: inside ? Text('已在组内', style: hintStyle(context)) : null,
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Insets.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 32,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: Insets.sm),
+          Text('还没有节点', style: display(15, weight: 600)),
+          const SizedBox(height: 4),
+          Text(
+            '先建一个节点，再把它加进「${widget.groupName}」。',
+            textAlign: TextAlign.center,
+            style: hintStyle(context),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -29,8 +29,8 @@ Clash 系客户端大多只让你旁路改 YAML 文本——加一个 vless 节�
 | `ClashDeck-0.1.0-x86_64.apk` | x86_64 | 模拟器 / x86 平板（35.2 MB） |
 
 - `minSdk 24`（Android 7.0+），`targetSdk 36`；APK 内已带内核与 GEOIP/GEOSITE 数据，装完即用
-- 仓库里带了**固定的自签名密钥库**（`android/app/clashdeck-release.jks`，自用/测试足够，不用于上架），
-  所以每个新包都能直接覆盖安装升级，不用先卸载；没有 armeabi-v7a 包
+- 发布包由**固定的一把自签名 key** 签名，所以新版本能直接覆盖安装、升级不丢配置；
+  这把 key 只在两个地方：你自己电脑的仓库外目录，和 CI 的 Actions Secrets——仓库里不保存
 - 首次「启动内核」会请求 VPN 授权；不想接管全局流量，可在设置里切「仅代理端口」
 
 包名 `dev.clashdeck`，许可证 **GPL-3.0**（与 mihomo 一致）。完整条款见 [LICENSE](LICENSE)；
@@ -146,41 +146,44 @@ git push origin v0.1.3
 
 ### 签名与覆盖升级
 
-**现象**：装新版本时提示要先卸载旧版本。
+安装包用同一把自签名 key 签名（自用/测试，不上架应用商店）。好处很直接：**新版本可以直接覆盖安装，
+配置和节点都不会丢。**
 
-**原因**：仓库里没有固定 keystore 时，Gradle 回退到 debug 签名；而 GitHub 的 runner 每次都是干净的
-机器，动态生成的 debug key 每构建一次就换一把，证书不同 → Android 拒绝覆盖安装
-（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。
+只有一种情况需要卸载一次：之前装的是早期"每次构建换一把签名"的版本（0.1.0–0.1.2 和早期 nightly），
+它们的证书与现在不同，无法覆盖安装。卸载前先在「YAML」页把配置复制备份，重装后「导入」粘回来即可。
 
-**修法：用一把固定的 key 签名，本地和 CI 都用它。**
+想确认手上的包是不是同一个签名，可以用本机 apksigner 验一下：
 
-本地生成（只需一次）：
-
-```powershell
-pwsh -File tool\setup_signing.ps1
+```bash
+apksigner verify --print-certs ClashDeck-*.apk
+# Signer #1 certificate SHA-256 digest: a6db4e7e…c1433be1
 ```
 
-它会生成 `android/app/clashdeck-release.jks` 和 `android/key.properties`，本地构建从此可以覆盖安装。
-`android/key.properties` 指向 keystore，**不要把 keystore 提交到仓库**——CI 里由 Secrets 提供。
+当前证书指纹（`Show signer` 步骤每次构建也会打印）：
 
-让 CI 也用同一把 key：把 keystore 转成一行 base64，存到仓库的
-Settings → Secrets and variables → Actions：
+```
+A6:DB:4E:7E:E0:28:85:9D:4F:D6:86:3E:61:94:C3:3F:8C:D7:2F:DD:C1:6A:9F:0D:1F:69:B2:16:C1:43:3B:E1
+```
 
-| Secret | 值 |
+#### 维护者：签名材料放在哪
+
+一句话：key 只放在**你自己电脑的仓库外目录**和**CI 的 Actions Secrets**里，仓库里不保存。
+
+| 位置 | 放什么 |
 | --- | --- |
-| `KEYSTORE_BASE64` | `[Convert]::ToBase64String([IO.File]::ReadAllBytes('android/app/clashdeck-release.jks'))` 的输出 |
-| `KEYSTORE_PASSWORD` | `key.properties` 里的 `storePassword` |
-| `KEY_ALIAS` | `key.properties` 里的 `keyAlias` |
-| `KEY_PASSWORD` | `key.properties` 里的 `keyPassword` |
+| 本机（仓库外） | `%USERPROFILE%\.clashdeck\` 里的 keystore；`android/key.properties` 指过去（已被 git 忽略） |
+| CI | Actions Secrets 四个：`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` |
+| 仓库 | 不保存任何签名材料（`.gitignore` 已排除 `*.jks`、`*.keystore`、`key.properties`） |
 
-工作流会把这些还原成临时 keystore 并写入 `android/key.properties`；没配置时会打印警告继续用 debug
-签名。构建日志最后的 `Show signer` 步骤会打印证书 SHA-256，可以对比本地 `apksigner` 的结果确认一致。
+- 通过私聊或私人网盘发给自己、备份到自己设备，都是正常做法；要避免的是**公开**：公开仓库、issue、
+  PR、截图、公开群聊。
+- `tool\setup_signing.ps1` 只在**换新 key** 时用一次：它把 keystore 生成到仓库外，并在仓库外输出 4 个
+  Secret 的值。已经有可用 key 时不要重跑。
+- 换 key 等于换 App 身份：要更新 4 个 Secrets，且用户需要卸载重装一次——非必要不换。
 
-**两点注意**：
-
-- 从「每次不同签名」切到「固定签名」时，需要**先卸载一次**旧包（旧包证书不同，无法覆盖）。
-- 覆盖安装还要求 `versionCode` 不降：CI 用构建序号（`--build-number`），本地手动构建时请显式给一个
-  不小于已安装版本的值，例如 `flutter build apk --release --build-number=2026`。
+本地打 release 包（可选）：`flutter build apk --release --split-per-abi` 会自动读
+`android/key.properties`；手动构建时 `--build-number` 不要小于已安装版本，否则会报降级
+（`INSTALL_FAILED_VERSION_DOWNGRADE`）。
 
 ## 目录
 

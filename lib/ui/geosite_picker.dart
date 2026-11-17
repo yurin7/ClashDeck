@@ -65,15 +65,24 @@ class _GeositePickerDialogState extends State<_GeositePickerDialog> {
     setState(() {
       _all = entries;
       _loading = false;
-      if (_code == null && entries.isNotEmpty) _code = entries.first.code;
+      // 默认选中常用分类里的第一个，而不是字母表最前面的 `0x0`。
+      final curated = entries.where((e) => kGeositeLabels.containsKey(e.code));
+      _code ??= curated.isEmpty ? null : curated.first.code;
     });
   }
 
   String get _query => _ctrl.text.trim().toLowerCase();
 
+  /// 默认只列「有中文名」的常用分类：直接按字母表取前 40 个会全是
+  /// `0x0`、`1337x` 这种看不出含义的 code，用户会以为是错数据。
+  List<GeositeEntry> get _curated => [
+    for (final entry in _all)
+      if (kGeositeLabels.containsKey(entry.code)) entry,
+  ];
+
   List<GeositeEntry> get _matches {
     final q = _query;
-    if (q.isEmpty) return _all.take(40).toList();
+    if (q.isEmpty) return _curated.take(40).toList();
     final hits = <GeositeEntry>[];
     for (final entry in _all) {
       final label = geositeLabelOf(entry.code).toLowerCase();

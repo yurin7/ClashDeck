@@ -52,7 +52,6 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
   late String _target;
   late bool _noResolve;
   late final TextEditingController _payloadCtrl;
-  late final TextEditingController _customCtrl;
 
   @override
   void initState() {
@@ -63,13 +62,11 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
         (widget.targets.isNotEmpty ? widget.targets.first : 'DIRECT');
     _noResolve = widget.initialNoResolve;
     _payloadCtrl = TextEditingController(text: widget.initialPayload ?? '');
-    _customCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _payloadCtrl.dispose();
-    _customCtrl.dispose();
     super.dispose();
   }
 
@@ -115,7 +112,6 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
 
   void _submit() {
     final payload = _payloadCtrl.text.trim();
-    final custom = _customCtrl.text.trim();
     if (_needsPayload && payload.isEmpty) {
       showToast(context, '请填写匹配内容');
       return;
@@ -124,7 +120,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
       RuleDraft(
         type: _type,
         payload: payload,
-        target: custom.isEmpty ? _target : custom,
+        target: _target,
         noResolve: _noResolve,
       ),
     );
@@ -175,16 +171,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
               ],
               onChanged: (v) => setState(() => _target = v),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _customCtrl,
-              decoration: const InputDecoration(
-                labelText: '手动填写目标（可选）',
-                hintText: '例如 DOH 或自定义组名',
-                helperText: '留空就按上面的选择；填了以这里为准',
-                border: OutlineInputBorder(),
-              ),
-            ),
+
             if (kNoResolveTypes.contains(_type))
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

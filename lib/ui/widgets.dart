@@ -641,3 +641,139 @@ class _SparkPainter extends CustomPainter {
 void disposeAfterDialog(ChangeNotifier notifier) {
   Future<void>.delayed(const Duration(milliseconds: 600), notifier.dispose);
 }
+
+/// iOS 式的左滑操作行：手指从右往左拖，露出右侧操作按钮。
+///
+/// 拖动过程跟手，松手按位移/速度判断停在展开态还是弹回；展开状态由外部
+/// 持有（一次只允许一行展开）。行内容展开时对应区域改由本组件接管点击，
+/// 点一下即收起，不会误触发行本身的「设为运行配置」。
+class SlidableRow extends StatefulWidget {
+  const SlidableRow({
+    super.key,
+    required this.child,
+    required this.actionLabel,
+    required this.onAction,
+    this.open = false,
+    this.onOpenChanged,
+    this.actionWidth = 80,
+  });
+
+  final Widget child;
+
+  /// 右侧按钮文案，例如「删除」。
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  /// 是否处于展开态（由外部单一来源控制）。
+  final bool open;
+  final ValueChanged<bool>? onOpenChanged;
+  final double actionWidth;
+
+  @override
+  State<SlidableRow> createState() => _SlidableRowState();
+}
+
+class _SlidableRowState extends State<SlidableRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: widget.open ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(covariant SlidableRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open != oldWidget.open) {
+      _controller.animateTo(widget.open ? 1 : 0, curve: Curves.easeOutCubic);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _controller.value =
+        (_controller.value - details.delta.dx / widget.actionWidth).clamp(
+          0.0,
+          1.0,
+        );
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldOpen =
+        velocity < -220 || (velocity <= 220 && _controller.value > 0.4);
+    widget.onOpenChanged?.call(shouldOpen);
+    _controller.animateTo(shouldOpen ? 1 : 0, curve: Curves.easeOutCubic);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onHorizontalDragStart: (_) => _controller.stop(),
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final value = _controller.value;
+            return Stack(
+              children: [
+                if (value > 0)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        width: widget.actionWidth,
+                        child: Material(
+                          color: scheme.error,
+                          child: InkWell(
+                            onTap: widget.onAction,
+                            child: Center(
+                              child: Text(
+                                widget.actionLabel,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onError,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Transform.translate(
+                  offset: Offset(-value * widget.actionWidth, 0),
+                  child: child,
+                ),
+                if (value > 0)
+                  Positioned(
+                    left: 0,
+                    right: widget.actionWidth * value,
+                    top: 0,
+                    bottom: 0,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => widget.onOpenChanged?.call(false),
+                    ),
+                  ),
+              ],
+            );
+          },
+          child: ColoredBox(
+            color: scheme.surfaceContainerLow,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}

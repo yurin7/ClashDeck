@@ -153,6 +153,80 @@ rules:
     expect(find.text('校验通过'), findsNWidgets(2));
   });
 
+  testWidgets('左滑露出删除，点删除走二次确认与壳层回调', (tester) async {
+    final deleted = <String>[];
+    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        home: HomePage(
+          activeFileName: '订阅.yaml',
+          onDeleteProfile: (fileName) async => deleted.add(fileName),
+        ),
+      ),
+    );
+    await pumpUntil(
+      tester,
+      () =>
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+          find.text('读取中').evaluate().isEmpty,
+    );
+
+    // 未滑动时看不到删除按钮。
+    expect(find.text('删除'), findsNothing);
+
+    // 左滑「正常」这一行 → 露出删除。
+    await tester.drag(find.text('正常').first, const Offset(-140, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('删除'), findsOneWidget);
+
+    // 点删除 → 二次确认弹窗。
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除「正常」？'), findsOneWidget);
+    expect(find.text('删除后不可恢复，建议先备份 YAML。'), findsOneWidget);
+
+    // 弹窗里确认 → 交给壳层回调，页面自己不动文件。
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+    expect(deleted, ['正常.yaml']);
+    expect(find.text('删除「正常」？'), findsNothing);
+    expect(File('${tmp.path}/profiles/正常.yaml').existsSync(), isTrue);
+  });
+
+  testWidgets('左滑只能展开一行，点别处自动收起', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(theme: ClashDeckTheme.light(), home: const HomePage()),
+    );
+    await pumpUntil(
+      tester,
+      () =>
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+          find.text('读取中').evaluate().isEmpty,
+    );
+
+    await tester.drag(find.text('正常').first, const Offset(-140, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('删除'), findsOneWidget);
+
+    // 另一行左滑 → 前一行收起，仍然只有一个删除按钮。
+    await tester.drag(find.text('坏配置').first, const Offset(-140, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('删除'), findsOneWidget);
+
+    // 点页面空白处 → 全部收起。
+    await tester.tapAt(const Offset(180, 120));
+    await tester.pumpAndSettle();
+    expect(find.text('删除'), findsNothing);
+  });
+
   testWidgets('360dp 窄屏：长错误标签不溢出', (tester) async {
     // physicalSize 是物理像素，除以 dpr 3 后逻辑宽度正好 360dp。
     await pumpHome(

@@ -18,6 +18,7 @@ class HomePage extends StatefulWidget {
     this.activeFileName,
     this.onSetActive,
     this.onProfilesChanged,
+    this.onDeleteProfile,
     this.runtime,
     this.autoSave = false,
     this.bottomInset = 0,
@@ -31,6 +32,10 @@ class HomePage extends StatefulWidget {
 
   /// 配置列表变化（新建/导入/改名/删除）后的回调。
   final Future<void> Function()? onProfilesChanged;
+
+  /// 删除某份配置（含 sidecar meta）。由壳层统一处理：内核在跑时先停、
+  /// 删完切到下一份可用配置。为空时退回自己删文件。
+  final Future<void> Function(String fileName)? onDeleteProfile;
 
   /// 全局唯一的运行控制器；传给编辑页后，配置页「点组内节点 = 切换该组出口」才生效。
   final RuntimeController? runtime;
@@ -176,11 +181,13 @@ class _HomePageState extends State<HomePage> {
 
   /// 点整行 = 把这份配置设为运行配置（内核在跑时由上层停→切→重启）。
   Future<void> _activate(StoredProfile item) async {
+    _closeSwipe();
     if (item.fileName == widget.activeFileName) return;
     await widget.onSetActive?.call(item.fileName);
   }
 
   Future<void> _open(StoredProfile item) async {
+    _closeSwipe();
     final store = _store;
     if (store == null) return;
     await Navigator.of(context).push(
@@ -332,14 +339,23 @@ class _HomePageState extends State<HomePage> {
     await _refresh();
   }
 
+  /// 左滑露出的行：同一时间只允许一行展开。
+  String? _swipedFileName;
+
+  void _closeSwipe() {
+    if (_swipedFileName == null) return;
+    setState(() => _swipedFileName = null);
+  }
+
   Future<void> _delete(StoredProfile item) async {
     final store = _store;
     if (store == null) return;
+    setState(() => _swipedFileName = null);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('删除「${item.name}」？'),
-        content: const Text('只删除这个 App 里的文件，不影响其它客户端的配置。'),
+        content: const Text('删除后不可恢复，建议先备份 YAML。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -356,8 +372,16 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     if (ok != true) return;
-    await store.delete(item.fileName);
-    await _refresh();
+    final onDelete = widget.onDeleteProfile;
+    if (onDelete != null) {
+      await onDelete(item.fileName);
+      // 壳层删完会重载它自己的列表；这里的行来自本页自己的 store 读取，
+      // 不刷新就会留下一条指向已删文件的幽灵行。
+      await _refresh();
+    } else {
+      await store.delete(item.fileName);
+      await _refresh();
+    }
   }
 
   /// 长按卡片时的操作面板（与右上角菜单同一套动作）。
@@ -445,132 +469,153 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildContent(BuildContext context) {
     final items = _orderedItems;
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            Insets.xl,
-            Insets.md,
-            Insets.xl,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: _Hero(
-              profileCount: _items.length,
-              nodeCount: _summariesLoading ? null : _totalNodes,
-              subscriptionCount: _summariesLoading ? null : _subscriptionCount,
-              onRefresh: _loading ? null : _refresh,
-            ),
-          ),
-        ),
-        // 空态里已经有「新建配置 / 导入」两个入口，这里不再重复一份。
-        if (_items.isNotEmpty)
+    return NotificationListener<ScrollStartNotification>(
+      onNotification: (_) {
+        _closeSwipe();
+        return false;
+      },
+      child: CustomScrollView(
+        slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               Insets.xl,
-              Insets.lg,
+              Insets.md,
               Insets.xl,
               0,
             ),
             sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AccentButton(
-                      label: '新建配置',
-                      icon: Icons.add,
-                      onPressed: _loading ? null : _createBlank,
-                    ),
-                  ),
-                  const SizedBox(width: Insets.sm),
-                  SizedBox(
-                    width: 118,
-                    child: OutlinedButton.icon(
-                      onPressed: _loading ? null : _import,
-                      icon: const Icon(Icons.file_download_outlined, size: 17),
-                      label: const Text('导入'),
-                    ),
-                  ),
-                ],
+              child: _Hero(
+                profileCount: _items.length,
+                nodeCount: _summariesLoading ? null : _totalNodes,
+                subscriptionCount: _summariesLoading
+                    ? null
+                    : _subscriptionCount,
+                onRefresh: _loading ? null : _refresh,
               ),
             ),
           ),
-        SliverPadding(
-          // SectionTitle 自带 4 的横向内边距，这里补到与卡片边缘（24）对齐。
-          padding: const EdgeInsets.fromLTRB(
-            Insets.xl - Insets.xs,
-            Insets.sm,
-            Insets.xl - Insets.xs,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: SectionTitle(
-              title: '我的配置',
-              subtitle: '点开编辑节点、策略组与规则',
-              trailing: Pill(label: '${_items.length} 份', dense: true),
-            ),
-          ),
-        ),
-        if (_items.isEmpty)
-          SliverToBoxAdapter(
-            child: EmptyHint(
-              icon: Icons.dns_outlined,
-              title: '还没有配置',
-              message:
-                  '新建一份，或粘贴 vless:// 链接 / 订阅地址导入。\n'
-                  '文件就是普通 YAML，mihomo 可直接使用。',
-              action: Wrap(
-                spacing: Insets.md,
-                runSpacing: Insets.sm,
-                alignment: WrapAlignment.center,
-                children: [
-                  FilledButton.icon(
-                    onPressed: _createBlank,
-                    icon: const Icon(Icons.add),
-                    label: const Text('新建配置'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _import,
-                    icon: const Icon(Icons.file_download_outlined),
-                    label: const Text('导入'),
-                  ),
-                ],
+          // 空态里已经有「新建配置 / 导入」两个入口，这里不再重复一份。
+          if (_items.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                Insets.xl,
+                Insets.lg,
+                Insets.xl,
+                0,
               ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.xl,
-              0,
-              Insets.xl,
-              Insets.xxl,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: AppCard(
-                padding: EdgeInsets.zero,
-                child: Column(
+              sliver: SliverToBoxAdapter(
+                child: Row(
                   children: [
-                    for (var i = 0; i < items.length; i++) ...[
-                      if (i > 0) const Hairline(indent: Insets.lg),
-                      _ProfileRow(
-                        item: items[i],
-                        summary: _summaries[items[i].fileName],
-                        subscriptionUrl: _subscriptionOf(items[i]),
-                        active: items[i].fileName == widget.activeFileName,
-                        onTap: () => _activate(items[i]),
-                        onLongPress: () => _showItemMenu(items[i]),
-                        onSettings: () => _open(items[i]),
+                    Expanded(
+                      child: AccentButton(
+                        label: '新建配置',
+                        icon: Icons.add,
+                        onPressed: _loading ? null : _createBlank,
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: Insets.sm),
+                    SizedBox(
+                      width: 118,
+                      child: OutlinedButton.icon(
+                        onPressed: _loading ? null : _import,
+                        icon: const Icon(
+                          Icons.file_download_outlined,
+                          size: 17,
+                        ),
+                        label: const Text('导入'),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+          SliverPadding(
+            // SectionTitle 自带 4 的横向内边距，这里补到与卡片边缘（24）对齐。
+            padding: const EdgeInsets.fromLTRB(
+              Insets.xl - Insets.xs,
+              Insets.sm,
+              Insets.xl - Insets.xs,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: SectionTitle(
+                title: '我的配置',
+                subtitle: '点开编辑节点、策略组与规则',
+                trailing: Pill(label: '${_items.length} 份', dense: true),
+              ),
+            ),
           ),
-        if (widget.bottomInset > 0)
-          SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
-      ],
+          if (_items.isEmpty)
+            SliverToBoxAdapter(
+              child: EmptyHint(
+                icon: Icons.dns_outlined,
+                title: '还没有配置',
+                message:
+                    '新建一份，或粘贴 vless:// 链接 / 订阅地址导入。\n'
+                    '文件就是普通 YAML，mihomo 可直接使用。',
+                action: Wrap(
+                  spacing: Insets.md,
+                  runSpacing: Insets.sm,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _createBlank,
+                      icon: const Icon(Icons.add),
+                      label: const Text('新建配置'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _import,
+                      icon: const Icon(Icons.file_download_outlined),
+                      label: const Text('导入'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                Insets.xl,
+                0,
+                Insets.xl,
+                Insets.xxl,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < items.length; i++) ...[
+                        if (i > 0) const Hairline(indent: Insets.lg),
+                        SlidableRow(
+                          open: _swipedFileName == items[i].fileName,
+                          actionLabel: '删除',
+                          onAction: () => _delete(items[i]),
+                          onOpenChanged: (open) => setState(
+                            () => _swipedFileName = open
+                                ? items[i].fileName
+                                : null,
+                          ),
+                          child: _ProfileRow(
+                            item: items[i],
+                            summary: _summaries[items[i].fileName],
+                            subscriptionUrl: _subscriptionOf(items[i]),
+                            active: items[i].fileName == widget.activeFileName,
+                            onTap: () => _activate(items[i]),
+                            onLongPress: () => _showItemMenu(items[i]),
+                            onSettings: () => _open(items[i]),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (widget.bottomInset > 0)
+            SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
+        ],
+      ),
     );
   }
 }

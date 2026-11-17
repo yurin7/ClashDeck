@@ -169,6 +169,45 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// 删除一份配置。删的是当前运行配置时按「停内核 → 切到下一份 → 再删」
+  /// 的顺序处理，避免内核还指着已经不存在的文件。
+  Future<void> _deleteProfile(String fileName) async {
+    final wasActive = fileName == _activeFileName;
+    final wasRunning =
+        _runtime.phase == RuntimePhase.running ||
+        _runtime.phase == RuntimePhase.starting;
+    if (wasActive && wasRunning) {
+      if (_runtime.isBusy) return;
+      await _runtime.stop();
+    }
+    final name = _profileName(fileName);
+    // 文件名和 sidecar meta（订阅地址等）一起删。
+    await widget.store.delete(fileName);
+    if (wasActive) {
+      await _prefs?.setActiveProfile(null);
+      if (mounted) setState(() => _activeFileName = null);
+    }
+    await _reloadProfiles();
+    if (!mounted) return;
+    if (!wasActive) {
+      _toast('已删除「$name」');
+      return;
+    }
+    final next = _activeFileName;
+    if (!wasRunning || next == null) {
+      _toast('已删除「$name」');
+      return;
+    }
+    try {
+      await _runtime.start();
+      if (mounted) {
+        _toast('已删除「$name」，内核改用「${_profileName(next)}」重启');
+      }
+    } catch (error) {
+      if (mounted) _toast('已删除「$name」，但重启内核失败：$error');
+    }
+  }
+
   String _profileName(String fileName) {
     for (final item in _profiles) {
       if (item.fileName == fileName) return item.name;
@@ -471,6 +510,7 @@ class _AppShellState extends State<AppShell> {
                   activeFileName: _activeFileName,
                   onSetActive: _setActive,
                   onProfilesChanged: _reloadProfiles,
+                  onDeleteProfile: _deleteProfile,
                   runtime: _runtime,
                   autoSave: _settings?.autoSave ?? false,
                   bottomInset: _bottomInset,

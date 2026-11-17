@@ -122,19 +122,24 @@ git clone --depth 1 -b Alpha https://github.com/MetaCubeX/mihomo D:\dev\_downloa
 
 ## 发布
 
-打 tag 就会自动发版（不需要本地打包）：
+全自动，本地不用打包：
+
+- **每次 push 到 `main`**：自动构建开发版，覆盖更新到 Release「开发版（跟随 main）」——它是一个
+  预发布（prerelease），始终指向最新的 main 代码，资源名固定为 `ClashDeck-dev-<abi>.apk`，
+  所以下载链接不会变。
+- **push `v*` 标签**：自动构建正式版，发到该标签的 Release。
 
 ```powershell
-git tag -a v0.1.1 -m "ClashDeck v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.3 -m "ClashDeck v0.1.3"
+git push origin v0.1.3
 ```
 
-GitHub Actions 会：
+每次构建都会：
 
 1. 在 runner 上用 `tool/build_core.sh` 现编 mihomo 内核（arm64-v8a / x86_64，含 anet 构建约束补丁）；
 2. `flutter analyze` + `flutter test`；
 3. `flutter build apk --release --split-per-abi`，只产出有内核的两个 ABI；
-4. 把 `ClashDeck-<版本>-<abi>.apk` 挂到该 tag 的 Release 上，并生成变更说明。
+4. 上传到对应的 Release（正式版生成变更说明），同时也作为 Actions 产物保存 14 天。
 
 流水线页面：<https://github.com/yurin7/ClashDeck/actions>
 

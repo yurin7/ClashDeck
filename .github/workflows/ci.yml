@@ -1,16 +1,20 @@
 name: ci
 
+# 只在 PR 上跑静态检查和单测；push 到 main 由 build 工作流负责（它会先跑同样的检查再打包）。
+
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  analyze-and-test:
+  test:
     name: Analyze & test
     runs-on: ubuntu-latest
     timeout-minutes: 30

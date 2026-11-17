@@ -4,6 +4,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// 发布签名：把 android/key.properties 和 android/app/clashdeck-release.jks 放进仓库，
+// 每次构建就用同一个 key 签名，新包能直接覆盖安装升级。
+// 缺这两个文件时回退到 debug 签名（CI 每次新生成，所以那种包必须卸载才能重装）。
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = java.util.Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val hasReleaseKeystore =
+    keystorePropertiesFile.exists() && keystoreProperties.getProperty("storeFile") != null
+
 android {
     namespace = "dev.clashdeck"
     compileSdk = flutter.compileSdkVersion
@@ -35,11 +46,26 @@ android {
         // 走到 MihomoCore.start 的"找不到内核文件"分支并报错，不会崩。
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 有固定 keystore 就用它，没有就退回 debug（能跑，但每次签名不同，装不上旧包）。
+            signingConfig =
+                if (hasReleaseKeystore) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
         }
     }
 

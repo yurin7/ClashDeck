@@ -176,6 +176,23 @@ class _RulesTabState extends State<RulesTab> {
   /// 导入规则：
   /// - 单行 URL → 当成 rule-provider 规则集（Loyalsoldier/clash-rules 那种）；
   /// - 其余 → 纯规则行，或带 proxy-groups / provider 的配置片段。
+  /// 在线面板的「自定义规则集地址」：只收一个 URL，按 rule-provider 导入。
+  Future<void> _addCustomRuleProvider() async {
+    final input = await showRuleImportDialog(
+      context,
+      initial: 'https://',
+      groups: [for (final g in s.profile.groups) g.name],
+    );
+    if (input == null) return;
+    final url = input.text.trim();
+    if (!_urlPattern.hasMatch(url)) {
+      if (!mounted) return;
+      showToast(context, '这里只接收规则集地址（http/https）');
+      return;
+    }
+    await _importRuleProviderFromUrl(url, groupName: input.group);
+  }
+
   Future<void> _importRules() async {
     final input = await showRuleImportDialog(
       context,
@@ -806,7 +823,14 @@ class _RulesTabState extends State<RulesTab> {
               onChanged: (value) => _setInterval(int.parse(value)),
             ),
           ),
-          const SizedBox(width: Insets.sm),
+          const SizedBox(width: Insets.xs),
+          IconButton(
+            onPressed: _refreshing ? null : _addCustomRuleProvider,
+            tooltip: '自定义规则集地址',
+            icon: const Icon(Icons.link, size: 18),
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: Insets.xs),
           OutlinedButton.icon(
             onPressed: (_refreshing || empty)
                 ? null
@@ -1403,21 +1427,13 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     for (final p in [...kLoyalRulesPresets, ...kAclRulesPresets])
       if (p.enabledByDefault) p.id,
   };
-  late final Set<String> _geosites = {
-    for (final p in kGeositePicks)
-      if (p.enabledByDefault) p.code,
-  };
   late final String _proxyGroup = widget.proxyGroup;
 
   /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
   final Map<String, String> _rowGroups = <String, String>{};
 
-  /// 每条 GEOSITE 要写进的组：没记录 = 用清洗后的标签建同名组。
-  final Map<String, String> _geositeGroups = <String, String>{};
-
   /// 折叠起来的区块名（精选两段、服务各分类）。
   final Set<String> _collapsed = <String>{};
-  int _tab = 0;
 
   /// 「缓存于 <时间>」：本地规则集缓存最近一次写入时间。
   String _cacheLabel = '';
@@ -1469,14 +1485,8 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
   /// 当前页签全选。
   void _selectAll() {
     setState(() {
-      if (_tab == 0) {
-        for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
-          _picked.add(preset.id);
-        }
-      } else {
-        for (final pick in kGeositePicks) {
-          _geosites.add(pick.code);
-        }
+      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
+        _picked.add(preset.id);
       }
     });
   }
@@ -1484,11 +1494,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
   /// 当前页签清空。
   void _clearAll() {
     setState(() {
-      if (_tab == 0) {
-        _picked.clear();
-      } else {
-        _geosites.clear();
-      }
+      _picked.clear();
     });
   }
 
@@ -1514,8 +1520,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [_tabButton(context, 0, '精选', '规则集')]),
-              const SizedBox(height: Insets.sm),
               Text(
                 'Loyalsoldier 与 ACL4SSR 的规则集，勾选后写成 rule-providers '
                 '并各加一条 RULE-SET（插在 MATCH 之前）。',
@@ -1566,7 +1570,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                         if (_picked.contains(p.id)) p,
                     ],
                     const <GeositePick>[],
-
                     _proxyGroup,
                     {
                       for (final p in [
@@ -1575,58 +1578,12 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                       ])
                         if (_picked.contains(p.id)) p.id: _groupFor(p),
                     },
-                    _geositeGroups,
+                    <String, String>{},
                   ),
                 ),
           child: Text('导入 $_total 项（$_pickedCount 规则集）'),
         ),
       ],
-    );
-  }
-
-  Widget _tabButton(
-    BuildContext context,
-    int index,
-    String label,
-    String hint,
-  ) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final selected = _tab == index;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _tab = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? scheme.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(Insets.sm),
-          border: Border.all(
-            color: selected ? scheme.primary : scheme.outlineVariant,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: display(
-                13,
-                weight: 600,
-                color: selected ? scheme.onPrimaryContainer : scheme.onSurface,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              hint,
-              style: mono(
-                10.5,
-                color: selected ? scheme.onPrimaryContainer : scheme.outline,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1763,7 +1720,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
       compact: true,
       value: group,
       options: [
-        DropdownOption('', '新建同名组'),
+        DropdownOption('', '默认组'),
         for (final name in widget.groupNames) DropdownOption(name, name),
       ],
       onChanged: (value) => _setGroup(preset, value),

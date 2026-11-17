@@ -183,7 +183,7 @@ class _GeositePickerDialogState extends State<_GeositePickerDialog> {
                     compact: true,
                     value: _target,
                     options: [
-                      const DropdownOption('', '新建同名组'),
+                      const DropdownOption('', '默认组'),
                       for (final name in widget.groupNames)
                         DropdownOption(name, name),
                     ],

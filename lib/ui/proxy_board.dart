@@ -11,6 +11,7 @@ import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'dropdown.dart';
 import 'rule_edit_dialog.dart';
+import 'rule_picker_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -1607,6 +1608,32 @@ class _GroupRulesCardState extends State<_GroupRulesCard> {
     showToast(context, '这条规则没写进去，请检查配置');
   }
 
+  /// 从已有规则里批量挑，挑中的改到本组名下。
+  Future<void> _addExisting() async {
+    final profile = widget.state.profile;
+    final picked = await showRulePickerSheet(
+      context,
+      group: widget.group.name,
+      candidates: rulesAssignableTo(profile, widget.group.name),
+    );
+    if (picked == null || picked.isEmpty) return;
+    final rules = profile.rules;
+    if (!widget.state.apply(
+      (doc) => retargetRules(
+        doc,
+        rules,
+        picked.map((rule) => rule.index),
+        widget.group.name,
+      ),
+    )) {
+      _fail();
+      return;
+    }
+    if (!mounted) return;
+    setState(() {});
+    showToast(context, '已把 ${picked.length} 条规则挂到「${widget.group.name}」');
+  }
+
   Future<void> _edit({RuleEntry? initial}) async {
     final profile = widget.state.profile;
     final targets = <String>{
@@ -1764,10 +1791,19 @@ class _GroupRulesCardState extends State<_GroupRulesCard> {
         if (_expanded || rules.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: Insets.xs, right: Insets.sm),
-            child: TextButton.icon(
-              onPressed: () => _edit(),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('添加规则'),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _addExisting,
+                  icon: const Icon(Icons.playlist_add, size: 16),
+                  label: const Text('添加已有规则'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _edit(),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('新建一条'),
+                ),
+              ],
             ),
           ),
       ],

@@ -65,7 +65,10 @@ class YamlDoc {
     } catch (e) {
       throw ConfigEditException('$e');
     }
-    final next = YamlDoc.parse(editor.toString());
+    // yaml_edit 把字符串里的 `/` 转义成 `\/`，那份 YAML 交给 Dart 的 yaml 包
+    // 还能解析，但内核用的 Go yaml.v3 会直接 fatal（found unknown escape character）。
+    // `\/` 与 `/` 语义完全一致，落盘前统一还原成 `/`。
+    final next = YamlDoc.parse(editor.toString().replaceAll(r'\/', '/'));
     if (next.error != null) {
       throw ConfigEditException('编辑产生了非法 YAML：${next.error!.message}');
     }

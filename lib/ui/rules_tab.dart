@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/geosite_index.dart';
@@ -197,54 +198,79 @@ class _RulesTabState extends State<RulesTab> {
     );
     if (choice == null) return;
     if (choice.presets.isEmpty && choice.geosites.isEmpty) return;
+    await _applyPresetChoice(choice);
+  }
 
+  /// 落地一次导入。`only` 非空时 = 只重试这些规则集（GEOSITE 不重复写）。
+  Future<void> _applyPresetChoice(
+    _PresetChoice choice, {
+    List<RulePreset> only = const <RulePreset>[],
+  }) async {
+    final presets = only.isEmpty ? choice.presets : only;
     var doc = s.doc;
     final applied = <String>[];
     final failed = <String>[];
+    final failedPresets = <RulePreset>[];
+    final hints = <String>[];
     final allProxies = [for (final p in s.profile.proxies) p.name];
     var updated = 0;
     var groupsMade = 0;
     var groupsReused = 0;
     var retargeted = 0;
 
-    if (choice.presets.isNotEmpty) {
+    if (presets.isNotEmpty) {
+      _cancelled = false;
+      _fetchDone = 0;
+      _fetchTotal = presets.length;
+      _progress.value = "";
       final fetched = await _withBusy(
-        '正在拉取 ${choice.presets.length} 个规则集…',
-        () => Future.wait(choice.presets.map(_fetchPreset)),
+        '正在拉取 ${presets.length} 个规则集…',
+        () => _runWithConcurrency([
+          for (final preset in presets) () => _fetchPreset(preset),
+        ]),
+        progress: _progress,
+        cancellable: true,
       );
+      if (_cancelled) {
+        _toast('已取消导入');
+        return;
+      }
       for (final item in fetched) {
         final body = item.body;
         if (body == null) {
-          failed.add('${item.preset.id}（${item.error ?? '解析失败'}）');
+          failed.add('${item.preset.label}（${item.error ?? '解析失败'}）');
+          failedPresets.add(item.preset);
           continue;
         }
+        final groupName = choice.groupFor(item.preset);
         try {
           final outcome = importRuleProvider(
             doc,
             body: body,
             name: item.preset.id,
-            target: presetTargetFor(item.preset, choice.proxyGroup),
+            // 目标直接指向这个规则集自己的组：内核按 first-match 走，
+            // 目标写固定代理组会让「同名组」形同虚设。
+            target: groupName,
             url: item.preset.url,
-            groupName: choice.shouldGroup(item.preset.id)
-                ? item.preset.label
-                : null,
+            groupName: groupName,
             groupMembers: allProxies,
           );
           doc = outcome.doc;
-          applied.add(item.preset.id);
+          applied.add(item.preset.label);
           updated += outcome.providersUpdated.length;
           groupsMade += outcome.groupsAdded.length;
           groupsReused += outcome.groupsMerged.length;
           retargeted += outcome.rulesRetargeted;
-          failed.addAll(outcome.warnings);
+          hints.addAll(outcome.warnings);
         } on ConfigEditException catch (e) {
-          failed.add('${item.preset.id}（${e.message}）');
+          failed.add('${item.preset.label}（${e.message}）');
+          failedPresets.add(item.preset);
         }
       }
     }
 
     var geoAdded = 0;
-    if (choice.geosites.isNotEmpty) {
+    if (only.isEmpty && choice.geosites.isNotEmpty) {
       // 一次最多 50 条，免得一口气把规则列表撑得太长。
       final lines = [
         for (final pick in choice.geosites.take(50))
@@ -254,14 +280,23 @@ class _RulesTabState extends State<RulesTab> {
         final outcome = insertRuleLines(doc, lines);
         doc = outcome.doc;
         geoAdded = outcome.rulesAdded;
-        failed.addAll(outcome.warnings);
+        hints.addAll(outcome.warnings);
       } on ConfigEditException catch (e) {
         failed.add('GEOSITE（${e.message}）');
       }
     }
 
     if (applied.isEmpty && geoAdded == 0) {
-      _toast('一个都没导入成功：${failed.isEmpty ? '未知原因' : failed.first}');
+      _toast(
+        '一个都没导入成功：${failed.isEmpty ? '未知原因' : failed.first}',
+        action: failedPresets.isEmpty
+            ? null
+            : SnackBarAction(
+                label: '重试失败项',
+                onPressed: () =>
+                    _applyPresetChoice(choice, only: failedPresets),
+              ),
+      );
       return;
     }
     if (!s.apply((_) => doc)) {
@@ -276,35 +311,92 @@ class _RulesTabState extends State<RulesTab> {
       if (retargeted > 0) '改写 $retargeted 条目标',
       if (updated > 0) '更新 $updated 个同名规则集',
     ];
+    final failedHint = failed.isEmpty
+        ? ''
+        : '，失败 ${failed.length} 项（${failed.first}）';
+    final hintsHint = hints.isEmpty ? '' : '；${hints.first}';
     _toast(
-      failed.isEmpty
-          ? '已导入 ${parts.join(' + ')}'
-          : '已导入 ${parts.join(' + ')}，${failed.length} 项失败：${failed.first}',
+      '成功 ${applied.length + geoAdded} 项：${parts.join(' + ')}$failedHint$hintsHint',
+      action: failedPresets.isEmpty
+          ? null
+          : SnackBarAction(
+              label: '重试失败项',
+              onPressed: () => _applyPresetChoice(choice, only: failedPresets),
+            ),
     );
+  }
+
+  /// 导入时按「取消」后置位，`_runWithConcurrency` 会在下一个任务前停下。
+  bool _cancelled = false;
+  int _fetchDone = 0;
+  int _fetchTotal = 0;
+
+  /// 已拉完多少个，喂给忙碌对话框。
+  final ValueNotifier<String> _progress = ValueNotifier<String>("");
+
+  /// 固定并发跑一批任务：一次性 19 个请求会把手机的 DNS/连接池打满。
+  Future<List<T>> _runWithConcurrency<T>(
+    List<Future<T> Function()> tasks, {
+    int max = 4,
+  }) async {
+    if (tasks.isEmpty) return <T>[];
+    final results = List<T?>.filled(tasks.length, null);
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        if (_cancelled) return;
+        final index = next++;
+        if (index >= tasks.length) return;
+        results[index] = await tasks[index]();
+        _fetchDone += 1;
+        _progress.value = '已拉完 $_fetchDone/$_fetchTotal 个';
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < max && i < tasks.length; i++) worker(),
+    ]);
+    return [for (final item in results) item as T];
   }
 
   Future<_PresetFetch> _fetchPreset(RulePreset preset) async {
     try {
-      final text = await fetchText(preset.url);
-      final parsed = parseRuleProviderBody(text, url: preset.url);
+      final fetched = await fetchTextWithMirrors(
+        preset.url,
+        attemptsPerMirror: 1,
+      );
+      final parsed = parseRuleProviderBody(fetched.text, url: fetched.url);
       if (parsed == null) {
-        return _PresetFetch(preset, error: '没识别出规则集内容');
+        return _PresetFetch(preset, error: '没识别出规则集内容', url: fetched.url);
       }
-      return _PresetFetch(preset, body: parsed);
+      return _PresetFetch(preset, body: parsed, url: fetched.url);
     } on ConfigEditException catch (e) {
       return _PresetFetch(preset, error: e.message);
     }
   }
 
-  void _toast(String message) {
+  void _toast(String message, {SnackBarAction? action}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: action,
+          duration: action == null
+              ? const Duration(seconds: 3)
+              : const Duration(seconds: 8),
+        ),
+      );
   }
 
   /// 跑一个异步任务，期间盖一层「正在…」的对话框。
-  Future<T> _withBusy<T>(String message, Future<T> Function() task) async {
+  Future<T> _withBusy<T>(
+    String message,
+    Future<T> Function() task, {
+    ValueListenable<String>? progress,
+    bool cancellable = false,
+  }) async {
     final navigator = Navigator.of(context, rootNavigator: true);
     var closed = false;
     unawaited(
@@ -312,17 +404,41 @@ class _RulesTabState extends State<RulesTab> {
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: Insets.md),
-              Expanded(child: Text(message)),
-            ],
+          content: ValueListenableBuilder<String>(
+            valueListenable: progress ?? ValueNotifier<String>(""),
+            builder: (context, extra, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: Insets.md),
+                    Expanded(child: Text(message)),
+                  ],
+                ),
+                if (extra.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Insets.sm),
+                    child: Text(extra, style: hintStyle(context)),
+                  ),
+              ],
+            ),
           ),
+          actions: [
+            if (cancellable)
+              TextButton(
+                onPressed: () {
+                  _cancelled = true;
+                  navigator.pop();
+                },
+                child: const Text('取消'),
+              ),
+          ],
         ),
       ).then((_) => closed = true),
     );
@@ -601,11 +717,14 @@ class _RuleRow extends StatelessWidget {
 
 /// 抓取一个预设规则集的结果。
 class _PresetFetch {
-  const _PresetFetch(this.preset, {this.body, this.error});
+  const _PresetFetch(this.preset, {this.body, this.error, this.url});
 
   final RulePreset preset;
   final RuleProviderBody? body;
   final String? error;
+
+  /// 实际拉到内容的地址（可能是镜像）。写 rule-providers 时用它。
+  final String? url;
 }
 
 /// 预设面板的返回值：选了哪些规则集、哪些 GEOSITE，代理流量走哪个组。
@@ -614,17 +733,22 @@ class _PresetChoice {
     this.presets,
     this.geosites,
     this.proxyGroup,
-    this.grouped,
+    this.rowGroups,
   );
 
   final List<RulePreset> presets;
   final List<GeositePick> geosites;
+
+  /// GEOSITE 的目标组（面板里不再让用户选，沿用已有的建议逻辑）。
   final String proxyGroup;
 
-  /// 要顺手建同名节点组的规则集 id。
-  final Set<String> grouped;
+  /// 每个规则集要写进的节点组：空串 = 新建同名组，否则 = 复用的已有组。
+  final Map<String, String> rowGroups;
 
-  bool shouldGroup(String presetId) => grouped.contains(presetId);
+  /// 这个规则集该用哪个组名。
+  String groupFor(RulePreset preset) => (rowGroups[preset.id] ?? '').isEmpty
+      ? preset.label
+      : rowGroups[preset.id]!;
 }
 
 /// 「常用规则集」面板：精选（Loyalsoldier + ACL4SSR）与 GEOSITE 服务两组。
@@ -647,17 +771,19 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     for (final p in kGeositePicks)
       if (p.enabledByDefault) p.code,
   };
-  late String _proxyGroup = widget.proxyGroup;
+  late final String _proxyGroup = widget.proxyGroup;
+
+  /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
+  final Map<String, String> _rowGroups = <String, String>{};
   int _tab = 0;
 
-  /// 默认给每个勾上的规则集顺手建一个同名节点组（成员 = 全部节点）。
-  bool _groupAll = true;
+  /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
+  String _groupFor(RulePreset preset) => _rowGroups[preset.id] ?? '';
 
-  /// 单独关掉的那些规则集。
-  final Set<String> _groupOff = <String>{};
+  void _setGroup(RulePreset preset, String value) {
+    setState(() => _rowGroups[preset.id] = value);
+  }
 
-  bool _groupedFor(RulePreset preset) =>
-      _groupAll && !_groupOff.contains(preset.id);
   int get _total => _picked.length + _geosites.length;
 
   int get _pickedCount => _picked.length;
@@ -675,7 +801,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
         for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
           _picked.add(preset.id);
         }
-        _groupOff.clear();
       } else {
         for (final pick in kGeositePicks) {
           _geosites.add(pick.code);
@@ -734,16 +859,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: Insets.sm),
-              AppDropdown<String>(
-                label: '代理流量走哪个组',
-                expand: true,
-                value: _proxyGroup,
-                options: [
-                  for (final name in widget.groupNames)
-                    DropdownOption(name, name),
-                ],
-                onChanged: (v) => setState(() => _proxyGroup = v),
-              ),
               const SizedBox(height: Insets.sm),
               Row(
                 children: [
@@ -758,22 +873,6 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                   ),
                 ],
               ),
-              if (_tab == 0)
-                SwitchListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  value: _groupAll,
-                  onChanged: (v) => setState(() {
-                    _groupAll = v;
-                    _groupOff.clear();
-                  }),
-                  title: const Text('给每个规则集建同名节点组'),
-                  subtitle: Text(
-                    '勾上的规则集会新建一个 select 组（成员 = 全部节点），'
-                    '并把该规则集的目标指向它',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
               if (_tab == 0)
                 ..._buildPresets(theme)
               else
@@ -810,7 +909,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                         ...kLoyalRulesPresets,
                         ...kAclRulesPresets,
                       ])
-                        if (_picked.contains(p.id) && _groupedFor(p)) p.id,
+                        if (_picked.contains(p.id)) p.id: _groupFor(p),
                     },
                   ),
                 ),
@@ -900,10 +999,8 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
 
   Widget _presetTile(ThemeData theme, ColorScheme scheme, RulePreset preset) {
     final ipBased = preset.behavior == 'ipcidr';
-    final grouped = _groupedFor(preset);
-    final target = grouped
-        ? preset.label
-        : presetTargetFor(preset, _proxyGroup);
+    final group = _groupFor(preset);
+    final target = group.isEmpty ? preset.label : group;
     return Row(
       children: [
         Expanded(
@@ -930,23 +1027,16 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
             ),
           ),
         ),
-        IconButton(
-          tooltip: '给这个规则集建同名节点组',
-          visualDensity: VisualDensity.compact,
-          iconSize: 18,
-          onPressed: () => setState(() {
-            if (grouped) {
-              _groupOff.add(preset.id);
-            } else {
-              _groupOff.remove(preset.id);
-              _groupAll = true;
-            }
-          }),
-          icon: Icon(
-            grouped
-                ? Icons.folder_special_outlined
-                : Icons.folder_open_outlined,
-            color: grouped ? scheme.primary : scheme.onSurfaceVariant,
+        SizedBox(
+          width: 150,
+          child: AppDropdown<String>(
+            compact: true,
+            value: group,
+            options: [
+              DropdownOption('', '新建同名组'),
+              for (final name in widget.groupNames) DropdownOption(name, name),
+            ],
+            onChanged: (value) => _setGroup(preset, value),
           ),
         ),
       ],

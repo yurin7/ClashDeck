@@ -2,6 +2,7 @@ import '../model/profile.dart';
 import '../model/rule_types.dart';
 import '../yaml/yaml_doc.dart';
 import 'config_ops.dart';
+import '../net/github_mirror.dart';
 
 /// 一次规则导入的结果。只描述「发生了什么」，不负责提示文案的排版。
 class RuleImportOutcome {
@@ -649,29 +650,44 @@ RuleImportOutcome importRuleProvider(
     // 解析带类型前缀的行会失败，所以这里必须覆盖而不是静默跳过。
     final current = existing['behavior'];
     final currentBehavior = current is String ? current : null;
-    if (currentBehavior == body.behavior) {
+    final existingUrl = existing['url'];
+    final currentUrl = existingUrl is String ? existingUrl.trim() : '';
+    // 手机上的内核运行时也要来拉这个 provider，raw.githubusercontent
+    // 在国内经常拉不动，所以落盘一律写成镜像地址；老配置里的直连地址
+    // 也要借这次导入顺手纠正，否则内核跑起来还是拉不动。
+    final wantedUrl = url == null || url.trim().isEmpty
+        ? currentUrl
+        : GithubMirror.preferred(url);
+    final behaviorChanged = currentBehavior != body.behavior;
+    final urlChanged = wantedUrl.isNotEmpty && wantedUrl != currentUrl;
+    if (!behaviorChanged && !urlChanged) {
       warnings.add('rule-providers 里已有「$providerName」，沿用原有定义');
     } else {
       final merged = <String, Object?>{
         for (final entry in existing.entries)
           if (entry.key is String) entry.key as String: entry.value,
       };
-      merged['behavior'] = body.behavior;
-      if (url != null && url.trim().isNotEmpty) {
+      if (behaviorChanged) merged['behavior'] = body.behavior;
+      if (wantedUrl.isNotEmpty) {
         merged['type'] = 'http';
-        merged['url'] = url.trim();
+        merged['url'] = wantedUrl;
         merged['path'] = merged['path'] ?? './ruleset/$providerName.yaml';
-        merged['interval'] = interval;
+        merged['interval'] = merged['interval'] ?? interval;
       }
       next = ConfigOps.setAtOrCreate(next, [
         'rule-providers',
         providerName,
       ], merged);
       providersUpdated.add('rule-providers/$providerName');
-      warnings.add(
-        '「$providerName」的 behavior 从 ${currentBehavior ?? '未写'} '
-        '改成 ${body.behavior}（旧定义会让内核解析失败）',
-      );
+      if (behaviorChanged) {
+        warnings.add(
+          '「$providerName」的 behavior 从 ${currentBehavior ?? '未写'} '
+          '改成 ${body.behavior}（旧定义会让内核解析失败）',
+        );
+      }
+      if (urlChanged) {
+        warnings.add('「$providerName」的地址换成镜像（内核运行时也要拉得动）');
+      }
     }
   } else {
     final Map<String, Object?> provider;
@@ -679,7 +695,7 @@ RuleImportOutcome importRuleProvider(
       provider = {
         'type': 'http',
         'behavior': body.behavior,
-        'url': url.trim(),
+        'url': GithubMirror.preferred(url),
         'path': './ruleset/$providerName.yaml',
         'interval': interval,
       };

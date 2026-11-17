@@ -528,6 +528,8 @@ RuleImportOutcome importRuleProvider(
   String? url,
   bool createMissingGroups = true,
   int interval = 86400,
+  String? groupName,
+  List<String> groupMembers = const [],
 }) {
   final providerName = name.trim();
   final targetName = target.trim();
@@ -539,6 +541,10 @@ RuleImportOutcome importRuleProvider(
   final warnings = <String>[];
   final providersAdded = <String>[];
   final providersUpdated = <String>[];
+  final groupsAdded = <String>[];
+  final groupsMerged = <String>[];
+  // 「创建同名节点组」勾上时，规则集的目标换成这个组。
+  var effectiveTarget = targetName;
 
   final existingProviders = next.plainAt(const ['rule-providers']);
   final existing = existingProviders is Map
@@ -599,27 +605,47 @@ RuleImportOutcome importRuleProvider(
   }
 
   final targetGroupsCreated = <String>[];
+  final wantedGroup = (groupName ?? '').trim();
+  if (wantedGroup.isNotEmpty) {
+    // 先按名字找：已存在就复用，避免把用户调好的成员覆盖掉。
+    if (Profile.from(next).group(wantedGroup) != null) {
+      groupsMerged.add(wantedGroup);
+    } else {
+      final members = groupMembers.isEmpty ? const ['DIRECT'] : groupMembers;
+      try {
+        next = ConfigOps.addGroup(next, {
+          'name': wantedGroup,
+          'type': 'select',
+        }, members: members);
+        groupsAdded.add(wantedGroup);
+      } on ConfigEditException catch (e) {
+        warnings.add('无法创建策略组「$wantedGroup」：${e.message}');
+      }
+    }
+    effectiveTarget = wantedGroup;
+  }
+
   if (createMissingGroups) {
     final profile = Profile.from(next);
     final known =
-        Profile.builtinTargets.contains(targetName) ||
-        profile.proxy(targetName) != null ||
-        profile.group(targetName) != null;
+        Profile.builtinTargets.contains(effectiveTarget) ||
+        profile.proxy(effectiveTarget) != null ||
+        profile.group(effectiveTarget) != null;
     if (!known) {
       try {
         next = ConfigOps.addGroup(
           next,
-          {'name': targetName, 'type': 'select'},
+          {'name': effectiveTarget, 'type': 'select'},
           members: const ['DIRECT'],
         );
-        targetGroupsCreated.add(targetName);
+        targetGroupsCreated.add(effectiveTarget);
       } on ConfigEditException catch (e) {
-        warnings.add('无法为规则目标「$targetName」建组：${e.message}');
+        warnings.add('无法为规则目标「$effectiveTarget」建组：${e.message}');
       }
     }
   }
 
-  final rule = 'RULE-SET,$providerName,$targetName';
+  final rule = 'RULE-SET,$providerName,$effectiveTarget';
   final profileNow = Profile.from(next);
   final existingRules = ConfigOps.ruleStrings(profileNow).map(_compact).toSet();
   var rulesAdded = 0;
@@ -640,8 +666,8 @@ RuleImportOutcome importRuleProvider(
     doc: next,
     rulesAdded: rulesAdded,
     rulesSkipped: rulesSkipped,
-    groupsAdded: const [],
-    groupsMerged: const [],
+    groupsAdded: groupsAdded,
+    groupsMerged: groupsMerged,
     targetGroupsCreated: targetGroupsCreated,
     providersAdded: providersAdded,
     providersUpdated: providersUpdated,

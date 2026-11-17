@@ -88,6 +88,72 @@ google.com
     });
   });
 
+  group('importRuleProvider 的同名节点组', () {
+    test('给了 groupName → 新建 select 组，成员用传入的节点，目标指向它', () {
+      final out = importRuleProvider(
+        _doc(),
+        body: parseRuleProviderBody(
+          _domainPayload,
+          url: 'https://example.com/reject.txt',
+        )!,
+        name: 'reject',
+        target: 'PROXY',
+        url: 'https://example.com/reject.txt',
+        groupName: '广告拦截',
+        groupMembers: ['n1', 'DIRECT'],
+      );
+
+      expect(out.groupsAdded, ['广告拦截']);
+      expect(out.groupsMerged, isEmpty);
+      final group = Profile.from(out.doc).group('广告拦截');
+      expect(group, isNotNull);
+      expect(group!.type, 'select');
+      expect(group.members, ['n1', 'DIRECT']);
+      expect(out.doc.plainAt(['rules']), [
+        'GEOIP,CN,DIRECT',
+        'RULE-SET,reject,广告拦截',
+        'MATCH,PROXY',
+      ]);
+    });
+
+    test('同名组已存在 → 复用不覆盖成员，记进 groupsMerged', () {
+      final out = importRuleProvider(
+        _doc(),
+        body: parseRuleProviderBody(_cidrPayload)!,
+        name: 'cncidr',
+        target: 'PROXY',
+        groupName: '媒体',
+        groupMembers: ['n2'],
+      );
+
+      expect(out.groupsAdded, isEmpty);
+      expect(out.groupsMerged, ['媒体']);
+      final group = Profile.from(out.doc).group('媒体');
+      expect(group!.members, ['n1']);
+      expect((out.doc.plainAt(['rules']) as List).last, 'MATCH,PROXY');
+      expect(
+        (out.doc.plainAt(['rules']) as List).contains('RULE-SET,cncidr,媒体'),
+        isTrue,
+      );
+    });
+
+    test('没给 groupName → 行为不变，仍写 RULE-SET 到原目标', () {
+      final out = importRuleProvider(
+        _doc(),
+        body: parseRuleProviderBody(_cidrPayload)!,
+        name: 'cncidr',
+        target: 'DIRECT',
+      );
+
+      expect(out.groupsAdded, isEmpty);
+      expect(out.groupsMerged, isEmpty);
+      expect(
+        (out.doc.plainAt(['rules']) as List).contains('RULE-SET,cncidr,DIRECT'),
+        isTrue,
+      );
+    });
+  });
+
   group('importRuleProvider', () {
     test('带 URL → http provider + RULE-SET 插到 MATCH 之前', () {
       final out = importRuleProvider(

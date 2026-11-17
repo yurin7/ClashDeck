@@ -201,7 +201,10 @@ class _RulesTabState extends State<RulesTab> {
     var doc = s.doc;
     final applied = <String>[];
     final failed = <String>[];
+    final allProxies = [for (final p in s.profile.proxies) p.name];
     var updated = 0;
+    var groupsMade = 0;
+    var groupsReused = 0;
 
     if (choice.presets.isNotEmpty) {
       final fetched = await _withBusy(
@@ -221,10 +224,17 @@ class _RulesTabState extends State<RulesTab> {
             name: item.preset.id,
             target: presetTargetFor(item.preset, choice.proxyGroup),
             url: item.preset.url,
+            groupName: choice.shouldGroup(item.preset.id)
+                ? item.preset.label
+                : null,
+            groupMembers: allProxies,
           );
           doc = outcome.doc;
           applied.add(item.preset.id);
           updated += outcome.providersUpdated.length;
+          groupsMade += outcome.groupsAdded.length;
+          groupsReused += outcome.groupsMerged.length;
+          failed.addAll(outcome.warnings);
         } on ConfigEditException catch (e) {
           failed.add('${item.preset.id}（${e.message}）');
         }
@@ -259,6 +269,8 @@ class _RulesTabState extends State<RulesTab> {
     final parts = <String>[
       if (applied.isNotEmpty) '${applied.length} 组规则集',
       if (geoAdded > 0) 'GEOSITE $geoAdded 条',
+      if (groupsMade > 0) '新建 $groupsMade 个节点组',
+      if (groupsReused > 0) '复用 $groupsReused 个同名组',
       if (updated > 0) '更新 $updated 个同名规则集',
     ];
     _toast(
@@ -595,11 +607,21 @@ class _PresetFetch {
 
 /// 预设面板的返回值：选了哪些规则集、哪些 GEOSITE，代理流量走哪个组。
 class _PresetChoice {
-  const _PresetChoice(this.presets, this.geosites, this.proxyGroup);
+  const _PresetChoice(
+    this.presets,
+    this.geosites,
+    this.proxyGroup,
+    this.grouped,
+  );
 
   final List<RulePreset> presets;
   final List<GeositePick> geosites;
   final String proxyGroup;
+
+  /// 要顺手建同名节点组的规则集 id。
+  final Set<String> grouped;
+
+  bool shouldGroup(String presetId) => grouped.contains(presetId);
 }
 
 /// 「常用规则集」面板：精选（Loyalsoldier + ACL4SSR）与 GEOSITE 服务两组。
@@ -625,6 +647,14 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
   late String _proxyGroup = widget.proxyGroup;
   int _tab = 0;
 
+  /// 默认给每个勾上的规则集顺手建一个同名节点组（成员 = 全部节点）。
+  bool _groupAll = true;
+
+  /// 单独关掉的那些规则集。
+  final Set<String> _groupOff = <String>{};
+
+  bool _groupedFor(RulePreset preset) =>
+      _groupAll && !_groupOff.contains(preset.id);
   int get _total => _picked.length + _geosites.length;
 
   void _toggle(Set<String> target, String key, bool? on) {
@@ -678,6 +708,22 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
               ),
               const SizedBox(height: Insets.sm),
               if (_tab == 0)
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: _groupAll,
+                  onChanged: (v) => setState(() {
+                    _groupAll = v;
+                    _groupOff.clear();
+                  }),
+                  title: const Text('给每个规则集建同名节点组'),
+                  subtitle: Text(
+                    '勾上的规则集会新建一个 select 组（成员 = 全部节点），'
+                    '并把该规则集的目标指向它',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              if (_tab == 0)
                 ..._buildPresets(theme)
               else
                 ..._buildGeosites(theme),
@@ -708,6 +754,13 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                         if (_geosites.contains(p.code)) p,
                     ],
                     _proxyGroup,
+                    {
+                      for (final p in [
+                        ...kLoyalRulesPresets,
+                        ...kAclRulesPresets,
+                      ])
+                        if (_picked.contains(p.id) && _groupedFor(p)) p.id,
+                    },
                   ),
                 ),
           child: Text('导入 $_total 项'),
@@ -796,27 +849,56 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
 
   Widget _presetTile(ThemeData theme, ColorScheme scheme, RulePreset preset) {
     final ipBased = preset.behavior == 'ipcidr';
-    return CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      value: _picked.contains(preset.id),
-      onChanged: (v) => _toggle(_picked, preset.id, v),
-      title: Text(
-        '${preset.label}  ·  ${preset.source}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${preset.description} → ${presetTargetFor(preset, _proxyGroup)}'
-        '${preset.behavior == 'classical' ? '  ·  classical' : ''}'
-        '${ipBased ? '  ·  IP 段' : ''}',
-        style: theme.textTheme.bodySmall,
-      ),
-      secondary: Icon(
-        ipBased ? Icons.lan_outlined : Icons.language,
-        size: 18,
-        color: scheme.primary,
-      ),
+    final grouped = _groupedFor(preset);
+    final target = grouped
+        ? preset.label
+        : presetTargetFor(preset, _proxyGroup);
+    return Row(
+      children: [
+        Expanded(
+          child: CheckboxListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            value: _picked.contains(preset.id),
+            onChanged: (v) => _toggle(_picked, preset.id, v),
+            title: Text(
+              '${preset.label}  ·  ${preset.source}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '${preset.description} → $target'
+              '${preset.behavior == 'classical' ? '  ·  classical' : ''}'
+              '${ipBased ? '  ·  IP 段' : ''}',
+              style: theme.textTheme.bodySmall,
+            ),
+            secondary: Icon(
+              ipBased ? Icons.lan_outlined : Icons.language,
+              size: 18,
+              color: scheme.primary,
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: '给这个规则集建同名节点组',
+          visualDensity: VisualDensity.compact,
+          iconSize: 18,
+          onPressed: () => setState(() {
+            if (grouped) {
+              _groupOff.add(preset.id);
+            } else {
+              _groupOff.remove(preset.id);
+              _groupAll = true;
+            }
+          }),
+          icon: Icon(
+            grouped
+                ? Icons.folder_special_outlined
+                : Icons.folder_open_outlined,
+            color: grouped ? scheme.primary : scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 

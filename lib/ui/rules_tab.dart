@@ -866,65 +866,129 @@ class _RulesTabState extends State<RulesTab> {
     required bool terminalLate,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        Insets.lg,
-        Insets.xs,
-        Insets.lg,
-        Insets.md,
-      ),
-      children: [
-        _buildZone(
-          context,
-          title: '本地精确规则',
-          subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
-          rules: local,
-          zone: RuleZone.local,
-          open: _localOpen,
-          onToggle: () => setState(() => _localOpen = !_localOpen),
-          onAdd: () => _editRule(),
+    return CustomScrollView(
+      slivers: [
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _ZoneHeaderDelegate(
+            background: scheme.surface,
+            child: _buildZoneHeader(
+              context,
+              title: '本地精确规则',
+              subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
+              rules: local,
+              zone: RuleZone.local,
+              open: _localOpen,
+              onToggle: () => setState(() => _localOpen = !_localOpen),
+              onAdd: () => _editRule(),
+            ),
+          ),
         ),
-        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-        const SizedBox(height: Insets.sm),
-        _buildZone(
-          context,
-          title: '在线规则集',
-          subtitle: '按整包匹配，排在本地规则之后',
-          rules: online,
-          zone: RuleZone.online,
-          open: _onlineOpen,
-          onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
-          onAdd: _importRules,
-          terminalLate: terminalLate,
+        if (_localOpen)
+          SliverToBoxAdapter(
+            child: _buildZoneBody(
+              context,
+              subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
+              rules: local,
+              zone: RuleZone.local,
+              onlineOpen: false,
+              terminalLate: terminalLate,
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
         ),
-        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-        const SizedBox(height: Insets.sm),
-        _buildZone(
-          context,
-          title: 'GEO 数据',
-          subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
-          rules: geo,
-          zone: RuleZone.geo,
-          open: _geoOpen,
-          onToggle: () => setState(() => _geoOpen = !_geoOpen),
-          onAdd: _addGeoRule,
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _ZoneHeaderDelegate(
+            background: scheme.surface,
+            child: _buildZoneHeader(
+              context,
+              title: '在线规则集',
+              subtitle: '按整包匹配，排在本地规则之后',
+              rules: online,
+              zone: RuleZone.online,
+              open: _onlineOpen,
+              onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
+              onAdd: _importRules,
+            ),
+          ),
         ),
-        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-        const SizedBox(height: Insets.sm),
-        _buildZone(
-          context,
-          title: '兜底规则',
-          subtitle: 'MATCH / FINAL，必须在最后',
-          rules: terminal,
-          zone: RuleZone.terminal,
-          open: _terminalOpen,
-          onToggle: () => setState(() => _terminalOpen = !_terminalOpen),
+        if (_onlineOpen)
+          SliverToBoxAdapter(
+            child: _buildZoneBody(
+              context,
+              subtitle: '按整包匹配，排在本地规则之后',
+              rules: online,
+              zone: RuleZone.online,
+              onlineOpen: true,
+              terminalLate: terminalLate,
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
         ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _ZoneHeaderDelegate(
+            background: scheme.surface,
+            child: _buildZoneHeader(
+              context,
+              title: 'GEO 数据',
+              subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
+              rules: geo,
+              zone: RuleZone.geo,
+              open: _geoOpen,
+              onToggle: () => setState(() => _geoOpen = !_geoOpen),
+              onAdd: _addGeoRule,
+            ),
+          ),
+        ),
+        if (_geoOpen)
+          SliverToBoxAdapter(
+            child: _buildZoneBody(
+              context,
+              subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
+              rules: geo,
+              zone: RuleZone.geo,
+              onlineOpen: false,
+              terminalLate: terminalLate,
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _ZoneHeaderDelegate(
+            background: scheme.surface,
+            child: _buildZoneHeader(
+              context,
+              title: '兜底规则',
+              subtitle: 'MATCH / FINAL，必须在最后',
+              rules: terminal,
+              zone: RuleZone.terminal,
+              open: _terminalOpen,
+              onToggle: () => setState(() => _terminalOpen = !_terminalOpen),
+            ),
+          ),
+        ),
+        if (_terminalOpen)
+          SliverToBoxAdapter(
+            child: _buildZoneBody(
+              context,
+              subtitle: 'MATCH / FINAL，必须在最后',
+              rules: terminal,
+              zone: RuleZone.terminal,
+              onlineOpen: false,
+              terminalLate: terminalLate,
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildZone(
+  Widget _buildZoneHeader(
     BuildContext context, {
     required String title,
     required String subtitle,
@@ -933,157 +997,153 @@ class _RulesTabState extends State<RulesTab> {
     required bool open,
     required VoidCallback onToggle,
     VoidCallback? onAdd,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = switch (zone) {
+      RuleZone.local => scheme.primary,
+      RuleZone.online => scheme.tertiary,
+      RuleZone.geo => scheme.secondary,
+      RuleZone.terminal => scheme.error,
+    };
+    return InkWell(
+      onTap: onToggle,
+      child: Row(
+        children: [
+          Icon(
+            open ? Icons.expand_more : Icons.chevron_right,
+            size: 18,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: Insets.xs),
+          Container(
+            width: 3,
+            height: 14,
+            margin: const EdgeInsets.only(right: Insets.xs),
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              style: monoStyle(
+                context,
+                size: 12,
+              ).copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          if (zone == RuleZone.online && !open)
+            Padding(
+              padding: const EdgeInsets.only(right: Insets.xs),
+              child: Text(_onlineSummary, style: hintStyle(context)),
+            ),
+          if (onAdd != null)
+            IconButton(
+              onPressed: onAdd,
+              tooltip: '添加…',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.add, size: 20),
+            ),
+          Pill(label: '${rules.length} 条', dense: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildZoneBody(
+    BuildContext context, {
+    required String subtitle,
+    required List<RuleEntry> rules,
+    required RuleZone zone,
+    required bool onlineOpen,
     bool terminalLate = false,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: Insets.md),
+      padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: Insets.xs,
-                horizontal: Insets.xs,
-              ),
-              child: Row(
+          Text(subtitle, style: hintStyle(context)),
+          if (zone == RuleZone.online && onlineOpen) ...[
+            const SizedBox(height: Insets.sm),
+            _onlineToolbar(context),
+            if (terminalLate) ...[
+              const SizedBox(height: Insets.sm),
+              Row(
                 children: [
-                  Icon(
-                    open ? Icons.expand_more : Icons.chevron_right,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  Icon(Icons.info_outline, size: 14, color: scheme.error),
                   const SizedBox(width: Insets.xs),
-                  Container(
-                    width: 3,
-                    height: 14,
-                    margin: const EdgeInsets.only(right: Insets.xs),
-                    decoration: BoxDecoration(
-                      color: zone == RuleZone.local
-                          ? scheme.primary
-                          : zone == RuleZone.online
-                          ? scheme.tertiary
-                          : zone == RuleZone.geo
-                          ? scheme.secondary
-                          : scheme.error,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: monoStyle(
-                            context,
-                            size: 12,
-                          ).copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(subtitle, style: hintStyle(context)),
-                      ],
+                    child: Text(
+                      '检测到 MATCH 不在末尾，内核会先命中它后面的规则',
+                      style: hintStyle(context)?.copyWith(color: scheme.error),
                     ),
                   ),
-                  if (zone == RuleZone.online && !open)
-                    Padding(
-                      padding: const EdgeInsets.only(right: Insets.xs),
-                      child: Text(_onlineSummary, style: hintStyle(context)),
-                    ),
-                  if (onAdd != null)
-                    IconButton(
-                      onPressed: onAdd,
-                      tooltip: '添加…',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.add, size: 20),
-                    ),
-                  Pill(label: '${rules.length} 条', dense: true),
                 ],
               ),
-            ),
-          ),
-          if (zone == RuleZone.online && open) ...[
-            _onlineToolbar(context),
-            if (terminalLate)
-              Padding(
-                padding: const EdgeInsets.only(top: Insets.xs),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 14, color: scheme.error),
-                    const SizedBox(width: Insets.xs),
-                    Expanded(
-                      child: Text(
-                        '检测到 MATCH 不在末尾，内核会先命中它后面的规则',
-                        style: hintStyle(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            ],
           ],
-          if (open) ...[
-            const SizedBox(height: Insets.xs),
-            if (rules.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: Insets.sm),
-                child: Text('暂无规则 —— 点右上角「+」添加', style: hintStyle(context)),
-              )
-            else
-              ReorderableListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                buildDefaultDragHandles: false,
-                itemCount: rules.length,
-                onReorderItem: (oldIndex, newIndex) {
-                  if (oldIndex == newIndex) return;
-                  final from = rules[oldIndex].index;
-                  final to = rules[newIndex].index;
-                  if (!s.moveRule(from, to)) _fail();
-                },
-                itemBuilder: (context, i) {
-                  final rule = rules[i];
-                  return Padding(
-                    key: ValueKey('rule-${rule.index}'),
-                    padding: const EdgeInsets.only(bottom: Insets.sm),
-                    child: _RuleRow(
-                      rule: rule,
-                      trailing: _rowTrailing(context, rule),
-                      dragHandle: ReorderableDragStartListener(
-                        index: i,
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.grab,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: Insets.xs,
-                              vertical: Insets.sm,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.drag_indicator,
-                                  size: 17,
-                                  color: scheme.onSurfaceVariant.withValues(
-                                    alpha: 0.7,
-                                  ),
+          const SizedBox(height: Insets.xs),
+          if (rules.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Insets.sm),
+              child: Text('暂无规则 —— 点右上角「+」添加', style: hintStyle(context)),
+            )
+          else
+            ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: rules.length,
+              onReorderItem: (oldIndex, newIndex) {
+                if (oldIndex == newIndex) return;
+                final from = rules[oldIndex].index;
+                final to = rules[newIndex].index;
+                if (!s.moveRule(from, to)) _fail();
+              },
+              itemBuilder: (context, i) {
+                final rule = rules[i];
+                return Padding(
+                  key: ValueKey('rule-${rule.index}'),
+                  padding: const EdgeInsets.only(bottom: Insets.sm),
+                  child: _RuleRow(
+                    rule: rule,
+                    trailing: _rowTrailing(context, rule),
+                    dragHandle: ReorderableDragStartListener(
+                      index: i,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.grab,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Insets.xs,
+                            vertical: Insets.sm,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.drag_indicator,
+                                size: 17,
+                                color: scheme.onSurfaceVariant.withValues(
+                                  alpha: 0.7,
                                 ),
-                                Text(
-                                  '${i + 1}',
-                                  style: monoStyle(context, size: 10),
-                                ),
-                              ],
-                            ),
+                              ),
+                              Text(
+                                '${i + 1}',
+                                style: monoStyle(context, size: 10),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      onTap: () => _editRule(initial: rule, index: rule.index),
                     ),
-                  );
-                },
-              ),
-          ],
+                    onTap: () => _editRule(initial: rule, index: rule.index),
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -1762,4 +1822,42 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
       },
     );
   }
+}
+
+class _ZoneHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _ZoneHeaderDelegate({required this.child, required this.background});
+
+  final Widget child;
+  final Color background;
+
+  @override
+  double get minExtent => 46;
+
+  @override
+  double get maxExtent => 46;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    // 吸顶头高度由 delegate 固定，子级必须撑满，否则 SliverGeometry 的
+    // layoutExtent 会大于 paintExtent 而触发断言。
+    return Material(
+      color: background,
+      child: SizedBox(
+        height: maxExtent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+          child: Align(alignment: Alignment.centerLeft, child: child),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_ZoneHeaderDelegate oldDelegate) =>
+      !identical(oldDelegate.child, child) ||
+      oldDelegate.background != background;
 }

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/model/app_settings.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
+import 'picker_sheet.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -497,32 +498,20 @@ class _GlobalExitRow extends StatelessWidget {
 
   Future<void> _pick(BuildContext context) async {
     final candidates = _candidates();
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => ListView(
-        shrinkWrap: true,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.lg,
-              0,
-              Insets.lg,
-              Insets.sm,
-            ),
-            child: Text('GLOBAL 走哪个节点', style: display(16, weight: 700)),
+    final picked = await showPickerSheet<String>(
+      context,
+      title: 'GLOBAL 走哪个节点',
+      options: [
+        for (final name in candidates)
+          PickerOption<String>(
+            name,
+            name,
+            subtitle: _membersOf(name).isEmpty
+                ? null
+                : '策略组 · ${_membersOf(name).length} 个成员',
           ),
-          for (final name in candidates)
-            ListTile(
-              dense: true,
-              title: Text(name),
-              trailing: settings.globalNode == name
-                  ? const Icon(Icons.check, size: 18)
-                  : null,
-              onTap: () => Navigator.pop(ctx, name),
-            ),
-        ],
-      ),
+      ],
+      current: settings.globalNode,
     );
     if (picked == null || !context.mounted) return;
 
@@ -531,32 +520,14 @@ class _GlobalExitRow extends StatelessWidget {
     final members = _membersOf(picked);
     String? member;
     if (members.isNotEmpty) {
-      final choice = await showModalBottomSheet<String>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => ListView(
-          shrinkWrap: true,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Insets.lg,
-                0,
-                Insets.lg,
-                Insets.sm,
-              ),
-              child: Text('「$picked」里用哪个节点', style: display(16, weight: 700)),
-            ),
-            for (final name in ['', ...members])
-              ListTile(
-                dense: true,
-                title: Text(name.isEmpty ? '跟着组自己的选择走' : name),
-                trailing: (settings.groupNodes[picked] ?? '') == name
-                    ? const Icon(Icons.check, size: 18)
-                    : null,
-                onTap: () => Navigator.pop(ctx, name),
-              ),
-          ],
-        ),
+      final choice = await showPickerSheet<String>(
+        context,
+        title: '「$picked」里用哪个节点',
+        options: [
+          const PickerOption<String>('', '跟着组自己的选择走'),
+          for (final name in members) PickerOption<String>(name, name),
+        ],
+        current: settings.groupNodes[picked] ?? '',
       );
       if (choice == null || !context.mounted) return;
       member = choice.isEmpty ? null : choice;

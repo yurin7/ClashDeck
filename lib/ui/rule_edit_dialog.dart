@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/edit/config_ops.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
 import 'toast.dart';
@@ -57,9 +58,11 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
   void initState() {
     super.initState();
     _type = widget.initialType ?? 'DOMAIN-SUFFIX';
-    _target =
-        widget.initialTarget ??
-        (widget.targets.isNotEmpty ? widget.targets.first : 'DIRECT');
+    // 新规则默认落到「默认」组：它带着全部节点 + DIRECT + REJECT。
+    final preferred = widget.targets.contains(kDefaultGroupName)
+        ? kDefaultGroupName
+        : (widget.targets.isNotEmpty ? widget.targets.first : 'DIRECT');
+    _target = widget.initialTarget ?? preferred;
     _noResolve = widget.initialNoResolve;
     _payloadCtrl = TextEditingController(text: widget.initialPayload ?? '');
   }

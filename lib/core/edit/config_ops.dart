@@ -1,6 +1,9 @@
 import '../model/profile.dart';
 import '../yaml/yaml_doc.dart';
 
+/// 默认 select 组的名字：规则默认指向它，新节点也自动加入。
+const String kDefaultGroupName = '默认';
+
 /// 所有编辑操作：`旧文档 -> 新文档` 的纯函数，失败抛 [ConfigEditException]。
 ///
 /// 设计原则：
@@ -22,6 +25,42 @@ class ConfigOps {
     var next = _appendProxy(doc, proxy);
     for (final g in intoGroups) {
       next = addGroupMember(next, g, name, missingGroupOk: true);
+    }
+    // 新节点一律进「默认」组：它带着全部节点 + DIRECT + REJECT，是规则的默认出口。
+    next = addGroupMember(next, kDefaultGroupName, name, missingGroupOk: true);
+    return ensureDefaultGroup(next);
+  }
+
+  /// 默认组的名字。规则默认指向它，新节点也会自动加入。
+  static const String defaultGroupName = kDefaultGroupName;
+
+  /// 保证配置里有「默认」select 组，且成员覆盖全部节点 + DIRECT + REJECT。
+  ///
+  /// 规则默认 target 指向它，所以缺了会让新规则无处可去；这里按需创建/补齐，
+  /// 已有的成员顺序尽量保持（新节点追加在末尾）。
+  static YamlDoc ensureDefaultGroup(YamlDoc doc) {
+    final profile = Profile.from(doc);
+    final names = [
+      for (final proxy in profile.proxies) proxy.name,
+      'DIRECT',
+      'REJECT',
+    ];
+    final existing = profile.group(kDefaultGroupName);
+    if (existing == null) {
+      return addGroup(doc, {
+        'name': kDefaultGroupName,
+        'type': 'select',
+      }, members: names);
+    }
+    var next = doc;
+    for (final member in names) {
+      if (existing.members.contains(member)) continue;
+      next = addGroupMember(
+        next,
+        kDefaultGroupName,
+        member,
+        missingGroupOk: true,
+      );
     }
     return next;
   }

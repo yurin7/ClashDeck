@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:clashdeck/core/edit/config_ops.dart';
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/validate/validator.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
@@ -36,7 +37,8 @@ void main() {
       profile.proxies.map((p) => p.name),
       containsAll(['香港 WS', '日本 Reality', '新加坡 gRPC', '美国 SS']),
     );
-    final group = profile.groups.single;
+    // 现在还有自动生成的「默认」组，这里只看链接导入建出来的那个组。
+    final group = profile.groups.firstWhere((g) => g.name != kDefaultGroupName);
     expect(
       group.members,
       containsAll(['香港 WS', '日本 Reality', '新加坡 gRPC', '美国 SS']),

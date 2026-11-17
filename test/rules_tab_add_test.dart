@@ -24,7 +24,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('添加规则'));
+    // 底部按钮栏已撤掉，本地规则区头右侧的「+」是新的入口。
+    await tester.tap(find.byTooltip('添加…').first);
     await tester.pumpAndSettle();
     expect(find.text('新建规则'), findsOneWidget);
 

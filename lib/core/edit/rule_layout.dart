@@ -8,7 +8,7 @@ import '../yaml/yaml_doc.dart';
 /// 能让「重排」这件事对用户可见地安全：段外一个字符都不动。
 ///
 /// 不变式（由 [normalize] 保证）：
-/// * 顺序为 本地精确区块 → 在线规则集区块 → 兜底块（MATCH / FINAL）；
+/// * 顺序为 本地精确区块 → 在线规则集区块 → GEO 区块 → 兜底块（MATCH / FINAL）；
 /// * 区块内部保持原有相对顺序；
 /// * 每条规则带上前方紧贴它的注释行，行内注释属于行本身；
 /// * 顺序已经正确时返回原字符串（幂等，调用方可据此跳过写盘）。
@@ -46,12 +46,15 @@ class RuleLayout {
     final at = atZoneEnd
         ? switch (zone) {
             RuleZone.local => block.localCount,
-            RuleZone.online => block.onlineCount,
+            RuleZone.online => block.localCount + block.onlineCount,
+            RuleZone.geo =>
+              block.localCount + block.onlineCount + block.geoCount,
             RuleZone.terminal => block.entries.length,
           }
         : switch (zone) {
             RuleZone.local => 0,
             RuleZone.online => block.localCount,
+            RuleZone.geo => block.localCount + block.onlineCount,
             RuleZone.terminal => block.entries.length,
           };
     return block.insertAt(at, line).applyTo(text);
@@ -124,6 +127,9 @@ class _RulesBlock {
   /// 在线区块的条目数，用于把新规则插到在线块末尾。
   int get onlineCount => entries.where((e) => e.zone == RuleZone.online).length;
 
+  /// GEO 区块的条目数。
+  int get geoCount => entries.where((e) => e.zone == RuleZone.geo).length;
+
   _RulesBlock insertAt(int index, String line) {
     final next = [...entries]..insert(index, _RuleEntry(['$indent- $line']));
     return _RulesBlock(
@@ -146,10 +152,11 @@ class _RulesBlock {
   String _bodyText() {
     final locals = entries.where((e) => e.zone == RuleZone.local);
     final onlines = entries.where((e) => e.zone == RuleZone.online);
+    final geos = entries.where((e) => e.zone == RuleZone.geo);
     final terminals = entries.where((e) => e.zone == RuleZone.terminal);
     final lines = <String>[
       ...header,
-      for (final group in [locals, onlines, terminals])
+      for (final group in [locals, onlines, geos, terminals])
         for (final entry in group) ...entry.lines,
       ...tail,
     ];

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/geosite_index.dart';
+import '../core/edit/import_plan.dart';
 import '../core/edit/import_rules.dart';
 import '../core/edit/rule_layout.dart';
 import '../core/edit/rule_presets.dart';
@@ -18,6 +19,7 @@ import '../data/app_prefs.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
+import 'geosite_picker.dart';
 import 'import_dialogs.dart';
 import 'rule_edit_dialog.dart';
 import 'dropdown.dart';
@@ -55,6 +57,7 @@ class _RulesTabState extends State<RulesTab> {
   bool _localOpen = true;
   bool _onlineOpen = true;
   bool _terminalOpen = true;
+  bool _geoOpen = true;
 
   @override
   void initState() {
@@ -72,6 +75,36 @@ class _RulesTabState extends State<RulesTab> {
     final msg = s.lastError;
     if (msg == null) return;
     showToast(context, msg);
+  }
+
+  /// 打开 GEO 选择器，往 GEO 区写一条 `GEOSITE,<code>,<target>`。
+  Future<void> _addGeoRule() async {
+    final names = [for (final g in s.profile.groups) g.name];
+    final pick = await showGeositePicker(context, groupNames: names);
+    if (pick == null || !mounted) return;
+    final target = pick.target.isEmpty
+        ? sanitizeGroupName(geositeLabelOf(pick.code))
+        : pick.target;
+    if (s.profile.group(target) == null) {
+      final members = [for (final p in s.profile.proxies) p.name];
+      final ok = s.apply(
+        (doc) => ConfigOps.addGroup(doc, {
+          'name': target,
+          'type': 'select',
+        }, members: members.isEmpty ? const ['DIRECT'] : members),
+      );
+      if (!ok) {
+        _fail();
+        return;
+      }
+    }
+    if (!s.addRule('GEOSITE,${pick.code},$target')) {
+      _fail();
+      return;
+    }
+    if (mounted) {
+      showToast(context, '已添加 GEOSITE,${pick.code},$target');
+    }
   }
 
   Future<void> _editRule({RuleEntry? initial, int? index}) async {
@@ -255,6 +288,124 @@ class _RulesTabState extends State<RulesTab> {
   }
 
   /// 落地一次导入。`only` 非空时 = 只重试这些规则集（GEOSITE 不重复写）。
+  /// 导入前算一遍计划：新建/复用组、新增/更新规则集、疑似重名。
+  ///
+  /// 只做统计，不写任何东西；确认后由 [_applyPresetChoice] 用同一份数据落地。
+  Future<ImportPlan> _buildPresetPlan(
+    List<_PresetFetch> fetched,
+    _PresetChoice choice,
+    RuleCache cache,
+  ) async {
+    final existing = <String, String>{};
+    final raw = s.doc.plainAt(['rule-providers']);
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          final url = value['url'];
+          existing['${entry.key}'] = url is String
+              ? normalizeRuleSetUrl(url)
+              : '';
+        }
+      }
+    }
+    final groupNames = {for (final g in s.profile.groups) g.name};
+    final newGroups = <String>[];
+    final reusedGroups = <String>[];
+    final newProviders = <String>[];
+    final updatedProviders = <String>[];
+    final similar = <String, String>{};
+    var skipped = 0;
+    for (final item in fetched) {
+      final body = item.body;
+      if (body == null) {
+        skipped += 1;
+        continue;
+      }
+      final name = item.preset.id;
+      final url = normalizeRuleSetUrl(item.preset.url);
+      // 同一份地址（忽略分支/query/末尾斜杠）换个名字导入，也算已存在。
+      final sameUrl = existing.entries.any(
+        (e) => e.value == url && url.isNotEmpty,
+      );
+      if (existing.containsKey(name) || sameUrl) {
+        updatedProviders.add(name);
+      } else {
+        // 内容相同但名字不同 → 视为同一个规则集，不重复建 provider。
+        var sameAsCached = false;
+        final text = item.text ?? ruleCacheBody(body.entries, body.behavior);
+        for (final other in existing.keys) {
+          final cached = await cache.read(other);
+          if (cached != null && cached == text) {
+            sameAsCached = true;
+            break;
+          }
+        }
+        if (sameAsCached) {
+          skipped += 1;
+          continue;
+        }
+        for (final other in existing.keys) {
+          if (looksLikeSameName(other, name)) {
+            similar[name] = other;
+            break;
+          }
+        }
+        newProviders.add(name);
+      }
+      final target = choice.groupFor(item.preset);
+      if (groupNames.contains(target)) {
+        if (!reusedGroups.contains(target)) reusedGroups.add(target);
+      } else if (!newGroups.contains(target)) {
+        newGroups.add(target);
+      }
+    }
+    return ImportPlan(
+      newGroups: newGroups,
+      reusedGroups: reusedGroups,
+      newProviders: newProviders,
+      updatedProviders: updatedProviders,
+      skippedRules: skipped,
+      rulesToAdd: fetched.length - skipped,
+      similarNames: similar,
+    );
+  }
+
+  /// 导入预览确认；返回 true 才继续写入。
+  Future<bool> _confirmPlan(ImportPlan plan) async {
+    if (plan.isEmpty && plan.similarLines.isEmpty) return true;
+    final ok = await showAppDialog<bool>(
+      context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('导入预览'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(plan.summary),
+              if (plan.similarLines.isNotEmpty) ...[
+                const SizedBox(height: Insets.sm),
+                Text('疑似重名（默认复用已有规则集）：${plan.similarLines.join('、')}'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _applyPresetChoice(
     _PresetChoice choice, {
     List<RulePreset> only = const <RulePreset>[],
@@ -291,6 +442,13 @@ class _RulesTabState extends State<RulesTab> {
       // 拉到就落本地缓存：内核自己拉 provider 在部分网络下会 EOF，
       // 所以规则集一律走 file provider，运行时不再依赖出网。
       final cache = await RuleCache.open();
+      // 导入前先算一次预览：新建/复用组、新增/更新规则集、疑似重名。
+      // 确认后按同一份数据继续写入，不重复计算。
+      final plan = await _buildPresetPlan(fetched, choice, cache);
+      if (!await _confirmPlan(plan)) {
+        _toast('已取消导入');
+        return;
+      }
       for (final item in fetched) {
         final body = item.body;
         if (body == null) {
@@ -681,6 +839,7 @@ class _RulesTabState extends State<RulesTab> {
     BuildContext context, {
     required List<RuleEntry> local,
     required List<RuleEntry> online,
+    required List<RuleEntry> geo,
     required List<RuleEntry> terminal,
     required bool terminalLate,
   }) {
@@ -701,6 +860,7 @@ class _RulesTabState extends State<RulesTab> {
           zone: RuleZone.local,
           open: _localOpen,
           onToggle: () => setState(() => _localOpen = !_localOpen),
+          onAdd: () => _editRule(),
         ),
         Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
         const SizedBox(height: Insets.sm),
@@ -712,7 +872,20 @@ class _RulesTabState extends State<RulesTab> {
           zone: RuleZone.online,
           open: _onlineOpen,
           onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
+          onAdd: _importRules,
           terminalLate: terminalLate,
+        ),
+        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        const SizedBox(height: Insets.sm),
+        _buildZone(
+          context,
+          title: 'GEO 数据',
+          subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
+          rules: geo,
+          zone: RuleZone.geo,
+          open: _geoOpen,
+          onToggle: () => setState(() => _geoOpen = !_geoOpen),
+          onAdd: _addGeoRule,
         ),
         Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
         const SizedBox(height: Insets.sm),
@@ -737,6 +910,7 @@ class _RulesTabState extends State<RulesTab> {
     required RuleZone zone,
     required bool open,
     required VoidCallback onToggle,
+    VoidCallback? onAdd,
     bool terminalLate = false,
   }) {
     final scheme = Theme.of(context).colorScheme;
@@ -769,6 +943,8 @@ class _RulesTabState extends State<RulesTab> {
                           ? scheme.primary
                           : zone == RuleZone.online
                           ? scheme.tertiary
+                          : zone == RuleZone.geo
+                          ? scheme.secondary
                           : scheme.error,
                       borderRadius: BorderRadius.circular(2),
                     ),
@@ -793,6 +969,13 @@ class _RulesTabState extends State<RulesTab> {
                     Padding(
                       padding: const EdgeInsets.only(right: Insets.xs),
                       child: Text(_onlineSummary, style: hintStyle(context)),
+                    ),
+                  if (onAdd != null)
+                    IconButton(
+                      onPressed: onAdd,
+                      tooltip: '添加…',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.add, size: 20),
                     ),
                   Pill(label: '${rules.length} 条', dense: true),
                 ],
@@ -823,10 +1006,7 @@ class _RulesTabState extends State<RulesTab> {
             if (rules.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Insets.sm),
-                child: Text(
-                  '暂无规则 —— 用下方「添加规则」或「导入规则」',
-                  style: hintStyle(context),
-                ),
+                child: Text('暂无规则 —— 点右上角「+」添加', style: hintStyle(context)),
               )
             else
               ReorderableListView.builder(
@@ -964,6 +1144,7 @@ class _RulesTabState extends State<RulesTab> {
     final scheme = Theme.of(context).colorScheme;
     final local = <RuleEntry>[];
     final online = <RuleEntry>[];
+    final geo = <RuleEntry>[];
     final terminal = <RuleEntry>[];
     for (final rule in rules) {
       switch (ruleZoneOf(rule.raw)) {
@@ -971,6 +1152,8 @@ class _RulesTabState extends State<RulesTab> {
           local.add(rule);
         case RuleZone.online:
           online.add(rule);
+        case RuleZone.geo:
+          geo.add(rule);
         case RuleZone.terminal:
           terminal.add(rule);
       }
@@ -1011,37 +1194,10 @@ class _RulesTabState extends State<RulesTab> {
                   context,
                   local: local,
                   online: online,
+                  geo: geo,
                   terminal: terminal,
                   terminalLate: terminalLate,
                 ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.lg,
-              Insets.xs,
-              Insets.lg,
-              Insets.md,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => _editRule(),
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text('添加规则'),
-                  ),
-                ),
-                const SizedBox(width: Insets.sm),
-                OutlinedButton.icon(
-                  onPressed: _importRules,
-                  icon: const Icon(Icons.file_download_outlined, size: 20),
-                  label: const Text('导入规则'),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );

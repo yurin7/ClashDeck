@@ -18,14 +18,15 @@ void main() {
       }
     });
 
-    test('规则集与 geo 规则落在在线区', () {
+    test('规则集落在线区、GEOSITE/GEOIP 落 GEO 区', () {
       for (final rule in <String>[
         'RULE-SET,loyal-reject,REJECT',
-        'GEOSITE,openai,PROXY',
-        'GEOIP,CN,DIRECT',
         'rule-set,loyal-proxy,PROXY',
       ]) {
         expect(ruleZoneOf(rule), RuleZone.online, reason: rule);
+      }
+      for (final rule in <String>['GEOSITE,openai,PROXY', 'GEOIP,CN,DIRECT']) {
+        expect(ruleZoneOf(rule), RuleZone.geo, reason: rule);
       }
     });
 
@@ -56,7 +57,7 @@ rules:
   - IP-CIDR,10.0.0.0/8,DIRECT
 ''';
 
-    test('本地块在前、在线块居中、MATCH 最后', () {
+    test('本地块在前、在线块与 GEO 居中、MATCH 最后', () {
       final out = RuleLayout.normalize(messy);
       final types = <String>[
         for (final line in out.split('\n'))
@@ -66,8 +67,8 @@ rules:
       expect(types, [
         'DOMAIN-SUFFIX',
         'IP-CIDR',
-        'GEOSITE',
         'RULE-SET',
+        'GEOSITE',
         'MATCH',
       ]);
     });
@@ -121,14 +122,14 @@ rules:
       expect(firstRule, '- DOMAIN-KEYWORD,github,PROXY');
     });
 
-    test('手写 GEOSITE 也进在线区，且排在已有在线条目之前', () {
+    test('手写 GEOSITE 进 GEO 区，排在规则集之后、MATCH 之前', () {
       final out = RuleLayout.insertRule(ordered, 'GEOSITE,openai,PROXY');
       final types = <String>[
         for (final line in out.split('\n'))
           if (line.trim().startsWith('- '))
             line.trim().substring(2).split(',').first,
       ];
-      expect(types, ['DOMAIN-SUFFIX', 'GEOSITE', 'RULE-SET', 'MATCH']);
+      expect(types, ['DOMAIN-SUFFIX', 'RULE-SET', 'GEOSITE', 'MATCH']);
     });
 
     test('MATCH 追加到末尾', () {

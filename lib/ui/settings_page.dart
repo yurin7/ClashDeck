@@ -366,6 +366,18 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
           _section(
+            title: '编辑器',
+            icon: Icons.edit_note,
+            children: [
+              _SwitchRow(
+                label: '自动保存',
+                description: '返回上一级时，配置没有错误就自动写入磁盘',
+                value: state.autoSave,
+                onChanged: (v) => _run(() => state.setAutoSave(v)),
+              ),
+            ],
+          ),
+          _section(
             title: '其它',
             icon: Icons.more_horiz,
             children: [

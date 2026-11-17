@@ -199,6 +199,7 @@ class _AppShellState extends State<AppShell> {
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
+          autoSave: _settings?.autoSave ?? true,
         ),
       ),
     );
@@ -262,6 +263,7 @@ class _AppShellState extends State<AppShell> {
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
+          autoSave: _settings?.autoSave ?? true,
         ),
       ),
     );
@@ -437,6 +439,7 @@ class _AppShellState extends State<AppShell> {
                   onSetActive: _setActive,
                   onProfilesChanged: _reloadProfiles,
                   runtime: _runtime,
+                  autoSave: _settings?.autoSave ?? true,
                   bottomInset: _bottomInset,
                 ),
                 SafeArea(

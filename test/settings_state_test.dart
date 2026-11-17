@@ -119,4 +119,26 @@ rules:
     await expectLater(s.setTunStack('system'), throwsA(isA<Exception>()));
     expect(await store.read('t.yaml'), contains('tun: false'));
   });
+
+  test('自动保存开关写进 sidecar，默认开', () async {
+    final s = await SettingsState.load(store, 't.yaml');
+    expect(s.autoSave, isTrue, reason: '默认应为开');
+
+    await s.setAutoSave(false);
+    final meta = await store.readMeta('t.yaml');
+    expect((meta['app']! as Map)['autoSave'], false);
+    // 纯界面偏好，不该出现在 YAML 里。
+    expect((await reloadYaml()).containsKey('autoSave'), isFalse);
+
+    final again = await SettingsState.load(store, 't.yaml');
+    expect(again.autoSave, isFalse);
+  });
+
+  test('老版本 meta 没有 autoSave 键时按开处理', () async {
+    await store.writeMeta('t.yaml', {
+      'app': {'proxyMode': 'tun', 'routeMode': 'all'},
+    });
+    final s = await SettingsState.load(store, 't.yaml');
+    expect(s.autoSave, isTrue);
+  });
 }

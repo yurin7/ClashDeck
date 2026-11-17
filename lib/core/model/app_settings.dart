@@ -62,6 +62,7 @@ class AppSettings {
     this.routePackages = const <String>[],
     this.autoUpdateHours = 0,
     this.launchOnBoot = false,
+    this.autoSave = true,
   });
 
   final ProxyMode proxyMode;
@@ -74,6 +75,9 @@ class AppSettings {
   /// 开机自启（需要系统允许后台启动，当前仅记录开关）。
   final bool launchOnBoot;
 
+  /// 返回上一级时，若当前配置没有校验错误，就自动保存。
+  final bool autoSave;
+
   static const AppSettings defaults = AppSettings();
 
   AppSettings copyWith({
@@ -82,6 +86,7 @@ class AppSettings {
     List<String>? routePackages,
     int? autoUpdateHours,
     bool? launchOnBoot,
+    bool? autoSave,
   }) {
     return AppSettings(
       proxyMode: proxyMode ?? this.proxyMode,
@@ -89,6 +94,7 @@ class AppSettings {
       routePackages: routePackages ?? this.routePackages,
       autoUpdateHours: autoUpdateHours ?? this.autoUpdateHours,
       launchOnBoot: launchOnBoot ?? this.launchOnBoot,
+      autoSave: autoSave ?? this.autoSave,
     );
   }
 
@@ -98,6 +104,7 @@ class AppSettings {
     'routePackages': routePackages,
     'autoUpdateHours': autoUpdateHours,
     'launchOnBoot': launchOnBoot,
+    'autoSave': autoSave,
   };
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
@@ -110,6 +117,8 @@ class AppSettings {
           : const <String>[],
       autoUpdateHours: (json['autoUpdateHours'] as num?)?.toInt() ?? 0,
       launchOnBoot: json['launchOnBoot'] == true,
+      // 缺省为 true：老版本存下来的 app 段没有这个键时，仍然按「自动保存」处理。
+      autoSave: json['autoSave'] as bool? ?? true,
     );
   }
 

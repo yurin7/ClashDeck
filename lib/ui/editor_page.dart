@@ -21,6 +21,7 @@ class EditorPage extends StatefulWidget {
     this.initialText,
     this.displayName,
     this.runtime,
+    this.autoSave = true,
   });
 
   final ProfileStore store;
@@ -32,6 +33,9 @@ class EditorPage extends StatefulWidget {
 
   /// 全局唯一的运行控制器：代理页点节点直接切组、运行页复用同一个实例。
   final RuntimeController? runtime;
+
+  /// 返回上一级时，配置没有校验错误就自动保存（设置里的「自动保存」）。
+  final bool autoSave;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -90,6 +94,75 @@ class _EditorPageState extends State<EditorPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// 返回上一级：有改动时按「自动保存」设置决定保存还是确认放弃。
+  Future<void> _handleBack() async {
+    final state = _state;
+    if (state == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_saving) return;
+    if (!state.dirty) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final report = state.report;
+    if (report.hasErrors) {
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('配置还有错误'),
+          content: Text('还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('留下处理'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('仍然返回'),
+            ),
+          ],
+        ),
+      );
+      if (leave == true && mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    if (widget.autoSave) {
+      await _save();
+      if (mounted && !(_state?.dirty ?? false)) Navigator.of(context).pop();
+      return;
+    }
+
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('有未保存的改动'),
+        content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。仍要返回吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('留下'),
+          ),
+          FilledButton(
+            onPressed: () {
+              _save();
+              Navigator.of(ctx).pop(true);
+            },
+            child: const Text('保存并返回'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('放弃改动'),
+          ),
+        ],
+      ),
+    );
+    if (leave == true && mounted) Navigator.of(context).pop();
   }
 
   Future<void> _saveAs() async {
@@ -262,118 +335,138 @@ class _EditorPageState extends State<EditorPage> {
       listenable: state,
       builder: (context, _) => DefaultTabController(
         length: 3,
-        child: Scaffold(
-          appBar: AppBar(
-            titleSpacing: 8,
-            title: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    _title,
-                    style: display(17, weight: 600),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (state.dirty) ...[
-                  const SizedBox(width: Insets.sm),
-                  Pill(
-                    label: '未保存',
-                    color: Theme.of(context).colorScheme.tertiary,
-                    dense: true,
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              IconButton(
-                tooltip: '运行',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        RuntimePage(state: state, controller: widget.runtime),
-                  ),
-                ),
-                icon: const Icon(Icons.play_circle_outline),
-              ),
-              IconButton(
-                tooltip: '撤销',
-                onPressed: state.canUndo ? state.undo : null,
-                icon: const Icon(Icons.undo),
-              ),
-              IconButton(
-                tooltip: '重做',
-                onPressed: state.canRedo ? state.redo : null,
-                icon: const Icon(Icons.redo),
-              ),
-              IconButton(
-                tooltip: '保存',
-                onPressed: state.dirty && !_saving ? _save : null,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(state.dirty ? Icons.save : Icons.save_outlined),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (v) async {
-                  switch (v) {
-                    case 'issues':
-                      await _showIssues(state.report);
-                    case 'subscription':
-                      await _subscription();
-                    case 'saveAs':
-                      await _saveAs();
+        child: PopScope(
+          // 有未保存改动时不直接 pop，走 _handleBack 决定「自动保存」还是「确认放弃」。
+          canPop: !state.dirty,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            _handleBack();
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              leading: BackButton(
+                onPressed: () {
+                  if (state.dirty) {
+                    _handleBack();
+                  } else {
+                    Navigator.of(context).pop();
                   }
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'issues', child: Text('校验详情')),
-                  PopupMenuItem(value: 'subscription', child: Text('订阅…')),
-                  PopupMenuItem(value: 'saveAs', child: Text('另存为…')),
+              ),
+              titleSpacing: 8,
+              title: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      _title,
+                      style: display(17, weight: 600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (state.dirty) ...[
+                    const SizedBox(width: Insets.sm),
+                    Pill(
+                      label: '未保存',
+                      color: Theme.of(context).colorScheme.tertiary,
+                      dense: true,
+                    ),
+                  ],
                 ],
               ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(48),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TabBar(
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  padding: const EdgeInsets.symmetric(horizontal: Insets.sm),
-                  tabs: const [
-                    Tab(
-                      icon: Icon(Icons.account_tree_outlined, size: 19),
-                      text: '代理',
+              actions: [
+                IconButton(
+                  tooltip: '运行',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          RuntimePage(state: state, controller: widget.runtime),
                     ),
-                    Tab(icon: Icon(Icons.rule_outlined, size: 19), text: '规则'),
-                    Tab(icon: Icon(Icons.code, size: 19), text: 'YAML'),
+                  ),
+                  icon: const Icon(Icons.play_circle_outline),
+                ),
+                IconButton(
+                  tooltip: '撤销',
+                  onPressed: state.canUndo ? state.undo : null,
+                  icon: const Icon(Icons.undo),
+                ),
+                IconButton(
+                  tooltip: '重做',
+                  onPressed: state.canRedo ? state.redo : null,
+                  icon: const Icon(Icons.redo),
+                ),
+                IconButton(
+                  tooltip: '保存',
+                  onPressed: state.dirty && !_saving ? _save : null,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(state.dirty ? Icons.save : Icons.save_outlined),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (v) async {
+                    switch (v) {
+                      case 'issues':
+                        await _showIssues(state.report);
+                      case 'subscription':
+                        await _subscription();
+                      case 'saveAs':
+                        await _saveAs();
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'issues', child: Text('校验详情')),
+                    PopupMenuItem(value: 'subscription', child: Text('订阅…')),
+                    PopupMenuItem(value: 'saveAs', child: Text('另存为…')),
                   ],
+                ),
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    padding: const EdgeInsets.symmetric(horizontal: Insets.sm),
+                    tabs: const [
+                      Tab(
+                        icon: Icon(Icons.account_tree_outlined, size: 19),
+                        text: '代理',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.rule_outlined, size: 19),
+                        text: '规则',
+                      ),
+                      Tab(icon: Icon(Icons.code, size: 19), text: 'YAML'),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          body: Column(
-            children: [
-              _StatusBar(
-                report: state.report,
-                onTap: () => _showIssues(state.report),
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    ProxyBoard(
-                      state: state,
-                      runtime: widget.runtime,
-                      onSubscriptionSaved: _rememberSubscription,
-                    ),
-                    RulesTab(state: state),
-                    RawYamlTab(state: state),
-                  ],
+            body: Column(
+              children: [
+                _StatusBar(
+                  report: state.report,
+                  onTap: () => _showIssues(state.report),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      ProxyBoard(
+                        state: state,
+                        runtime: widget.runtime,
+                        onSubscriptionSaved: _rememberSubscription,
+                      ),
+                      RulesTab(state: state),
+                      RawYamlTab(state: state),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

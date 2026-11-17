@@ -104,6 +104,9 @@ class SettingsState extends ChangeNotifier {
 
   String? get subscriptionUrl => _subscriptionUrl;
 
+  /// 返回上一级时是否自动保存（纯界面偏好，存在 sidecar 的 app 段里）。
+  bool get autoSave => app.autoSave;
+
   Future<void> reload() async {
     final text = await store.read(fileName);
     _doc = YamlDoc.parse(text);
@@ -163,6 +166,9 @@ class SettingsState extends ChangeNotifier {
 
   Future<void> setLaunchOnBoot(bool value) =>
       _updateApp(app.copyWith(launchOnBoot: value));
+
+  Future<void> setAutoSave(bool value) =>
+      _updateApp(app.copyWith(autoSave: value));
 
   /// 把一批解析好的节点写进这份配置（订阅刷新用：同名跳过）。
   ///

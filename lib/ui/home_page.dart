@@ -19,6 +19,7 @@ class HomePage extends StatefulWidget {
     this.onSetActive,
     this.onProfilesChanged,
     this.runtime,
+    this.autoSave = true,
     this.bottomInset = 0,
   });
 
@@ -33,6 +34,9 @@ class HomePage extends StatefulWidget {
 
   /// 全局唯一的运行控制器；传给编辑页后，配置页「点组内节点 = 切换该组出口」才生效。
   final RuntimeController? runtime;
+
+  /// 设置里的「自动保存」：编辑页返回上一级时据此决定自动保存还是确认放弃。
+  final bool autoSave;
 
   /// 给底部悬浮岛留出的空白。
   final double bottomInset;
@@ -168,6 +172,7 @@ class _HomePageState extends State<HomePage> {
           initialText: null,
           displayName: item.name,
           runtime: widget.runtime,
+          autoSave: widget.autoSave,
         ),
       ),
     );

@@ -250,4 +250,103 @@ google.com
       expect(ruleSetCount, 1);
     });
   });
+  group('Q1：同一 provider / code 的旧行就地改写目标', () {
+    test('provider 已存在但目标不同 → 改写原行，不新增、位置不变', () {
+      final base = _base.replaceFirst(
+        '  - MATCH,PROXY',
+        '  - RULE-SET,direct,DIRECT\n  - MATCH,PROXY',
+      );
+      final doc = _doc(base);
+      final before = Profile.from(doc).rules.length;
+
+      final out = importRuleProvider(
+        doc,
+        body: parseRuleProviderBody(
+          _domainPayload,
+          url: 'https://example.com/direct.txt',
+        )!,
+        name: 'direct',
+        target: '直连域名',
+        url: 'https://example.com/direct.txt',
+      );
+
+      final rules = Profile.from(out.doc).rules;
+      expect(rules.length, before, reason: '一行换一行，不能多出一条');
+      expect(out.rulesAdded, 0);
+      expect(out.rulesSkipped, 0);
+      expect(out.rulesRetargeted, 1);
+      expect(out.summary, contains('改写 1 条目标'));
+      expect(rules[rules.length - 2].raw, 'RULE-SET,direct,直连域名');
+      expect(rules.last.isTerminal, isTrue);
+    });
+
+    test('取消勾选建同名组再导入 → 目标改回面板指定的组', () {
+      final ranged = _base.replaceFirst(
+        '  - MATCH,PROXY',
+        '  - RULE-SET,direct,直连域名\n  - MATCH,PROXY',
+      );
+      final out = importRuleProvider(
+        _doc(ranged),
+        body: parseRuleProviderBody(
+          _domainPayload,
+          url: 'https://example.com/direct.txt',
+        )!,
+        name: 'direct',
+        target: 'PROXY',
+        url: 'https://example.com/direct.txt',
+      );
+
+      final raws = Profile.from(out.doc).rules.map((r) => r.raw).toList();
+      expect(out.rulesRetargeted, 1);
+      expect(raws, contains('RULE-SET,direct,PROXY'));
+      expect(raws, isNot(contains('RULE-SET,direct,直连域名')));
+    });
+
+    test('GEOSITE 按 code 去重改写，不误伤同名前缀', () {
+      final base = _base.replaceFirst(
+        '  - MATCH,PROXY',
+        '  - GEOSITE,google,DIRECT\n'
+            '  - GEOSITE,google-cn,DIRECT\n'
+            '  - MATCH,PROXY',
+      );
+
+      final out = insertRuleLines(_doc(base), const ['GEOSITE,google,PROXY']);
+
+      final raws = Profile.from(out.doc).rules.map((r) => r.raw).toList();
+      expect(out.rulesAdded, 0);
+      expect(out.rulesRetargeted, 1);
+      expect(raws, contains('GEOSITE,google,PROXY'));
+      expect(raws, isNot(contains('GEOSITE,google,DIRECT')));
+      expect(raws, contains('GEOSITE,google-cn,DIRECT'));
+    });
+
+    test('遗留重复行被折叠成一条', () {
+      final base = _base.replaceFirst(
+        '  - MATCH,PROXY',
+        '  - RULE-SET,direct,DIRECT\n'
+            '  - RULE-SET,direct,直连域名\n'
+            '  - MATCH,PROXY',
+      );
+      final doc = _doc(base);
+      final before = Profile.from(doc).rules.length;
+
+      final out = importRuleProvider(
+        doc,
+        body: parseRuleProviderBody(
+          _domainPayload,
+          url: 'https://example.com/direct.txt',
+        )!,
+        name: 'direct',
+        target: '直连域名',
+        url: 'https://example.com/direct.txt',
+      );
+
+      final raws = Profile.from(out.doc).rules.map((r) => r.raw).toList();
+      expect(raws.where((r) => r.startsWith('RULE-SET,direct,')).length, 1);
+      expect(raws, contains('RULE-SET,direct,直连域名'));
+      expect(Profile.from(out.doc).rules.length, before - 1);
+      expect(out.rulesRetargeted, 1);
+      expect(out.rulesAdded, 0);
+    });
+  });
 }

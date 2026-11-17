@@ -205,6 +205,7 @@ class _RulesTabState extends State<RulesTab> {
     var updated = 0;
     var groupsMade = 0;
     var groupsReused = 0;
+    var retargeted = 0;
 
     if (choice.presets.isNotEmpty) {
       final fetched = await _withBusy(
@@ -234,6 +235,7 @@ class _RulesTabState extends State<RulesTab> {
           updated += outcome.providersUpdated.length;
           groupsMade += outcome.groupsAdded.length;
           groupsReused += outcome.groupsMerged.length;
+          retargeted += outcome.rulesRetargeted;
           failed.addAll(outcome.warnings);
         } on ConfigEditException catch (e) {
           failed.add('${item.preset.id}（${e.message}）');
@@ -271,6 +273,7 @@ class _RulesTabState extends State<RulesTab> {
       if (geoAdded > 0) 'GEOSITE $geoAdded 条',
       if (groupsMade > 0) '新建 $groupsMade 个节点组',
       if (groupsReused > 0) '复用 $groupsReused 个同名组',
+      if (retargeted > 0) '改写 $retargeted 条目标',
       if (updated > 0) '更新 $updated 个同名规则集',
     ];
     _toast(
@@ -657,6 +660,41 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
       _groupAll && !_groupOff.contains(preset.id);
   int get _total => _picked.length + _geosites.length;
 
+  int get _pickedCount => _picked.length;
+
+  int get _presetTotal => kLoyalRulesPresets.length + kAclRulesPresets.length;
+
+  int get _geositeCount => _geosites.length;
+
+  int get _geositeTotal => kGeositePicks.length;
+
+  /// 当前页签全选。
+  void _selectAll() {
+    setState(() {
+      if (_tab == 0) {
+        for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
+          _picked.add(preset.id);
+        }
+        _groupOff.clear();
+      } else {
+        for (final pick in kGeositePicks) {
+          _geosites.add(pick.code);
+        }
+      }
+    });
+  }
+
+  /// 当前页签清空。
+  void _clearAll() {
+    setState(() {
+      if (_tab == 0) {
+        _picked.clear();
+      } else {
+        _geosites.clear();
+      }
+    });
+  }
+
   void _toggle(Set<String> target, String key, bool? on) {
     setState(() {
       if (on == true) {
@@ -707,6 +745,19 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                 onChanged: (v) => setState(() => _proxyGroup = v),
               ),
               const SizedBox(height: Insets.sm),
+              Row(
+                children: [
+                  TextButton(onPressed: _selectAll, child: const Text('全选')),
+                  TextButton(onPressed: _clearAll, child: const Text('清空')),
+                  const Spacer(),
+                  Text(
+                    _tab == 0
+                        ? '已选 $_pickedCount / $_presetTotal'
+                        : '已选 $_geositeCount / $_geositeTotal',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
               if (_tab == 0)
                 SwitchListTile(
                   dense: true,

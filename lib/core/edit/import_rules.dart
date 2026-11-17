@@ -9,6 +9,7 @@ class RuleImportOutcome {
     required this.doc,
     required this.rulesAdded,
     required this.rulesSkipped,
+    this.rulesRetargeted = 0,
     required this.groupsAdded,
     required this.groupsMerged,
     required this.targetGroupsCreated,
@@ -20,6 +21,9 @@ class RuleImportOutcome {
   final YamlDoc doc;
   final int rulesAdded;
   final int rulesSkipped;
+
+  /// 同一 provider / code 的旧规则行，目标被就地改写掉的条数。
+  final int rulesRetargeted;
   final List<String> groupsAdded;
   final List<String> groupsMerged;
 
@@ -37,6 +41,7 @@ class RuleImportOutcome {
 
   bool get isEmpty =>
       rulesAdded == 0 &&
+      rulesRetargeted == 0 &&
       groupsAdded.isEmpty &&
       groupsMerged.isEmpty &&
       providersAdded.isEmpty &&
@@ -47,6 +52,7 @@ class RuleImportOutcome {
     final parts = <String>[
       if (rulesAdded > 0) '新增 $rulesAdded 条规则',
       if (rulesSkipped > 0) '跳过 $rulesSkipped 条重复',
+      if (rulesRetargeted > 0) '改写 $rulesRetargeted 条目标',
       if (groupsAdded.isNotEmpty) '新建 ${groupsAdded.length} 个策略组',
       if (groupsMerged.isNotEmpty) '补全 ${groupsMerged.length} 个组',
       if (targetGroupsCreated.isNotEmpty)
@@ -158,6 +164,7 @@ RuleImportOutcome importRules(
   // 3) 最后追加规则。
   var rulesAdded = 0;
   var rulesSkipped = 0;
+  var rulesRetargeted = 0;
   final targetGroupsCreated = <String>[];
   for (final rule in ruleTexts) {
     final profile = Profile.from(next);
@@ -165,6 +172,21 @@ RuleImportOutcome importRules(
     if (existing.contains(_compact(rule))) {
       rulesSkipped++;
       continue;
+    }
+    // 同一「类型 + 匹配内容」的旧行改目标，而不是再排一条：
+    // first-match 下旧行会把新行永久遮住。
+    final parts = rule.split(',').map((p) => p.trim()).toList();
+    if (parts.length >= 3) {
+      final retargeted = _retargetRule(next, parts[0], parts[1], parts[2]);
+      if (retargeted != null) {
+        if (identical(retargeted, next)) {
+          rulesSkipped++;
+        } else {
+          next = retargeted;
+          rulesRetargeted++;
+        }
+        continue;
+      }
     }
     if (createMissingGroups) {
       final entry = RuleEntry.parse(profile.rules.length, rule);
@@ -200,6 +222,7 @@ RuleImportOutcome importRules(
     doc: next,
     rulesAdded: rulesAdded,
     rulesSkipped: rulesSkipped,
+    rulesRetargeted: rulesRetargeted,
     groupsAdded: groupsAdded,
     groupsMerged: groupsMerged,
     targetGroupsCreated: targetGroupsCreated,
@@ -213,6 +236,59 @@ RuleImportOutcome importRules(
 ///
 /// 和 [importRules] 的区别：调用方已经拿到了最终规则文本，不需要再解析片段或
 /// 建 rule-provider；这里只做去重、补缺失目标组、定位插入点。
+/// 找到与 [type] + [key] 同一条规则（RULE-SET 按 provider 名、GEOSITE 按 code），
+/// 把它的目标就地改成 [target]，位置和顺序都不动。
+///
+/// 没有这条规则时返回 `null`；已经就是 [target] 时原样返回 [doc]（同一实例），
+/// 调用方据此判断「真的改过」还是「本来就是这样」。
+YamlDoc? _retargetRule(YamlDoc doc, String type, String key, String target) {
+  final wanted = type.toUpperCase();
+  List<int> matches(List<String> rules) {
+    final hits = <int>[];
+    for (var i = 0; i < rules.length; i++) {
+      final parts = rules[i].split(',').map((p) => p.trim()).toList();
+      if (parts.length < 3) continue;
+      if (parts[0].toUpperCase() != wanted) continue;
+      if (parts[1] != key) continue;
+      hits.add(i);
+    }
+    return hits;
+  }
+
+  var next = doc;
+  var hits = matches(ConfigOps.ruleStrings(Profile.from(next)));
+  if (hits.isEmpty) return null;
+
+  // 历史配置里同一个 provider 可能已经留了多条（旧版不判重）。先改写第一条，
+  // 再把其余重复行删掉：内核 first-match，重复行只会互相遮盖。
+  final first = hits.first;
+  final parts = ConfigOps.ruleStrings(
+    Profile.from(next),
+  )[first].split(',').map((p) => p.trim()).toList();
+  final changed = parts[2] != target;
+  if (changed) {
+    // 保留尾部参数（如 no-resolve）。
+    final rest = parts.skip(3).join(',');
+    next = ConfigOps.updateRule(
+      next,
+      first,
+      rest.isEmpty ? '$type,$key,$target' : '$type,$key,$target,$rest',
+    );
+  }
+
+  hits = matches(ConfigOps.ruleStrings(Profile.from(next)));
+  final hadDuplicates = hits.length > 1;
+  if (hadDuplicates) {
+    // 从后往前删，避免下标位移。
+    for (final index in hits.skip(1).toList().reversed) {
+      next = ConfigOps.deleteRule(next, index);
+    }
+  }
+  // 同一实例 = 本来就只有这一条、目标也对，调用方按「跳过」处理。
+  if (!changed && !hadDuplicates) return doc;
+  return next;
+}
+
 RuleImportOutcome insertRuleLines(
   YamlDoc doc,
   List<String> rules, {
@@ -223,6 +299,7 @@ RuleImportOutcome insertRuleLines(
   final targetGroupsCreated = <String>[];
   var rulesAdded = 0;
   var rulesSkipped = 0;
+  var rulesRetargeted = 0;
 
   for (final raw in rules) {
     final rule = raw.trim();
@@ -232,6 +309,21 @@ RuleImportOutcome insertRuleLines(
     if (existing.contains(_compact(rule))) {
       rulesSkipped++;
       continue;
+    }
+    // 同一「类型 + 匹配内容」的旧行改目标，而不是再排一条：
+    // first-match 下旧行会把新行永久遮住。
+    final parts = rule.split(',').map((p) => p.trim()).toList();
+    if (parts.length >= 3) {
+      final retargeted = _retargetRule(next, parts[0], parts[1], parts[2]);
+      if (retargeted != null) {
+        if (identical(retargeted, next)) {
+          rulesSkipped++;
+        } else {
+          next = retargeted;
+          rulesRetargeted++;
+        }
+        continue;
+      }
     }
     if (createMissingGroups) {
       final entry = RuleEntry.parse(profile.rules.length, rule);
@@ -267,6 +359,7 @@ RuleImportOutcome insertRuleLines(
     doc: next,
     rulesAdded: rulesAdded,
     rulesSkipped: rulesSkipped,
+    rulesRetargeted: rulesRetargeted,
     groupsAdded: const [],
     groupsMerged: const [],
     targetGroupsCreated: targetGroupsCreated,
@@ -647,11 +740,24 @@ RuleImportOutcome importRuleProvider(
 
   final rule = 'RULE-SET,$providerName,$effectiveTarget';
   final profileNow = Profile.from(next);
-  final existingRules = ConfigOps.ruleStrings(profileNow).map(_compact).toSet();
   var rulesAdded = 0;
   var rulesSkipped = 0;
-  if (existingRules.contains(_compact(rule))) {
-    rulesSkipped = 1;
+  var rulesRetargeted = 0;
+  // 内核规则自上而下 first-match：同一个 provider 留两条不同目标的规则，
+  // 旧行会把新行永久遮住。所以先按 provider 名找旧行，找到就就地改写目标。
+  final retargeted = _retargetRule(
+    next,
+    'RULE-SET',
+    providerName,
+    effectiveTarget,
+  );
+  if (retargeted != null) {
+    if (identical(retargeted, next)) {
+      rulesSkipped = 1;
+    } else {
+      next = retargeted;
+      rulesRetargeted = 1;
+    }
   } else {
     final terminalAt = profileNow.rules.indexWhere((r) => r.isTerminal);
     next = ConfigOps.addRule(
@@ -666,6 +772,7 @@ RuleImportOutcome importRuleProvider(
     doc: next,
     rulesAdded: rulesAdded,
     rulesSkipped: rulesSkipped,
+    rulesRetargeted: rulesRetargeted,
     groupsAdded: groupsAdded,
     groupsMerged: groupsMerged,
     targetGroupsCreated: targetGroupsCreated,

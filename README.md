@@ -29,7 +29,8 @@ Clash 系客户端大多只让你旁路改 YAML 文本——加一个 vless 节�
 | `ClashDeck-0.1.0-x86_64.apk` | x86_64 | 模拟器 / x86 平板（35.2 MB） |
 
 - `minSdk 24`（Android 7.0+），`targetSdk 36`；APK 内已带内核与 GEOIP/GEOSITE 数据，装完即用
-- 当前用 **debug keystore 签名**（自用/测试足够，不用于上架）；没有 armeabi-v7a 包
+- 仓库里带了**固定的自签名密钥库**（`android/app/clashdeck-release.jks`，自用/测试足够，不用于上架），
+  所以每个新包都能直接覆盖安装升级，不用先卸载；没有 armeabi-v7a 包
 - 首次「启动内核」会请求 VPN 授权；不想接管全局流量，可在设置里切「仅代理端口」
 
 包名 `dev.clashdeck`，许可证 **GPL-3.0**（与 mihomo 一致）。完整条款见 [LICENSE](LICENSE)；
@@ -142,6 +143,22 @@ git push origin v0.1.3
 4. 上传到对应的 Release（正式版生成变更说明），同时也作为 Actions 产物保存 14 天。
 
 流水线页面：<https://github.com/yurin7/ClashDeck/actions>
+
+### 签名与覆盖升级
+
+`android/app/build.gradle.kts` 优先用仓库里的固定 keystore 签名：
+
+- `android/key.properties`（`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）
+- `android/app/clashdeck-release.jks`
+
+两个文件缺任意一个就回退到 debug 签名——**CI 上现生成的 debug key 每次都不一样**，
+那样打出来的包签名不同，装新版本前必须先卸载旧版本。生成固定 keystore：
+
+```powershell
+pwsh -File tool\setup_signing.ps1   # 已生成过会跳过
+```
+
+生成后把 `android/app/clashdeck-release.jks` 和 `android/key.properties` 一起提交。
 
 ## 目录
 

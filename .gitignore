@@ -32,3 +32,7 @@ Thumbs.db
 
 # 本地备份
 *.bak
+
+# 发布签名：这两个文件要进仓库，CI 才能每次用同一个 key 签名（新包可直接覆盖安装升级）
+!android/key.properties
+!android/app/*.jks

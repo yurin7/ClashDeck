@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -8,7 +10,7 @@ plugins {
 // 每次构建就用同一个 key 签名，新包能直接覆盖安装升级。
 // 缺这两个文件时回退到 debug 签名（CI 每次新生成，所以那种包必须卸载才能重装）。
 val keystorePropertiesFile = rootProject.file("key.properties")
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }

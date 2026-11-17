@@ -29,3 +29,6 @@ android/app/src/main/jniLibs/**/*.so
 *.log
 Thumbs.db
 .DS_Store
+
+# 本地备份
+*.bak

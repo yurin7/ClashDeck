@@ -6,6 +6,7 @@ import '../core/model/app_settings.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'app_picker_page.dart';
+import 'dropdown.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -371,7 +372,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _SwitchRow(
                 label: '自动保存',
-                description: '返回上一级时，配置没有错误就自动写入磁盘',
+                description: '返回上一级时，有改动就询问是否保存',
                 value: state.autoSave,
                 onChanged: (v) => _run(() => state.setAutoSave(v)),
               ),
@@ -523,7 +524,6 @@ class _ChoiceRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         Insets.lg,
@@ -544,23 +544,13 @@ class _ChoiceRow<T> extends StatelessWidget {
             ),
           ),
           const SizedBox(width: Insets.md),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<T>(
-              value: value,
-              isDense: true,
-              dropdownColor: scheme.surfaceContainerHigh,
-              borderRadius: const BorderRadius.all(Radius.circular(Insets.md)),
-              items: [
-                for (final item in items)
-                  DropdownMenuItem<T>(
-                    value: item,
-                    child: Text(labelOf(item), style: mono(12)),
-                  ),
-              ],
-              onChanged: (next) {
-                if (next != null && next != value) onChanged(next);
-              },
-            ),
+          AppDropdown<T>(
+            compact: true,
+            value: value,
+            options: [
+              for (final item in items) DropdownOption<T>(item, labelOf(item)),
+            ],
+            onChanged: onChanged,
           ),
         ],
       ),

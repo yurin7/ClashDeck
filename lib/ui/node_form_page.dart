@@ -4,6 +4,7 @@ import 'package:yaml/yaml.dart';
 import '../core/schema/field_spec.dart';
 import '../core/schema/proxy_schema.dart';
 import '../core/schema/schema_prune.dart';
+import 'dropdown.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -316,22 +317,17 @@ class _NodeFormPageState extends State<NodeFormPage> {
                 color: Theme.of(context).colorScheme.error,
               ),
             ),
-          DropdownButtonFormField<String>(
-            initialValue: _type,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: '协议类型',
-              prefixIcon: Icon(Icons.alt_route),
-            ),
-            items: [
+          AppDropdown<String>(
+            label: '协议类型',
+            icon: Icons.alt_route,
+            expand: true,
+            value: _type,
+            options: [
               for (final t in kSupportedProxyTypes)
-                DropdownMenuItem(
-                  value: t,
-                  child: Text('${proxySchemaFor(t)?.labelZh ?? t}（$t）'),
-                ),
+                DropdownOption(t, '${proxySchemaFor(t)?.labelZh ?? t}（$t）'),
             ],
             onChanged: (t) {
-              if (t == null || t == _type) return;
+              if (t == _type) return;
               setState(() {
                 _type = t;
                 _values['type'] = t;
@@ -441,40 +437,24 @@ class _NodeFormPageState extends State<NodeFormPage> {
         final value = hasRaw ? raw : raw;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: spec.labelZh,
-              helperText: spec.help,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: value,
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: '',
-                    child: Text('（默认）'),
-                  ),
-                  for (final o in options)
-                    DropdownMenuItem<String>(value: o, child: Text(o)),
-                  if (hasRaw)
-                    DropdownMenuItem<String>(
-                      value: raw,
-                      child: Text('$raw（当前值，schema 未收录）'),
-                    ),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  if (v.isEmpty) {
-                    setState(() => scope.remove(spec.key));
-                  } else {
-                    onChanged(v);
-                  }
-                },
-              ),
-            ),
+          child: AppDropdown<String>(
+            label: spec.labelZh,
+            helper: spec.help,
+            expand: true,
+            value: value,
+            options: [
+              const DropdownOption<String>('', '（默认）'),
+              for (final o in options) DropdownOption<String>(o, o),
+              // 配置里可能存在 schema 枚举没收录的值（内核比 schema 跑得快）。
+              if (hasRaw) DropdownOption<String>(raw, '$raw（当前值，schema 未收录）'),
+            ],
+            onChanged: (v) {
+              if (v.isEmpty) {
+                setState(() => scope.remove(spec.key));
+              } else {
+                onChanged(v);
+              }
+            },
           ),
         );
       default:

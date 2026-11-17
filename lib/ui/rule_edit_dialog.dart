@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/model/rule_types.dart';
+import 'dropdown.dart';
 
 /// 规则编辑对话框的输入结果。
 class RuleDraft {
@@ -142,21 +143,12 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
-              key: ValueKey('rule-type-$_type'),
-              initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: '类型',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final t in types)
-                  DropdownMenuItem(value: t, child: Text(t)),
-              ],
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => _type = v);
-              },
+            AppDropdown<String>(
+              label: '类型',
+              expand: true,
+              value: _type,
+              options: [for (final t in types) DropdownOption(t, t)],
+              onChanged: (v) => setState(() => _type = v),
             ),
             const SizedBox(height: 12),
             if (_needsPayload)
@@ -170,24 +162,18 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
                 ),
               ),
             if (_needsPayload) const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: ValueKey('rule-target-$_target'),
-              initialValue: _target,
-              decoration: const InputDecoration(
-                labelText: '目标（策略 / 组）',
-                border: OutlineInputBorder(),
-              ),
-              items: [
+            AppDropdown<String>(
+              label: '目标（策略 / 组）',
+              expand: true,
+              value: _target,
+              options: [
                 for (final t in <String>{
                   ...widget.targets,
                   if (!widget.targets.contains(_target)) _target,
                 })
-                  DropdownMenuItem(value: t, child: Text(t)),
+                  DropdownOption(t, t),
               ],
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => _target = v);
-              },
+              onChanged: (v) => setState(() => _target = v),
             ),
             const SizedBox(height: 12),
             TextField(

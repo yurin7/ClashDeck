@@ -124,11 +124,12 @@ rules:
     expect(find.text('校验通过'), findsNWidgets(2));
   });
 
-  testWidgets('空态：EmptyHint 与两个入口按钮', (tester) async {
+  testWidgets('空态：只在空态里放一份入口', (tester) async {
     Directory('${tmp.path}/profiles').deleteSync(recursive: true);
     await pumpHome(tester, ClashDeckTheme.light());
     expect(find.text('还没有配置'), findsOneWidget);
-    expect(find.text('新建配置'), findsNWidgets(2));
-    expect(find.text('导入'), findsNWidgets(2));
+    // 顶部那排「新建配置 / 导入」在空态下不渲染，避免与空态里的入口重复。
+    expect(find.text('新建配置'), findsOneWidget);
+    expect(find.text('导入'), findsOneWidget);
   });
 }

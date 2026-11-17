@@ -138,31 +138,39 @@ class _EditorPageState extends State<EditorPage> {
       return;
     }
 
-    final leave = await showDialog<bool>(
+    // 关掉「自动保存」时，返回前问一句要不要保存。
+    final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('有未保存的改动'),
-        content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。仍要返回吗？'),
+        content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('留下'),
-          ),
-          FilledButton(
-            onPressed: () {
-              _save();
-              Navigator.of(ctx).pop(true);
-            },
-            child: const Text('保存并返回'),
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('放弃改动'),
+            onPressed: () => Navigator.of(ctx).pop('discard'),
+            child: const Text('不保存'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop('save'),
+            child: const Text('保存'),
           ),
         ],
       ),
     );
-    if (leave == true && mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+    switch (choice) {
+      case 'save':
+        await _save();
+        if (mounted && !(_state?.dirty ?? false)) Navigator.of(context).pop();
+      case 'discard':
+        Navigator.of(context).pop();
+      default:
+        // 取消：留在编辑器里继续改。
+        break;
+    }
   }
 
   Future<void> _saveAs() async {

@@ -12,6 +12,7 @@ import '../core/yaml/yaml_doc.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'rule_edit_dialog.dart';
+import 'dropdown.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -584,19 +585,15 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: Insets.sm),
-              DropdownButtonFormField<String>(
-                initialValue: _proxyGroup,
-                decoration: const InputDecoration(
-                  labelText: '代理流量走哪个组',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
+              AppDropdown<String>(
+                label: '代理流量走哪个组',
+                expand: true,
+                value: _proxyGroup,
+                options: [
                   for (final name in widget.groupNames)
-                    DropdownMenuItem(value: name, child: Text(name)),
+                    DropdownOption(name, name),
                 ],
-                onChanged: (v) {
-                  if (v != null) setState(() => _proxyGroup = v);
-                },
+                onChanged: (v) => setState(() => _proxyGroup = v),
               ),
               const SizedBox(height: Insets.sm),
               for (final preset in presets)

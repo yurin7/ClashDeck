@@ -59,6 +59,9 @@ class RuntimeController extends ChangeNotifier {
   Map<String, String> _selected = const {};
   Map<String, List<String>> _members = const {};
   Map<String, int?> _delays = const {};
+
+  /// 本次启动是否已经把设置里的全局出口应用过（只做一次）。
+  bool _globalExitApplied = false;
   int _up = 0;
   int _down = 0;
 
@@ -110,6 +113,7 @@ class RuntimeController extends ChangeNotifier {
       return;
     }
     _lastError = null;
+    _globalExitApplied = false;
     _setPhase(RuntimePhase.starting);
     try {
       _workDir ??= await _resolveWorkDir();
@@ -290,11 +294,29 @@ class RuntimeController extends ChangeNotifier {
       _selected = selected;
       _members = members;
       notifyListeners();
+      unawaited(_applySavedGlobalExit());
     } catch (_) {
       // 内核还没起来时忽略
     } finally {
       client.close();
     }
+  }
+
+  /// 内核起来后，把设置里保存的全局出口应用一次。
+  ///
+  /// 只在本次启动里生效：用户之后在运行页临时换节点，不该被反复覆盖。
+  Future<void> _applySavedGlobalExit() async {
+    if (_globalExitApplied) return;
+    final node = settingsProvider?.call().globalNode;
+    if (node == null || node.isEmpty) {
+      _globalExitApplied = true;
+      return;
+    }
+    if (_selected['GLOBAL'] == node) {
+      _globalExitApplied = true;
+      return;
+    }
+    if (await selectNode('GLOBAL', node)) _globalExitApplied = true;
   }
 
   void _startPolling() {

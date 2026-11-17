@@ -62,8 +62,12 @@ class AppSettings {
     this.routePackages = const <String>[],
     this.autoUpdateHours = 0,
     this.launchOnBoot = false,
-    this.autoSave = true,
+    this.autoSave = false,
+    this.globalNode,
   });
+
+  /// copyWith 里区分「没给这个参数」和「明确要设成 null」。
+  static const Object _unset = Object();
 
   final ProxyMode proxyMode;
   final AppRouteMode routeMode;
@@ -78,6 +82,12 @@ class AppSettings {
   /// 返回上一级时，若当前配置没有校验错误，就自动保存。
   final bool autoSave;
 
+  /// 「全局」模式下选定的出口（节点名或策略组名）。
+  ///
+  /// 存在 sidecar 里而不是写 YAML：它表达的是「用户想让 GLOBAL 走哪个」，
+  /// 内核没起来时也能选、能存，等内核起来再应用（`GLOBAL` 组是内核内置的）。
+  final String? globalNode;
+
   static const AppSettings defaults = AppSettings();
 
   AppSettings copyWith({
@@ -87,6 +97,7 @@ class AppSettings {
     int? autoUpdateHours,
     bool? launchOnBoot,
     bool? autoSave,
+    Object? globalNode = _unset,
   }) {
     return AppSettings(
       proxyMode: proxyMode ?? this.proxyMode,
@@ -95,6 +106,9 @@ class AppSettings {
       autoUpdateHours: autoUpdateHours ?? this.autoUpdateHours,
       launchOnBoot: launchOnBoot ?? this.launchOnBoot,
       autoSave: autoSave ?? this.autoSave,
+      globalNode: identical(globalNode, _unset)
+          ? this.globalNode
+          : globalNode as String?,
     );
   }
 
@@ -105,6 +119,7 @@ class AppSettings {
     'autoUpdateHours': autoUpdateHours,
     'launchOnBoot': launchOnBoot,
     'autoSave': autoSave,
+    'globalNode': globalNode,
   };
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
@@ -118,7 +133,11 @@ class AppSettings {
       autoUpdateHours: (json['autoUpdateHours'] as num?)?.toInt() ?? 0,
       launchOnBoot: json['launchOnBoot'] == true,
       // 缺省为 true：老版本存下来的 app 段没有这个键时，仍然按「自动保存」处理。
-      autoSave: json['autoSave'] as bool? ?? true,
+      autoSave: json['autoSave'] as bool? ?? false,
+      globalNode: switch (json['globalNode']) {
+        final String name when name.isNotEmpty => name,
+        _ => null,
+      },
     );
   }
 

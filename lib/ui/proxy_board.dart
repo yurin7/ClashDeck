@@ -7,6 +7,7 @@ import '../core/yaml/yaml_doc.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
+import 'dropdown.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -1118,20 +1119,15 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
             ),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _type,
-            decoration: const InputDecoration(
-              labelText: '类型',
-              border: OutlineInputBorder(),
-            ),
-            items: [
+          AppDropdown<String>(
+            label: '类型',
+            expand: true,
+            value: _type,
+            options: [
               for (final t in kGroupTypes)
-                DropdownMenuItem(
-                  value: t,
-                  child: Text(_ProxyBoardState._groupTypeLabel(t)),
-                ),
+                DropdownOption(t, _ProxyBoardState._groupTypeLabel(t)),
             ],
-            onChanged: (v) => setState(() => _type = v ?? _type),
+            onChanged: (v) => setState(() => _type = v),
           ),
         ],
       ),
@@ -1227,20 +1223,15 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _type,
-              decoration: const InputDecoration(
-                labelText: '类型',
-                border: OutlineInputBorder(),
-              ),
-              items: [
+            AppDropdown<String>(
+              label: '类型',
+              expand: true,
+              value: _type,
+              options: [
                 for (final t in kGroupTypes)
-                  DropdownMenuItem(
-                    value: t,
-                    child: Text(_ProxyBoardState._groupTypeLabel(t)),
-                  ),
+                  DropdownOption(t, _ProxyBoardState._groupTypeLabel(t)),
               ],
-              onChanged: (v) => setState(() => _type = v ?? _type),
+              onChanged: (v) => setState(() => _type = v),
             ),
             if (_timed) ...[
               const SizedBox(height: 12),

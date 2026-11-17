@@ -454,36 +454,38 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            Insets.xl,
-            Insets.lg,
-            Insets.xl,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              children: [
-                Expanded(
-                  child: AccentButton(
-                    label: '新建配置',
-                    icon: Icons.add,
-                    onPressed: _loading ? null : _createBlank,
+        // 空态里已经有「新建配置 / 导入」两个入口，这里不再重复一份。
+        if (_items.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              Insets.xl,
+              Insets.lg,
+              Insets.xl,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AccentButton(
+                      label: '新建配置',
+                      icon: Icons.add,
+                      onPressed: _loading ? null : _createBlank,
+                    ),
                   ),
-                ),
-                const SizedBox(width: Insets.sm),
-                SizedBox(
-                  width: 118,
-                  child: OutlinedButton.icon(
-                    onPressed: _loading ? null : _import,
-                    icon: const Icon(Icons.file_download_outlined, size: 17),
-                    label: const Text('导入'),
+                  const SizedBox(width: Insets.sm),
+                  SizedBox(
+                    width: 118,
+                    child: OutlinedButton.icon(
+                      onPressed: _loading ? null : _import,
+                      icon: const Icon(Icons.file_download_outlined, size: 17),
+                      label: const Text('导入'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
         SliverPadding(
           // SectionTitle 自带 4 的横向内边距，这里补到与卡片边缘（24）对齐。
           padding: const EdgeInsets.fromLTRB(

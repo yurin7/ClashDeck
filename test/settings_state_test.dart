@@ -120,25 +120,30 @@ rules:
     expect(await store.read('t.yaml'), contains('tun: false'));
   });
 
-  test('自动保存开关写进 sidecar，默认开', () async {
+  test('自动保存开关写进 sidecar，默认为关', () async {
     final s = await SettingsState.load(store, 't.yaml');
-    expect(s.autoSave, isTrue, reason: '默认应为开');
+    expect(s.autoSave, isFalse, reason: '默认为关');
 
-    await s.setAutoSave(false);
-    final meta = await store.readMeta('t.yaml');
-    expect((meta['app']! as Map)['autoSave'], false);
+    await s.setAutoSave(true);
+    expect(((await store.readMeta('t.yaml'))['app']! as Map)['autoSave'], true);
     // 纯界面偏好，不该出现在 YAML 里。
     expect((await reloadYaml()).containsKey('autoSave'), isFalse);
+
+    await s.setAutoSave(false);
+    expect(
+      ((await store.readMeta('t.yaml'))['app']! as Map)['autoSave'],
+      false,
+    );
 
     final again = await SettingsState.load(store, 't.yaml');
     expect(again.autoSave, isFalse);
   });
 
-  test('老版本 meta 没有 autoSave 键时按开处理', () async {
+  test('老版本 meta 没有 autoSave 键时按关处理', () async {
     await store.writeMeta('t.yaml', {
       'app': {'proxyMode': 'tun', 'routeMode': 'all'},
     });
     final s = await SettingsState.load(store, 't.yaml');
-    expect(s.autoSave, isTrue);
+    expect(s.autoSave, isFalse);
   });
 }

@@ -336,22 +336,35 @@ class _QuickControls extends StatelessWidget {
           ),
           const SizedBox(height: Insets.sm),
           Text(state.app.proxyMode.description, style: hintStyle(context)),
-          if (state.app.proxyMode == ProxyMode.tun) ...[
-            const SizedBox(height: Insets.md),
-            const MicroLabel('TUN 协议栈'),
-            const SizedBox(height: Insets.sm),
-            _Segmented<String>(
-              values: const ['gvisor', 'system', 'mixed'],
-              selected: state.tunStack,
-              labelOf: (stack) => stack,
-              onSelected: (stack) async {
-                await state.setTunStack(stack);
-                onChanged();
-              },
-            ),
-            const SizedBox(height: Insets.xs),
-            Text('默认 gvisor；换成其他栈可能上不了网。改动需重启内核生效。', style: hintStyle(context)),
-          ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: state.app.proxyMode == ProxyMode.tun
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: Insets.md),
+                      const MicroLabel('TUN 协议栈'),
+                      const SizedBox(height: Insets.sm),
+                      _Segmented<String>(
+                        values: const ['gvisor', 'system', 'mixed'],
+                        selected: state.tunStack,
+                        labelOf: (stack) => stack,
+                        onSelected: (stack) async {
+                          await state.setTunStack(stack);
+                          onChanged();
+                        },
+                      ),
+                      const SizedBox(height: Insets.xs),
+                      Text(
+                        '默认 gvisor；换成其他栈可能上不了网。改动需重启内核生效。',
+                        style: hintStyle(context),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
           const SizedBox(height: Insets.lg),
           const MicroLabel('分流模式'),
           const SizedBox(height: Insets.md),
@@ -371,10 +384,21 @@ class _QuickControls extends StatelessWidget {
               onChanged();
             },
           ),
-          if (state.mode == 'global') ...[
-            const SizedBox(height: Insets.md),
-            _GlobalExitRow(runtime: runtime, onChanged: onChanged),
-          ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: state.mode == 'global'
+                ? Padding(
+                    padding: const EdgeInsets.only(top: Insets.md),
+                    child: _GlobalExitRow(
+                      runtime: runtime,
+                      settings: state,
+                      onChanged: onChanged,
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );
@@ -382,19 +406,42 @@ class _QuickControls extends StatelessWidget {
 }
 
 /// 全局模式下的出口：显示 GLOBAL 当前选中的节点，点一下就能换。
+///
+/// 这里刻意不依赖内核是否在运行：选哪个出口是**配置状态**，先存进 sidecar，
+/// 内核起来时再应用。否则没启动内核时点「切换」只会弹一句提示，看着像坏了。
 class _GlobalExitRow extends StatelessWidget {
-  const _GlobalExitRow({required this.runtime, required this.onChanged});
+  const _GlobalExitRow({
+    required this.runtime,
+    required this.settings,
+    required this.onChanged,
+  });
 
   final RuntimeController runtime;
+  final SettingsState settings;
   final VoidCallback onChanged;
 
-  Future<void> _pick(BuildContext context) async {
-    final members = runtime.members['GLOBAL'] ?? const <String>[];
-    if (runtime.phase != RuntimePhase.running || members.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('先启动内核，才能切换全局出口')));
-      return;
+  /// 内核的 `GLOBAL` 组能选的范围：内置出站 + 本配置里的所有节点和策略组。
+  List<String> _candidates() {
+    final doc = settings.doc;
+    final names = <String>['DIRECT', 'REJECT'];
+    for (final list in [
+      doc.plainAt(['proxies']),
+      doc.plainAt(['proxy-groups']),
+    ]) {
+      if (list is! List) continue;
+      for (final item in list) {
+        if (item is! Map) continue;
+        final name = item['name'];
+        if (name is String && name.isNotEmpty && !names.contains(name)) {
+          names.add(name);
+        }
+      }
     }
+    return names;
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final candidates = _candidates();
     final picked = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -410,11 +457,11 @@ class _GlobalExitRow extends StatelessWidget {
             ),
             child: Text('GLOBAL 走哪个节点', style: display(16, weight: 700)),
           ),
-          for (final name in members)
+          for (final name in candidates)
             ListTile(
               dense: true,
               title: Text(name),
-              trailing: runtime.selected['GLOBAL'] == name
+              trailing: settings.globalNode == name
                   ? const Icon(Icons.check, size: 18)
                   : null,
               onTap: () => Navigator.pop(ctx, name),
@@ -423,20 +470,23 @@ class _GlobalExitRow extends StatelessWidget {
       ),
     );
     if (picked == null) return;
-    final ok = await runtime.selectNode('GLOBAL', picked);
-    if (!ok) {
-      if (context.mounted) {
+    // 先落盘：内核没起来也要记住这个选择。
+    await settings.setGlobalNode(picked);
+    if (runtime.phase == RuntimePhase.running) {
+      final ok = await runtime.selectNode('GLOBAL', picked);
+      if (!ok && context.mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('切换失败，内核可能已经退出')));
+            .showSnackBar(const SnackBar(content: Text('已保存；内核没有确认切换，可能已经退出')));
       }
-      return;
     }
     onChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = runtime.selected['GLOBAL'];
+    final running = runtime.phase == RuntimePhase.running;
+    final current =
+        (running ? runtime.selected['GLOBAL'] : null) ?? settings.globalNode;
     return Row(
       children: [
         Expanded(
@@ -445,7 +495,7 @@ class _GlobalExitRow extends StatelessWidget {
               children: [
                 TextSpan(text: '全局出口  ', style: hintStyle(context)),
                 TextSpan(
-                  text: current ?? '未连接',
+                  text: current ?? '跟随内核默认（DIRECT）',
                   style: mono(12, color: Theme.of(context).colorScheme.primary),
                 ),
               ],
@@ -638,7 +688,9 @@ class _Segmented<T> extends StatelessWidget {
               child: GestureDetector(
                 onTap: value == selected ? null : () => onSelected(value),
                 behavior: HitTestBehavior.opaque,
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
                   height: 34,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
@@ -647,14 +699,17 @@ class _Segmented<T> extends StatelessWidget {
                         : Colors.transparent,
                     borderRadius: const BorderRadius.all(Radius.circular(6)),
                   ),
-                  child: Text(
-                    labelOf(value),
-                    style: display(
-                      12.5,
-                      weight: 600,
-                      color: value == selected
+                  child: TweenAnimationBuilder<Color?>(
+                    tween: ColorTween(
+                      end: value == selected
                           ? scheme.primary
                           : scheme.onSurfaceVariant,
+                    ),
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, color, _) => Text(
+                      labelOf(value),
+                      style: display(12.5, weight: 600, color: color),
                     ),
                   ),
                 ),

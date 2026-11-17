@@ -110,8 +110,8 @@ class _EditorPageState extends State<EditorPage> {
 
     final report = state.report;
     if (report.hasErrors) {
-      final leave = await showDialog<bool>(
-        context: context,
+      final leave = await showAppDialog<bool>(
+        context,
         builder: (ctx) => AlertDialog(
           title: const Text('配置还有错误'),
           content: Text('还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？'),
@@ -138,8 +138,8 @@ class _EditorPageState extends State<EditorPage> {
     }
 
     // 关掉「自动保存」时，返回前问一句要不要保存。
-    final choice = await showDialog<String>(
-      context: context,
+    final choice = await showAppDialog<String>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('有未保存的改动'),
         content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。'),
@@ -175,8 +175,8 @@ class _EditorPageState extends State<EditorPage> {
   Future<void> _saveAs() async {
     final state = _state;
     if (state == null) return;
-    final name = await showDialog<String>(
-      context: context,
+    final name = await showAppDialog<String>(
+      context,
       builder: (_) => _NameDialog(initial: '$_title 副本'),
     );
     if (name == null || name.isEmpty) return;
@@ -233,8 +233,8 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   Future<void> _showIssues(ValidationReport report) async {
-    await showDialog<void>(
-      context: context,
+    await showAppDialog<void>(
+      context,
       builder: (ctx) => AlertDialog(
         title: Text(
           report.isClean

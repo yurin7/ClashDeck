@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -80,8 +81,8 @@ class _RulesTabState extends State<RulesTab> {
       if (initial != null) initial.target,
     }.toList();
 
-    final result = await showDialog<Object>(
-      context: context,
+    final result = await showAppDialog<Object>(
+      context,
       builder: (_) => RuleEditDialog(
         initialType: initial?.type,
         initialPayload: initial?.payload,
@@ -94,7 +95,32 @@ class _RulesTabState extends State<RulesTab> {
 
     if (result == null) return; // 取消
     if (result == 'delete') {
-      if (!s.deleteRule(index!)) _fail();
+      if (index == null) return;
+      if (!mounted) return;
+      final confirmed = await showAppDialog<bool>(
+        context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('删除这条规则？'),
+          content: Text(
+            '这条规则会从当前配置里移除，删掉后只能重新添加。',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(ctx).colorScheme.error,
+              ),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true && !s.deleteRule(index)) _fail();
       return;
     }
     final draft = result as RuleDraft;
@@ -124,6 +150,8 @@ class _RulesTabState extends State<RulesTab> {
     );
     if (input == null) return;
     if (input.preset) {
+      // 让上一个对话框的退场动画先跑完，否则新路由的入场动画会停在 0。
+      await Future<void>.delayed(const Duration(milliseconds: 280));
       await _importLoyalPreset();
       return;
     }
@@ -214,8 +242,8 @@ class _RulesTabState extends State<RulesTab> {
   /// GEOSITE 直接写进 rules（离线命中）。
   Future<void> _importLoyalPreset() async {
     final groupNames = [for (final g in s.profile.groups) g.name];
-    final choice = await showDialog<_PresetChoice>(
-      context: context,
+    final choice = await showAppDialog<_PresetChoice>(
+      context,
       builder: (_) => _RulePresetSheet(
         proxyGroup: suggestProxyGroup(groupNames),
         groupNames: groupNames,
@@ -570,45 +598,59 @@ class _RulesTabState extends State<RulesTab> {
     );
   }
 
+  String get _intervalLabel =>
+      _intervalHours == 168 ? '7 天' : '${_intervalHours}h';
+
+  /// 折叠时区头右侧显示的摘要，比如「自动更新 · 24h」。
+  String get _onlineSummary => _autoUpdate ? '自动更新 · $_intervalLabel' : '自动更新关';
+
   Widget _onlineToolbar(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final empty = _onlinePresets().isEmpty;
     return Padding(
       padding: const EdgeInsets.only(top: Insets.xs),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: Insets.xs,
-        runSpacing: Insets.xs,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Switch(
-            value: _autoUpdate,
-            onChanged: _refreshing ? null : (v) => _setAutoUpdate(v),
-          ),
           Text('自动更新', style: hintStyle(context)),
-          for (final hours in const [12, 24, 168])
-            TextButton(
-              onPressed: _refreshing ? null : () => _setInterval(hours),
-              child: Text(
-                hours == 168 ? '7 天' : '${hours}h',
-                style:
-                    monoStyle(
-                      context,
-                      size: 12,
-                      color: hours == _intervalHours
-                          ? scheme.primary
-                          : scheme.onSurfaceVariant,
-                    ).copyWith(
-                      fontWeight: hours == _intervalHours
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                    ),
+          SizedBox(
+            height: 32,
+            child: FittedBox(
+              child: Switch(
+                value: _autoUpdate,
+                onChanged: _refreshing ? null : (v) => _setAutoUpdate(v),
               ),
             ),
-          FilledButton.tonalIcon(
-            onPressed: _refreshing
+          ),
+          const Spacer(),
+          Text('间隔', style: hintStyle(context)),
+          const SizedBox(width: Insets.xs),
+          SizedBox(
+            width: 104,
+            child: AppDropdown<String>(
+              value: '$_intervalHours',
+              compact: true,
+              expand: true,
+              enabled: !_refreshing,
+              options: const [
+                DropdownOption('12', '12h'),
+                DropdownOption('24', '24h'),
+                DropdownOption('168', '7 天'),
+              ],
+              onChanged: (value) => _setInterval(int.parse(value)),
+            ),
+          ),
+          const SizedBox(width: Insets.sm),
+          OutlinedButton.icon(
+            onPressed: (_refreshing || empty)
                 ? null
                 : () => _refreshPresets(_onlinePresets()),
             icon: const Icon(Icons.cloud_sync_outlined, size: 18),
             label: Text(_refreshing ? '更新中…' : '全部更新'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: scheme.primary,
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ],
       ),
@@ -622,6 +664,7 @@ class _RulesTabState extends State<RulesTab> {
     required List<RuleEntry> terminal,
     required bool terminalLate,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         Insets.lg,
@@ -639,6 +682,8 @@ class _RulesTabState extends State<RulesTab> {
           open: _localOpen,
           onToggle: () => setState(() => _localOpen = !_localOpen),
         ),
+        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        const SizedBox(height: Insets.sm),
         _buildZone(
           context,
           title: '在线规则集',
@@ -649,6 +694,8 @@ class _RulesTabState extends State<RulesTab> {
           onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
           terminalLate: terminalLate,
         ),
+        Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+        const SizedBox(height: Insets.sm),
         _buildZone(
           context,
           title: '兜底规则',
@@ -693,6 +740,19 @@ class _RulesTabState extends State<RulesTab> {
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: Insets.xs),
+                  Container(
+                    width: 3,
+                    height: 14,
+                    margin: const EdgeInsets.only(right: Insets.xs),
+                    decoration: BoxDecoration(
+                      color: zone == RuleZone.local
+                          ? scheme.primary
+                          : zone == RuleZone.online
+                          ? scheme.tertiary
+                          : scheme.error,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -709,12 +769,17 @@ class _RulesTabState extends State<RulesTab> {
                       ],
                     ),
                   ),
+                  if (zone == RuleZone.online && !open)
+                    Padding(
+                      padding: const EdgeInsets.only(right: Insets.xs),
+                      child: Text(_onlineSummary, style: hintStyle(context)),
+                    ),
                   Pill(label: '${rules.length} 条', dense: true),
                 ],
               ),
             ),
           ),
-          if (zone == RuleZone.online) ...[
+          if (zone == RuleZone.online && open) ...[
             _onlineToolbar(context),
             if (terminalLate)
               Padding(
@@ -738,7 +803,10 @@ class _RulesTabState extends State<RulesTab> {
             if (rules.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Insets.sm),
-                child: Text('（这一区还没有规则）', style: hintStyle(context)),
+                child: Text(
+                  '暂无规则 —— 用下方「添加规则」或「导入规则」',
+                  style: hintStyle(context),
+                ),
               )
             else
               ReorderableListView.builder(
@@ -821,8 +889,8 @@ class _RulesTabState extends State<RulesTab> {
     final navigator = Navigator.of(context, rootNavigator: true);
     var closed = false;
     unawaited(
-      showDialog<void>(
-        context: context,
+      showAppDialog<void>(
+        context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
           content: ValueListenableBuilder<String>(
@@ -1264,7 +1332,7 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     return AlertDialog(
       title: const Text('常用规则集'),
       content: SizedBox(
-        width: 480,
+        width: math.min(480, MediaQuery.sizeOf(context).width - 48),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1349,7 +1417,9 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
                     },
                   ),
                 ),
-          child: Text('导入 $_total 项'),
+          child: Text(
+            '导入 $_total 项（$_pickedCount 规则集 + $_geositeCount GEOSITE）',
+          ),
         ),
       ],
     );
@@ -1437,45 +1507,64 @@ class _RulePresetSheetState extends State<_RulePresetSheet> {
     final ipBased = preset.behavior == 'ipcidr';
     final group = _groupFor(preset);
     final target = group.isEmpty ? preset.label : group;
-    return Row(
-      children: [
-        Expanded(
-          child: CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            value: _picked.contains(preset.id),
-            onChanged: (v) => _toggle(_picked, preset.id, v),
-            title: Text(
-              '${preset.label}  ·  ${preset.source}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${preset.description} → $target'
-              '${preset.behavior == 'classical' ? '  ·  classical' : ''}'
-              '${ipBased ? '  ·  IP 段' : ''}',
-              style: theme.textTheme.bodySmall,
-            ),
-            secondary: Icon(
-              ipBased ? Icons.lan_outlined : Icons.language,
-              size: 18,
-              color: scheme.primary,
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 150,
-          child: AppDropdown<String>(
-            compact: true,
-            value: group,
-            options: [
-              DropdownOption('', '新建同名组'),
-              for (final name in widget.groupNames) DropdownOption(name, name),
-            ],
-            onChanged: (value) => _setGroup(preset, value),
-          ),
-        ),
+    final tile = CheckboxListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      value: _picked.contains(preset.id),
+      onChanged: (v) => _toggle(_picked, preset.id, v),
+      title: Text(
+        '${preset.label}  ·  ${preset.source}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${preset.description} → $target'
+        '${preset.behavior == 'classical' ? '  ·  classical' : ''}'
+        '${ipBased ? '  ·  IP 段' : ''}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall,
+      ),
+      secondary: Icon(
+        ipBased ? Icons.lan_outlined : Icons.language,
+        size: 18,
+        color: scheme.primary,
+      ),
+    );
+    final groupPicker = AppDropdown<String>(
+      compact: true,
+      value: group,
+      options: [
+        DropdownOption('', '新建同名组'),
+        for (final name in widget.groupNames) DropdownOption(name, name),
       ],
+      onChanged: (value) => _setGroup(preset, value),
+    );
+
+    // 窄屏（手机竖屏）一行放不下勾选框 + 组下拉，中文会被压成逐字竖排；
+    // 这种宽度下改成两行：上面整行勾选，下面右对齐放组下拉。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              tile,
+              Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(width: 160, child: groupPicker),
+              ),
+              const SizedBox(height: Insets.xs),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: tile),
+            SizedBox(width: 150, child: groupPicker),
+          ],
+        );
+      },
     );
   }
 

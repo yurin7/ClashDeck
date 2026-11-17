@@ -85,7 +85,8 @@ void main() {
     );
     expect(find.text('编辑规则'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
-    expect(find.text('no-resolve（不解析域名）'), findsOneWidget);
+    expect(find.text('no-resolve'), findsOneWidget);
+    expect(find.text('不解析域名（仅 GEOIP / IP-CIDR 生效）'), findsOneWidget);
   });
 
   testWidgets('删除返回占位值', (tester) async {

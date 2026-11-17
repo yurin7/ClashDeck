@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
@@ -15,11 +17,11 @@ import 'theme.dart';
 /// 66 = 底部岛屿高度，20 = 岛屿与屏幕底部的间距，10 = 再留一点呼吸。
 const double kBottomBarClearance = 96;
 
-/// 淡入淡出的时长。
-const Duration kToastFade = Duration(milliseconds: 200);
+/// 出现 / 消失的时长（灵动一点：向上弹出、向下收回）。
+const Duration kToastFade = Duration(milliseconds: 260);
 
-/// 点掉时加速淡出，别让用户觉得「点了没反应」。
-const Duration kToastDismissFade = Duration(milliseconds: 120);
+/// 点掉时的收回时长，比自然消失更快一点，别让用户觉得「点了没反应」。
+const Duration kToastDismissFade = Duration(milliseconds: 180);
 
 /// 一条提示的内容。
 class _ToastData {
@@ -113,27 +115,27 @@ class _ToastView extends StatefulWidget {
   State<_ToastView> createState() => _ToastViewState();
 }
 
-class _ToastViewState extends State<_ToastView>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _anim = AnimationController(
+class _ToastViewState extends State<_ToastView> with TickerProviderStateMixin {
+  /// 管出现 / 消失：0 = 完全收起，1 = 完全展开。
+  late final AnimationController _vis = AnimationController(
     vsync: this,
     duration: kToastFade,
+    reverseDuration: kToastDismissFade,
   )..addStatusListener(_onStatus);
 
-  /// 淡出时 `data` 已经是 null，但还要把上一条画完。
+  /// 管停留：跑完就自然收回。
+  late final AnimationController _life = AnimationController(vsync: this)
+    ..addStatusListener(_onLifeStatus);
+
+  /// 收回时 `data` 已经是 null，但还要把上一条画完。
   _ToastData? _shown;
 
-  /// 整条提示的总时长，用来把 [kToastFade] 折算成动画里的比例。
-  Duration _total = const Duration(milliseconds: 2600);
-
-  double get _fadeRatio {
-    final total = _total.inMilliseconds;
-    if (total <= 0) return 0.2;
-    return (kToastFade.inMilliseconds / total).clamp(0.02, 0.4);
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed) widget.onDone();
   }
 
-  void _onStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) widget.onDone();
+  void _onLifeStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _hide();
   }
 
   @override
@@ -146,24 +148,34 @@ class _ToastViewState extends State<_ToastView>
   @override
   void dispose() {
     widget.data.removeListener(_sync);
-    _anim.dispose();
+    _vis.dispose();
+    _life.dispose();
     super.dispose();
+  }
+
+  /// 收回：先反向播出现动画，播完由 [_onStatus] 移除浮层。
+  void _hide() {
+    if (_vis.status == AnimationStatus.dismissed) return;
+    _life.stop();
+    _vis.reverse();
   }
 
   void _sync() {
     final next = widget.data.value;
     if (next == null) {
-      // 点掉或超时：快速淡出，结束后由 onDone 移除浮层。
-      _anim.animateTo(1, duration: kToastDismissFade);
+      _hide();
       return;
     }
     setState(() {
       _shown = next;
-      _total = next.total;
     });
-    _anim.duration = next.total;
-    // 从淡入结束的位置开始跑，新消息无需再淡入一次。
-    _anim.forward(from: _fadeRatio);
+    // 新消息覆盖旧消息时，重新计时停留，出现动画从头播（灵动地上弹）。
+    _vis.duration = kToastFade;
+    unawaited(_vis.forward(from: 0));
+    _life
+      ..stop()
+      ..duration = next.total
+      ..forward(from: 0);
   }
 
   @override
@@ -177,24 +189,26 @@ class _ToastViewState extends State<_ToastView>
       right: Insets.xl,
       bottom: kBottomBarClearance,
       child: AnimatedBuilder(
-        animation: _anim,
+        animation: Listenable.merge([_vis, _life]),
         builder: (context, child) {
-          final ratio = _fadeRatio;
-          final v = _anim.value;
-          // 0→fadeIn 淡入，1-fadeIn→1 淡出，中间恒为 1。
-          final t = v < ratio
-              ? (v / ratio).clamp(0.0, 1.0)
-              : v > 1 - ratio
-              ? ((1 - v) / ratio).clamp(0.0, 1.0)
-              : 1.0;
-          final eased = Curves.easeOutCubic.transform(t);
+          final t = _vis.value.clamp(0.0, 1.0);
+          // 出现用 easeOutBack（略微过冲，显得灵动），收回用 easeInCubic。
+          final eased = _vis.status == AnimationStatus.reverse
+              ? Curves.easeInCubic.transform(t)
+              : Curves.easeOutBack.transform(t);
+          final opacity = _vis.status == AnimationStatus.reverse
+              ? t
+              : Curves.easeOut.transform(t);
           return IgnorePointer(
-            ignoring: eased == 0,
+            ignoring: t == 0,
             child: Opacity(
-              opacity: eased,
+              opacity: opacity.clamp(0.0, 1.0),
               child: Transform.translate(
-                offset: Offset(0, 12 * (1 - eased)),
-                child: child,
+                offset: Offset(0, 28 * (1 - eased)),
+                child: Transform.scale(
+                  scale: 0.94 + 0.06 * eased,
+                  child: child,
+                ),
               ),
             ),
           );

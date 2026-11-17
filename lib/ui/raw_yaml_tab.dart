@@ -11,8 +11,8 @@ class RawYamlTab extends StatelessWidget {
 
   Future<void> _editRaw(BuildContext context) async {
     final ctrl = TextEditingController(text: state.doc.text);
-    final result = await showDialog<String>(
-      context: context,
+    final result = await showAppDialog<String>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('编辑 YAML 源码'),
         content: SizedBox(

@@ -4,6 +4,7 @@ import '../core/parse/share_link.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'theme.dart';
+import 'dropdown.dart';
 import 'widgets.dart';
 
 /// 「粘贴分享链接」对话框：多行输入，返回原文；取消返回 null。
@@ -13,8 +14,8 @@ Future<String?> showPasteLinksDialog(
   String title = '粘贴分享链接',
 }) {
   final ctrl = TextEditingController(text: initial ?? '');
-  return showDialog<String>(
-    context: context,
+  return showAppDialog<String>(
+    context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: SingleChildScrollView(
@@ -78,101 +79,152 @@ class RuleImportInput {
 
 /// 「导入规则」对话框：粘贴规则行 / 配置片段 / 规则集地址。
 ///
-/// 组名输入框默认留空，只有填了单个规则集地址时才有意义：留空就用规则集名字
-/// （direct.txt → direct），同名组不存在会自动建，存在就直接附加进去。右侧箭头
-/// 列出当前配置里已有的组，点一下覆盖输入框，避免「选组」和「建组」两套交互。
+/// 目标组用统一的下拉控件选：默认「用规则集名称」（direct.txt → direct），
+/// 也可以直接挑一个已有组，或者选「自定义…」现写一个名字。弹窗只留一行提示，
+/// 具体怎么解析交给导入逻辑，不再在对话框里堆说明。
 Future<RuleImportInput?> showRuleImportDialog(
   BuildContext context, {
   String? initial,
   List<String> groups = const [],
 }) {
-  final ctrl = TextEditingController(text: initial ?? '');
-  final groupCtrl = TextEditingController();
-  return showDialog<RuleImportInput>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('导入规则'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: ctrl,
-              minLines: 8,
-              maxLines: 14,
-              autofocus: true,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              decoration: const InputDecoration(
-                labelText: '规则行、配置片段，或规则集地址',
-                hintText:
-                    'DOMAIN-SUFFIX,google.com,PROXY\n'
-                    'GEOIP,CN,DIRECT,no-resolve\n'
-                    'MATCH,PROXY\n'
-                    'https://…/direct.txt',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
+  return showAppDialog<RuleImportInput>(
+    context,
+    builder: (ctx) => _RuleImportDialog(initial: initial, groups: groups),
+  );
+}
+
+class _RuleImportDialog extends StatefulWidget {
+  const _RuleImportDialog({this.initial, required this.groups});
+
+  final String? initial;
+  final List<String> groups;
+
+  @override
+  State<_RuleImportDialog> createState() => _RuleImportDialogState();
+}
+
+class _RuleImportDialogState extends State<_RuleImportDialog> {
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.initial ?? '',
+  );
+  final TextEditingController _customCtrl = TextEditingController();
+  String _group = '';
+
+  bool _isCustom = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _customCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _groupValue => _isCustom ? _customCtrl.text.trim() : _group;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('导入规则')),
+          IconButton(
+            tooltip: '常用规则集',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => Navigator.pop(
+              context,
+              const RuleImportInput(text: '', group: '', preset: true),
+            ),
+            icon: const Icon(Icons.auto_awesome, size: 20),
+          ),
+        ],
+      ),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _ctrl,
+                minLines: 5,
+                maxLines: 8,
+                autofocus: false,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                decoration: const InputDecoration(
+                  labelText: '规则行、配置片段，或规则集地址',
+                  hintText:
+                      'DOMAIN-SUFFIX,google.com,PROXY\nhttps://…/direct.txt',
+                  helperText: '支持规则行、YAML 片段、规则集 URL',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: groupCtrl,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: InputDecoration(
-                labelText: '目标组',
-                hintText: '留空 = 用规则集名称',
-                helperText: groups.isEmpty
-                    ? '规则集地址导入时用；同名组不存在会自动新建'
-                    : '规则集地址导入时用；右侧箭头可挑已有组',
-                border: const OutlineInputBorder(),
-                suffixIcon: groups.isEmpty
-                    ? const Icon(Icons.expand_more, size: 18)
-                    : PopupMenuButton<String>(
-                        tooltip: '选择已有组',
-                        icon: const Icon(Icons.expand_more, size: 18),
-                        onSelected: (value) => groupCtrl.text = value,
-                        itemBuilder: (_) => [
-                          for (final name in groups)
-                            PopupMenuItem(value: name, child: Text(name)),
-                        ],
-                      ),
+              const SizedBox(height: 12),
+              AppDropdown<String>(
+                value: _group,
+                label: '目标组',
+                helper: '规则集地址导入时用',
+                expand: true,
+                enabled: !_isCustom,
+                options: [
+                  const DropdownOption('', '（默认）用规则集名称'),
+                  for (final name in widget.groups) DropdownOption(name, name),
+                ],
+                onChanged: (value) => setState(() => _group = value),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '认 YAML 片段里的 rules / proxy-groups / rule-providers / '
-              'proxy-providers：策略组会一起合并（成员在当前配置里不存在就跳过），'
-              '规则会插到 MATCH 之前，重复的自动跳过。\n'
-              '只填一个 URL 时按规则集处理（Loyalsoldier/clash-rules 这类 '
-              'payload 列表），会自动建 rule-providers 并加一条 RULE-SET。',
-              style: Theme.of(ctx).textTheme.bodySmall,
-            ),
-          ],
+              if (_isCustom) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _customCtrl,
+                  autofocus: true,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: '自定义组名',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => setState(() {
+                    _isCustom = !_isCustom;
+                    _customCtrl.clear();
+                  }),
+                  child: Text(
+                    _isCustom ? '用已有组' : '自定义组名',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
-        TextButton.icon(
-          onPressed: () => Navigator.pop(
-            ctx,
-            const RuleImportInput(text: '', group: '', preset: true),
-          ),
-          icon: const Icon(Icons.auto_awesome, size: 18),
-          label: const Text('常用规则集'),
-        ),
         TextButton(
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(
-            ctx,
-            RuleImportInput(text: ctrl.text, group: groupCtrl.text.trim()),
+            context,
+            RuleImportInput(text: _ctrl.text, group: _groupValue),
           ),
           child: const Text('导入'),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 /// 「从订阅链接导入」对话框的返回值。
@@ -193,8 +245,8 @@ Future<SubscriptionInput?> showSubscriptionDialog(
   String? initialUrl,
   bool allowSaveOnly = true,
 }) {
-  return showDialog<SubscriptionInput>(
-    context: context,
+  return showAppDialog<SubscriptionInput>(
+    context,
     builder: (_) => _SubscriptionDialog(
       initialUrl: initialUrl,
       allowSaveOnly: allowSaveOnly,

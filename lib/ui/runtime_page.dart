@@ -349,8 +349,8 @@ class _RuntimePageState extends State<RuntimePage> {
   }
 
   Future<void> _pickNode(String group, List<String> nodes) async {
-    final picked = await showDialog<String>(
-      context: context,
+    final picked = await showAppDialog<String>(
+      context,
       builder: (context) => SimpleDialog(
         title: Text('切换到…'),
         children: [

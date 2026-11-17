@@ -192,7 +192,10 @@ class _AppShellState extends State<AppShell> {
     final wasRunning =
         _runtime.phase == RuntimePhase.running ||
         _runtime.phase == RuntimePhase.starting;
-    if (_runtime.isBusy) return;
+    if (_runtime.isBusy) {
+      showTopNotice(context, '已取消切换', ok: false);
+      return;
+    }
     if (wasRunning) {
       await _runtime.stop();
     }
@@ -205,12 +208,14 @@ class _AppShellState extends State<AppShell> {
     await _reloadProfiles();
     if (!mounted) return;
     if (!wasRunning) {
-      _toast('已切换到「${_profileName(fileName)}」，启动内核后生效');
+      showTopNotice(context, '✓ 已切换到「${_profileName(fileName)}」');
       return;
     }
     try {
       await _runtime.start();
-      if (mounted) _toast('已切换到「${_profileName(fileName)}」并重启内核');
+      if (mounted) {
+        showTopNotice(context, '✓ 已切换到「${_profileName(fileName)}」并重启内核');
+      }
     } catch (error) {
       if (mounted) _toast('切换后启动内核失败：$error');
     }
@@ -229,7 +234,10 @@ class _AppShellState extends State<AppShell> {
         _runtime.phase == RuntimePhase.running ||
         _runtime.phase == RuntimePhase.starting;
     if (wasActive && wasRunning) {
-      if (_runtime.isBusy) return;
+      if (_runtime.isBusy) {
+        showTopNotice(context, '已取消切换', ok: false);
+        return;
+      }
       await _runtime.stop();
     }
     final name = _profileName(fileName);
@@ -396,8 +404,8 @@ class _AppShellState extends State<AppShell> {
 
   Future<String?> _showTextImportDialog() {
     final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
+    return showAppDialog<String>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('粘贴导入'),
         content: SizedBox(
@@ -581,6 +589,7 @@ class _AppShellState extends State<AppShell> {
                       onImportText: _importText,
                       onImportUrl: _importUrl,
                       onOpenSubscription: _openSubscription,
+                      activeName: _profileName(_activeFileName ?? ''),
                       bottomInset: _bottomInset,
                     ),
                   ),

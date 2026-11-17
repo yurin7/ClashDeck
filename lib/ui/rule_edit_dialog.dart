@@ -154,7 +154,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
             if (_needsPayload)
               TextField(
                 controller: _payloadCtrl,
-                autofocus: true,
+                autofocus: false,
                 decoration: InputDecoration(
                   labelText: '匹配内容',
                   hintText: _payloadHint,
@@ -179,15 +179,17 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
             TextField(
               controller: _customCtrl,
               decoration: const InputDecoration(
-                labelText: '目标不在列表里？手动填写',
+                labelText: '手动填写目标（可选）',
                 hintText: '例如 DOH 或自定义组名',
+                helperText: '留空就按上面的选择；填了以这里为准',
                 border: OutlineInputBorder(),
               ),
             ),
             if (kNoResolveTypes.contains(_type))
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('no-resolve（不解析域名）'),
+                title: const Text('no-resolve'),
+                subtitle: const Text('不解析域名（仅 GEOIP / IP-CIDR 生效）'),
                 value: _noResolve,
                 onChanged: (v) => setState(() => _noResolve = v),
               ),
@@ -198,7 +200,13 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
         if (!widget.isNew)
           TextButton(
             onPressed: () => Navigator.of(context).pop('delete'),
-            child: const Text('删除'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [Icon(Icons.delete_outline, size: 18), Text('删除')],
+            ),
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

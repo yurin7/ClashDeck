@@ -181,8 +181,8 @@ class _NodeFormPageState extends State<NodeFormPage> {
     final onDelete = widget.onDelete;
     if (onDelete == null) return;
     final name = '${widget.initial?['name'] ?? ''}';
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: Text('删除节点「$name」？'),
         content: const Text('会同时从所有策略组里移除它，这个操作可以撤销。'),
@@ -584,8 +584,8 @@ class _NodeFormPageState extends State<NodeFormPage> {
   Future<void> _addExtraField() async {
     final keyCtrl = TextEditingController();
     final valueCtrl = TextEditingController();
-    final result = await showDialog<MapEntry<String, Object?>?>(
-      context: context,
+    final result = await showAppDialog<MapEntry<String, Object?>?>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('添加字段'),
         content: Column(

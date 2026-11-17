@@ -4,7 +4,9 @@ import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
 
+export 'app_dialog.dart';
 export 'toast.dart';
+export 'top_notice.dart';
 
 /// 页面统一的容器：无阴影、1px 细描边、18 圆角。
 class AppCard extends StatelessWidget {

@@ -261,8 +261,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<String?> _pickGroup({String title = '选择策略组'}) async {
     final groups = s.profile.groups;
     if (groups.isEmpty) return null;
-    return showDialog<String>(
-      context: context,
+    return showAppDialog<String>(
+      context,
       builder: (ctx) => SimpleDialog(
         title: Text(title),
         children: [
@@ -283,8 +283,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _moveDialog(ProxyEntry node, String? fromGroup) async {
     final groups = s.profile.groups.where((g) => g.name != fromGroup).toList();
     if (groups.isEmpty) return;
-    final target = await showDialog<String>(
-      context: context,
+    final target = await showAppDialog<String>(
+      context,
       builder: (ctx) => SimpleDialog(
         title: Text('把「${node.name}」移动到…'),
         children: [
@@ -304,8 +304,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
   }
 
   Future<void> _addGroup() async {
-    final spec = await showDialog<_NewGroupSpec>(
-      context: context,
+    final spec = await showAppDialog<_NewGroupSpec>(
+      context,
       builder: (_) => const _NewGroupDialog(),
     );
     if (spec == null || spec.name.isEmpty) return;
@@ -322,8 +322,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
   }
 
   Future<void> _editGroup(GroupEntry group) async {
-    final result = await showDialog<_GroupEditResult>(
-      context: context,
+    final result = await showAppDialog<_GroupEditResult>(
+      context,
       builder: (_) => _EditGroupDialog(group: group),
     );
     if (result == null) return;
@@ -365,8 +365,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
     _ => t,
   };
 
-  Future<bool?> _confirm(String title, String message) => showDialog<bool>(
-    context: context,
+  Future<bool?> _confirm(String title, String message) => showAppDialog<bool>(
+    context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: Text(message),
@@ -424,6 +424,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
           onMove: (n) => _moveDialog(n, null),
           onDelete: _deleteNode,
           onMenuNode: (n) => _showNodeActions(n),
+          onAdd: _addNode,
           onDrop: (data) {
             if (data.fromGroup == null) return;
             final ok = s.removeGroupMember(data.fromGroup!, data.node);
@@ -476,24 +477,14 @@ class _ProxyBoardState extends State<ProxyBoard> {
             ),
           ),
         const SizedBox(height: Insets.xl),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: _addNode,
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('添加节点'),
-              ),
-            ),
-            const SizedBox(width: Insets.md),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _addGroup,
-                icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-                label: const Text('新建组'),
-              ),
-            ),
-          ],
+        // 「添加节点」已经移到节点列表区头，这里只留「新建组」。
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _addGroup,
+            icon: const Icon(Icons.create_new_folder_outlined, size: 20),
+            label: const Text('新建组'),
+          ),
         ),
       ],
     );
@@ -511,8 +502,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
       ...groupCandidates.map((e) => e.name),
     ];
     if (all.isEmpty) return Future.value(null);
-    return showDialog<String>(
-      context: context,
+    return showAppDialog<String>(
+      context,
       builder: (ctx) => SimpleDialog(
         title: Text('向「${group.name}」添加成员'),
         children: [
@@ -561,6 +552,7 @@ class _NodeListCard extends StatefulWidget {
     required this.onMove,
     required this.onDelete,
     required this.onDrop,
+    required this.onAdd,
     this.onMenuNode,
   });
 
@@ -569,6 +561,9 @@ class _NodeListCard extends StatefulWidget {
   final void Function(ProxyEntry) onMove;
   final void Function(ProxyEntry) onDelete;
   final void Function(_DragData) onDrop;
+
+  /// 区头的「添加节点」入口，和底部「新建组」并列。
+  final VoidCallback onAdd;
 
   /// 手机上点芯片右侧 ⋮ 打开操作表（编辑 / 移动 / 删除）。
   final void Function(ProxyEntry)? onMenuNode;
@@ -617,6 +612,13 @@ class _NodeListCardState extends State<_NodeListCard> {
                     style: mono(11.5, color: scheme.onSurfaceVariant),
                   ),
                   const Spacer(),
+                  // 添加节点放在区头，空列表时也是唯一可见入口，不用滚到底部按钮。
+                  IconButton(
+                    tooltip: '添加节点',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: widget.onAdd,
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                  ),
                   Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
                     size: 20,
@@ -634,7 +636,7 @@ class _NodeListCardState extends State<_NodeListCard> {
               if (_expanded) ...[
                 const SizedBox(height: Insets.md),
                 if (count == 0)
-                  Text('还没有节点：点下面「添加节点」。', style: hintStyle(context))
+                  Text('还没有节点：点右上角「+」添加。', style: hintStyle(context))
                 else
                   Wrap(
                     spacing: Insets.sm,

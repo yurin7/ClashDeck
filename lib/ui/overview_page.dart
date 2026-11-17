@@ -210,13 +210,34 @@ class _StatusCard extends StatelessWidget {
             children: [
               StatusDot(color: statusColor, size: 7, pulsing: running),
               const SizedBox(width: Insets.sm),
-              Text(
-                _phaseLabel,
-                style: mono(
-                  11,
-                  weight: 700,
-                  color: statusColor,
-                ).copyWith(letterSpacing: 0.8),
+              // 状态文字用 AnimatedSwitcher 淡入淡出 + 尺寸过渡：
+              // starting/stopping 这类中间态连续切换时不闪、不抖。
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.centerLeft,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axis: Axis.horizontal,
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    _phaseLabel,
+                    key: ValueKey(_phaseLabel),
+                    style: mono(
+                      11,
+                      weight: 700,
+                      color: statusColor,
+                    ).copyWith(letterSpacing: 0.8),
+                  ),
+                ),
               ),
               const Spacer(),
               if (runtime.pid != null && runtime.pid! > 0)

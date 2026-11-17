@@ -207,8 +207,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<String?> _askName({String initial = '我的配置'}) async {
     final ctrl = TextEditingController(text: initial);
-    final name = await showDialog<String>(
-      context: context,
+    final name = await showAppDialog<String>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('配置名称'),
         content: TextField(
@@ -255,8 +255,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _import() async {
     final store = _store;
     if (store == null) return;
-    final input = await showDialog<_ImportInput>(
-      context: context,
+    final input = await showAppDialog<_ImportInput>(
+      context,
       builder: (_) => const _ImportDialog(),
     );
     if (input == null || !mounted) return;
@@ -351,8 +351,8 @@ class _HomePageState extends State<HomePage> {
     final store = _store;
     if (store == null) return;
     setState(() => _swipedFileName = null);
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: Text('删除「${item.name}」？'),
         content: const Text('删除后不可恢复，建议先备份 YAML。'),

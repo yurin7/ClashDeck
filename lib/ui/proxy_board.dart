@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/edit/member_picker.dart';
 import '../core/edit/config_ops.dart';
 import '../core/model/profile.dart';
 import '../core/schema/group_schema.dart';
@@ -459,7 +460,10 @@ class _ProxyBoardState extends State<ProxyBoard> {
                   return;
                 }
                 // 组头计数直接读 state，刷新一次就能看到新成员。
-                if (mounted) setState(() {});
+                if (mounted) {
+                  setState(() {});
+                  _toast('已加入  个');
+                }
               },
               onDrop: (data) {
                 final ok = data.fromGroup == null
@@ -1297,22 +1301,73 @@ class _AddMemberSheet extends StatefulWidget {
 
 class _AddMemberSheetState extends State<_AddMemberSheet> {
   final Set<String> _picked = <String>{};
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
 
-  bool _inGroup(String name) => widget.members.contains(name);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
-  List<String> get _candidates => <String>[
+  /// 全部候选（含已在组内的，置灰显示）。
+  List<MemberCandidate> get _all => <MemberCandidate>[
     for (final proxy in widget.profile.proxies)
-      if (!_inGroup(proxy.name)) proxy.name,
+      MemberCandidate(
+        name: proxy.name,
+        inGroup: widget.members.contains(proxy.name),
+      ),
     for (final group in widget.profile.groups)
-      if (group.name != widget.groupName && !_inGroup(group.name)) group.name,
+      if (group.name != widget.groupName)
+        MemberCandidate(
+          name: group.name,
+          isGroup: true,
+          inGroup: widget.members.contains(group.name),
+        ),
   ];
+
+  List<MemberCandidate> get _visible => filterMemberCandidates(_all, _query);
+
+  void _selectAll() {
+    setState(() {
+      final next = selectVisible(_all, _query, _picked);
+      _picked
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  void _invert() {
+    setState(() {
+      final next = invertVisible(_all, _query, _picked);
+      _picked
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  void _clear() {
+    setState(_picked.clear);
+  }
+
+  void _toggle(String name, bool selected) {
+    setState(() {
+      if (selected) {
+        _picked.add(name);
+      } else {
+        _picked.remove(name);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final candidates = _candidates;
+    final all = _all;
+    final visible = _visible;
     final noNodes = widget.profile.proxies.isEmpty;
-    final allInside = !noNodes && candidates.isEmpty;
+    final everythingInside = !noNodes && all.every((c) => c.inGroup);
+    final selectable = all.where((c) => !c.inGroup).length;
 
     return SafeArea(
       child: Padding(
@@ -1324,7 +1379,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1332,25 +1387,73 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             children: [
               Text('选择要加入的节点', style: display(17, weight: 700)),
               const SizedBox(height: 2),
-              Text('向「${widget.groupName}」添加成员', style: hintStyle(context)),
-              if (allInside) ...[
-                const SizedBox(height: Insets.md),
+              Text('向「${widget.groupName}」批量添加成员', style: hintStyle(context)),
+              if (everythingInside) ...[
+                const SizedBox(height: Insets.sm),
                 Pill(
                   label: '全部节点已在组内',
                   icon: Icons.check_circle_outline,
                   color: scheme.primary,
                 ),
               ],
-              const SizedBox(height: Insets.md),
+              const SizedBox(height: Insets.sm),
+              TextField(
+                controller: _searchCtrl,
+                style: mono(13),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '搜索节点或策略组',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清空搜索',
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: Insets.xs),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: selectable == 0 ? null : _selectAll,
+                    child: const Text('全选'),
+                  ),
+                  TextButton(
+                    onPressed: selectable == 0 ? null : _invert,
+                    child: const Text('反选'),
+                  ),
+                  TextButton(
+                    onPressed: _picked.isEmpty ? null : _clear,
+                    child: const Text('清空'),
+                  ),
+                  const Spacer(),
+                  Pill(
+                    label: '已选 ${_picked.length}',
+                    dense: true,
+                    color: _picked.isEmpty ? null : scheme.primary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: Insets.xs),
               Flexible(
                 child: noNodes
                     ? _emptyState(context)
+                    : visible.isEmpty
+                    ? _noMatchState(context)
                     : ListView(
                         shrinkWrap: true,
                         children: [
-                          for (final proxy in widget.profile.proxies)
-                            _row(proxy.name, scheme),
-                          if (widget.profile.groups.isNotEmpty)
+                          for (final candidate in visible)
+                            if (!candidate.isGroup)
+                              _row(context, scheme, candidate),
+                          if (visible.any((c) => c.isGroup))
                             Padding(
                               padding: const EdgeInsets.only(
                                 top: Insets.sm,
@@ -1361,9 +1464,9 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                                 color: scheme.onSurfaceVariant,
                               ),
                             ),
-                          for (final group in widget.profile.groups)
-                            if (group.name != widget.groupName)
-                              _row(group.name, scheme, isGroup: true),
+                          for (final candidate in visible)
+                            if (candidate.isGroup)
+                              _row(context, scheme, candidate),
                         ],
                       ),
               ),
@@ -1384,8 +1487,11 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                   FilledButton(
                     onPressed: _picked.isEmpty
                         ? null
-                        : () => Navigator.pop(context, _picked.toList()),
-                    child: Text('加入（${_picked.length}）'),
+                        : () => Navigator.pop(
+                            context,
+                            prunePicked(all, _picked).toList(),
+                          ),
+                    child: Text('加入 ${_picked.length} 个'),
                   ),
                 ],
               ),
@@ -1396,25 +1502,21 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
     );
   }
 
-  Widget _row(String name, ColorScheme scheme, {bool isGroup = false}) {
-    final inside = _inGroup(name);
+  Widget _row(
+    BuildContext context,
+    ColorScheme scheme,
+    MemberCandidate candidate,
+  ) {
+    final inside = candidate.inGroup;
     return CheckboxListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
-      value: inside || _picked.contains(name),
+      value: inside || _picked.contains(candidate.name),
       onChanged: inside
           ? null
-          : (value) {
-              setState(() {
-                if (value ?? false) {
-                  _picked.add(name);
-                } else {
-                  _picked.remove(name);
-                }
-              });
-            },
+          : (value) => _toggle(candidate.name, value ?? false),
       title: Text(
-        name,
+        candidate.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: hintStyle(
@@ -1422,11 +1524,31 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
         )?.copyWith(color: inside ? scheme.onSurfaceVariant : scheme.onSurface),
       ),
       secondary: Icon(
-        isGroup ? Icons.account_tree_outlined : Icons.dns_outlined,
+        candidate.isGroup ? Icons.account_tree_outlined : Icons.dns_outlined,
         size: 18,
         color: scheme.onSurfaceVariant,
       ),
       subtitle: inside ? Text('已在组内', style: hintStyle(context)) : null,
+    );
+  }
+
+  Widget _noMatchState(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Insets.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 32,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: Insets.sm),
+          Text('没有匹配「${_query.trim()}」的成员', style: display(15, weight: 600)),
+          const SizedBox(height: 4),
+          Text('换个关键字，或清空搜索看全部。', style: hintStyle(context)),
+        ],
+      ),
     );
   }
 

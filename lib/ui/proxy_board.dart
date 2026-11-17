@@ -186,6 +186,56 @@ class _ProxyBoardState extends State<ProxyBoard> {
     if (!s.deleteProxy(node.name)) _fail();
   }
 
+  /// 芯片上的 ⋮：手机上唯一稳定可达的「编辑 / 移动 / 删除」入口。
+  Future<void> _showNodeActions(ProxyEntry node, {String? fromGroup}) async {
+    final scheme = Theme.of(context).colorScheme;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('编辑节点'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_move_outline),
+              title: const Text('移动到…'),
+              subtitle: const Text('也可以长按芯片直接拖到目标组'),
+              onTap: () => Navigator.pop(ctx, 'move'),
+            ),
+            if (fromGroup != null)
+              ListTile(
+                leading: const Icon(Icons.remove_circle_outline),
+                title: Text('从「$fromGroup」移除'),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: scheme.error),
+              title: Text('删除节点', style: TextStyle(color: scheme.error)),
+              subtitle: const Text('会同时从所有策略组里移除'),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'edit':
+        await _editNode(node);
+      case 'move':
+        await _moveDialog(node, fromGroup);
+      case 'remove':
+        if (!s.removeGroupMember(fromGroup!, node.name)) _fail();
+      case 'delete':
+        await _deleteNode(node);
+    }
+  }
+
   Future<String?> _pickGroup({String title = '选择策略组'}) async {
     final groups = s.profile.groups;
     if (groups.isEmpty) return null;
@@ -460,6 +510,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
           onOpen: _editNode,
           onMove: (n) => _moveDialog(n, null),
           onDelete: _deleteNode,
+          onMenuNode: (n) => _showNodeActions(n),
           onDrop: (data) {
             if (data.fromGroup == null) return;
             final ok = s.removeGroupMember(data.fromGroup!, data.node);
@@ -475,6 +526,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onOpenNode: _editNode,
               onMove: (n, from) => _moveDialog(n, from),
               onDeleteNode: _deleteNode,
+              onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
               onAddMember: () async {
@@ -592,6 +644,7 @@ class _NodeListCard extends StatefulWidget {
     required this.onMove,
     required this.onDelete,
     required this.onDrop,
+    this.onMenuNode,
   });
 
   final List<ProxyEntry> nodes;
@@ -599,6 +652,9 @@ class _NodeListCard extends StatefulWidget {
   final void Function(ProxyEntry) onMove;
   final void Function(ProxyEntry) onDelete;
   final void Function(_DragData) onDrop;
+
+  /// 手机上点芯片右侧 ⋮ 打开操作表（编辑 / 移动 / 删除）。
+  final void Function(ProxyEntry)? onMenuNode;
 
   @override
   State<_NodeListCard> createState() => _NodeListCardState();
@@ -675,6 +731,9 @@ class _NodeListCardState extends State<_NodeListCard> {
                           onMove: () => widget.onMove(n),
                           onDelete: () => widget.onDelete(n),
                           onRemove: null,
+                          onMenu: widget.onMenuNode == null
+                              ? null
+                              : () => widget.onMenuNode!(n),
                         ),
                     ],
                   ),
@@ -699,6 +758,7 @@ class _GroupCard extends StatelessWidget {
     required this.onAddMember,
     required this.onDrop,
     required this.onRemove,
+    this.onMenuNode,
   });
 
   final GroupEntry group;
@@ -706,6 +766,9 @@ class _GroupCard extends StatelessWidget {
   final void Function(ProxyEntry) onOpenNode;
   final void Function(ProxyEntry, String?) onMove;
   final void Function(ProxyEntry) onDeleteNode;
+
+  /// 手机上点芯片右侧 ⋮ 打开操作表（编辑 / 移动 / 从组移除 / 删除）。
+  final void Function(ProxyEntry, String?)? onMenuNode;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onAddMember;
@@ -844,6 +907,9 @@ class _GroupCard extends StatelessWidget {
                             onMove: () => onMove(node, group.name),
                             onDelete: () => onDeleteNode(node),
                             onRemove: () => onRemove(name),
+                            onMenu: onMenuNode == null
+                                ? null
+                                : () => onMenuNode!(node, group.name),
                           )
                         else if (profile.groupByName.containsKey(name))
                           Tooltip(
@@ -908,6 +974,7 @@ class NodeChip extends StatelessWidget {
     required this.onMove,
     required this.onDelete,
     required this.onRemove,
+    this.onMenu,
     this.highlight,
   });
 
@@ -919,6 +986,9 @@ class NodeChip extends StatelessWidget {
 
   /// 非空表示"从当前组移除"；未归类节点为 null。
   final VoidCallback? onRemove;
+
+  /// 手机上没有右键，点这个 ⋮ 打开「编辑 / 移动 / 删除」操作表。
+  final VoidCallback? onMenu;
   final String? highlight;
 
   static String _typeBadge(String type) => switch (type) {
@@ -968,6 +1038,19 @@ class NodeChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(node.name, style: display(13, weight: 500)),
+          if (onMenu != null)
+            InkWell(
+              onTap: onMenu,
+              customBorder: const CircleBorder(),
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Icon(
+                  Icons.more_vert,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           if (onRemove != null)
             InkWell(
               onTap: onRemove,
@@ -981,7 +1064,7 @@ class NodeChip extends StatelessWidget {
                 ),
               ),
             )
-          else
+          else if (onMenu == null)
             const SizedBox(width: 4),
         ],
       ),
@@ -989,6 +1072,10 @@ class NodeChip extends StatelessWidget {
 
     return LongPressDraggable<_DragData>(
       data: _DragData(node.name, fromGroup),
+      // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
+      delay: const Duration(milliseconds: 300),
+      hapticFeedbackOnStart: true,
+      dragAnchorStrategy: childDragAnchorStrategy,
       feedback: Material(
         color: Colors.transparent,
         child: Opacity(opacity: 0.92, child: chip),
@@ -1021,6 +1108,9 @@ class NodeChip extends StatelessWidget {
         },
         child: Tooltip(
           message: '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
+          // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
+          // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
+          triggerMode: TooltipTriggerMode.manual,
           child: InkWell(
             onTap: onOpen,
             borderRadius: BorderRadius.circular(10),

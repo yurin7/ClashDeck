@@ -290,3 +290,233 @@ String _compact(String rule) => rule
     .map((p) => p.isEmpty ? p : p)
     .join(',')
     .toLowerCase();
+
+/// 一份规则集（rule-provider）的内容。
+///
+/// Loyalsoldier/clash-rules 这类项目的文件都是 `payload:` 列表，两种 behavior：
+/// - `direct.txt` / `proxy.txt` / `reject.txt` … → 域名，behavior 用 `domain`
+/// - `cncidr.txt` / `telegramcidr.txt` / `lancidr.txt` → IP 段，behavior 用 `ipcidr`
+class RuleProviderBody {
+  const RuleProviderBody({
+    required this.entries,
+    required this.behavior,
+    this.name,
+    this.sourceUrl,
+  });
+
+  final List<String> entries;
+
+  /// `domain` 或 `ipcidr`。
+  final String behavior;
+
+  /// 从 URL 文件名推出来的建议名字（`direct.txt` → `direct`）。
+  final String? name;
+  final String? sourceUrl;
+
+  int get count => entries.length;
+
+  bool get isEmpty => entries.isEmpty;
+}
+
+/// 解析规则集内容：既接受 `payload:` 的 YAML，也接受纯文本列表（一行一条）。
+///
+/// 认不出来返回 null；`url` 只用来推断建议名字，不会发起请求。
+RuleProviderBody? parseRuleProviderBody(String text, {String? url}) {
+  final raw = text.trim();
+  if (raw.isEmpty) return null;
+
+  final entries = <String>[];
+  String? declaredBehavior;
+  String? declaredName;
+
+  final looksYaml = RegExp(
+    r'^[ \t]*(payload|behavior|name)[ \t]*:',
+    multiLine: true,
+  ).hasMatch(raw);
+  if (looksYaml) {
+    final parsed = YamlDoc.parse(raw);
+    if (parsed.isValid) {
+      final root = parsed.plainRoot;
+      final payload = root['payload'];
+      if (payload is List) {
+        for (final item in payload) {
+          final entry = _cleanProviderEntry('$item');
+          if (entry.isNotEmpty) entries.add(entry);
+        }
+      }
+      final behavior = '${root['behavior'] ?? ''}'.trim().toLowerCase();
+      if (behavior == 'domain' || behavior == 'ipcidr') {
+        declaredBehavior = behavior;
+      }
+      final name = '${root['name'] ?? ''}'.trim();
+      if (name.isNotEmpty) declaredName = name;
+    }
+  }
+
+  if (entries.isEmpty) {
+    for (final line in raw.split(RegExp(r'\r?\n'))) {
+      var value = line.trim();
+      if (value.isEmpty || value.startsWith('#')) continue;
+      // `payload:` / `rules:` 这种结构行本身不是条目。
+      if (RegExp(r'^[A-Za-z_-]+[ \t]*:$').hasMatch(value)) continue;
+      // 只去掉 YAML 列表项的「- 」（连字符 + 空白）；
+      // 域名规则本身可能以 `-.` 开头（mihomo 的排除写法），不能吃掉这个连字符。
+      value = value.replaceFirst(RegExp(r'^-[ \t]+'), '');
+      value = _cleanProviderEntry(value);
+      if (value.isNotEmpty) entries.add(value);
+    }
+  }
+
+  if (entries.isEmpty) return null;
+
+  final behavior = declaredBehavior ?? _inferBehavior(entries);
+  final urlName = _nameFromUrl(url);
+  return RuleProviderBody(
+    entries: entries,
+    behavior: behavior,
+    name: declaredName ?? urlName,
+    sourceUrl: url,
+  );
+}
+
+String _cleanProviderEntry(String value) {
+  var v = value.trim();
+  if (v.length >= 2) {
+    final first = v[0];
+    final last = v[v.length - 1];
+    if ((first == "'" && last == "'") || (first == '"' && last == '"')) {
+      v = v.substring(1, v.length - 1).trim();
+    }
+  }
+  return v;
+}
+
+final RegExp _cidrV4 = RegExp(r'^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$');
+final RegExp _cidrV6 = RegExp(r'^[0-9a-fA-F:]+/\d{1,3}$');
+
+String _inferBehavior(List<String> entries) {
+  final allIp = entries.every(
+    (e) => _cidrV4.hasMatch(e) || _cidrV6.hasMatch(e),
+  );
+  return allIp ? 'ipcidr' : 'domain';
+}
+
+String? _nameFromUrl(String? url) {
+  if (url == null || url.trim().isEmpty) return null;
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null) return null;
+  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+  if (segments.isEmpty) return null;
+  var name = segments.last;
+  for (final ext in const ['.txt', '.yaml', '.yml', '.list', '.conf']) {
+    if (name.toLowerCase().endsWith(ext)) {
+      name = name.substring(0, name.length - ext.length);
+      break;
+    }
+  }
+  name = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-');
+  return name.isEmpty ? null : name;
+}
+
+/// 把一份规则集写进 `rule-providers`，并在兜底规则之前加一条 `RULE-SET`。
+///
+/// - 给了 [url]：写成 `type: http`（内核按 interval 自动更新），path 用
+///   `./ruleset/<name>.yaml`，和社区配置的习惯一致；
+/// - 没给 URL：写成 `type: inline`，条目直接嵌进配置。
+RuleImportOutcome importRuleProvider(
+  YamlDoc doc, {
+  required RuleProviderBody body,
+  required String name,
+  required String target,
+  String? url,
+  bool createMissingGroups = true,
+  int interval = 86400,
+}) {
+  final providerName = name.trim();
+  final targetName = target.trim();
+  if (providerName.isEmpty) throw ConfigEditException('规则集需要一个名字');
+  if (targetName.isEmpty) throw ConfigEditException('规则集需要一个策略组作为目标');
+  if (body.isEmpty) throw ConfigEditException('规则集是空的');
+
+  var next = doc;
+  final warnings = <String>[];
+  final providersAdded = <String>[];
+
+  final existingProviders = next.plainAt(const ['rule-providers']);
+  final already =
+      existingProviders is Map && existingProviders.containsKey(providerName);
+  if (already) {
+    warnings.add('rule-providers 里已有「$providerName」，沿用原有定义');
+  } else {
+    final Map<String, Object?> provider;
+    if (url != null && url.trim().isNotEmpty) {
+      provider = {
+        'type': 'http',
+        'behavior': body.behavior,
+        'url': url.trim(),
+        'path': './ruleset/$providerName.yaml',
+        'interval': interval,
+      };
+    } else {
+      provider = {
+        'type': 'inline',
+        'behavior': body.behavior,
+        'payload': body.entries,
+      };
+    }
+    next = ConfigOps.setAtOrCreate(next, [
+      'rule-providers',
+      providerName,
+    ], provider);
+    providersAdded.add('rule-providers/$providerName');
+  }
+
+  final targetGroupsCreated = <String>[];
+  if (createMissingGroups) {
+    final profile = Profile.from(next);
+    final known =
+        Profile.builtinTargets.contains(targetName) ||
+        profile.proxy(targetName) != null ||
+        profile.group(targetName) != null;
+    if (!known) {
+      try {
+        next = ConfigOps.addGroup(
+          next,
+          {'name': targetName, 'type': 'select'},
+          members: const ['DIRECT'],
+        );
+        targetGroupsCreated.add(targetName);
+      } on ConfigEditException catch (e) {
+        warnings.add('无法为规则目标「$targetName」建组：${e.message}');
+      }
+    }
+  }
+
+  final rule = 'RULE-SET,$providerName,$targetName';
+  final profileNow = Profile.from(next);
+  final existingRules = ConfigOps.ruleStrings(profileNow).map(_compact).toSet();
+  var rulesAdded = 0;
+  var rulesSkipped = 0;
+  if (existingRules.contains(_compact(rule))) {
+    rulesSkipped = 1;
+  } else {
+    final terminalAt = profileNow.rules.indexWhere((r) => r.isTerminal);
+    next = ConfigOps.addRule(
+      next,
+      rule,
+      at: terminalAt < 0 ? null : terminalAt,
+    );
+    rulesAdded = 1;
+  }
+
+  return RuleImportOutcome(
+    doc: next,
+    rulesAdded: rulesAdded,
+    rulesSkipped: rulesSkipped,
+    groupsAdded: const [],
+    groupsMerged: const [],
+    targetGroupsCreated: targetGroupsCreated,
+    providersAdded: providersAdded,
+    warnings: warnings,
+  );
+}

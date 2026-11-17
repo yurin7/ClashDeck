@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/import_rules.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
+import '../core/net/fetch_text.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
@@ -73,10 +76,19 @@ class _RulesTabState extends State<RulesTab> {
     if (!ok) _fail();
   }
 
-  /// 导入规则：支持纯规则行，也支持带 proxy-groups / provider 的配置片段。
+  /// 导入规则：
+  /// - 单行 URL → 当成 rule-provider 规则集（Loyalsoldier/clash-rules 那种）；
+  /// - 其余 → 纯规则行，或带 proxy-groups / provider 的配置片段。
   Future<void> _importRules() async {
     final text = await showRuleImportDialog(context);
     if (text == null || text.trim().isEmpty) return;
+    final trimmed = text.trim();
+
+    if (_urlPattern.hasMatch(trimmed)) {
+      await _importRuleProviderFromUrl(trimmed);
+      return;
+    }
+
     final RuleImportOutcome outcome;
     try {
       outcome = importRules(s.doc, text);
@@ -110,6 +122,118 @@ class _RulesTabState extends State<RulesTab> {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text('已导入：${outcome.summary}')));
+  }
+
+  static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
+
+  /// 从规则集地址导入：拉下来 → 猜 behavior → 起名 + 选目标组 → 写 provider + RULE-SET。
+  Future<void> _importRuleProviderFromUrl(String url) async {
+    String body;
+    try {
+      body = await _withBusy('正在拉取规则集…', () => fetchText(url));
+    } on ConfigEditException catch (e) {
+      _toast(e.message);
+      return;
+    }
+    final parsed = parseRuleProviderBody(body, url: url);
+    if (parsed == null) {
+      _toast('这个地址里没有可识别的规则集（既不是 payload 列表，也不是一行一条的文本）');
+      return;
+    }
+
+    final name = await _promptProviderName(parsed.name ?? 'rules');
+    if (name == null) return;
+    final target = await _pickTargetGroup();
+    if (target == null) return;
+
+    final RuleImportOutcome outcome;
+    try {
+      outcome = importRuleProvider(
+        s.doc,
+        body: parsed,
+        name: name,
+        target: target,
+        url: url,
+      );
+    } on ConfigEditException catch (e) {
+      _toast(e.message);
+      return;
+    }
+    if (!s.apply((_) => outcome.doc)) {
+      _fail();
+      return;
+    }
+    _toast(
+      '已导入「$name」：${parsed.count} 条 ${parsed.behavior} 规则，'
+      '目标 $target（${outcome.summary}）',
+    );
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 跑一个异步任务，期间盖一层「正在…」的对话框。
+  Future<T> _withBusy<T>(String message, Future<T> Function() task) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var closed = false;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: Insets.md),
+              Expanded(child: Text(message)),
+            ],
+          ),
+        ),
+      ).then((_) => closed = true),
+    );
+    try {
+      return await task();
+    } finally {
+      if (!closed) navigator.pop();
+    }
+  }
+
+  Future<String?> _promptProviderName(String initial) {
+    return showDialog<String>(
+      context: context,
+      builder: (_) => _ProviderNameDialog(initial: initial),
+    );
+  }
+
+  /// 规则目标：策略组 + 内置出站。
+  Future<String?> _pickTargetGroup() {
+    final profile = s.profile;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('这些规则走哪个目标？'),
+        children: [
+          for (final group in profile.groups)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, group.name),
+              child: Text('${group.name}  ·  ${group.typeLabel}'),
+            ),
+          for (final builtin in const ['DIRECT', 'REJECT'])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, builtin),
+              child: Text(builtin),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -350,6 +474,63 @@ class _RuleRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 给规则集起名字的小对话框（默认用文件名推出来的名字）。
+class _ProviderNameDialog extends StatefulWidget {
+  const _ProviderNameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_ProviderNameDialog> createState() => _ProviderNameDialogState();
+}
+
+class _ProviderNameDialogState extends State<_ProviderNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('规则集叫什么名字？'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '名称',
+              helperText: '写进 rule-providers，规则里用 RULE-SET 引用',
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _controller.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(context, name);
+          },
+          child: const Text('下一步'),
+        ),
+      ],
     );
   }
 }

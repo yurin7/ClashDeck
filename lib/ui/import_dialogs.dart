@@ -77,11 +77,12 @@ Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
               autofocus: true,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               decoration: const InputDecoration(
-                labelText: '一行一条规则，也可以粘贴配置片段',
+                labelText: '规则行、配置片段，或规则集地址',
                 hintText:
                     'DOMAIN-SUFFIX,google.com,PROXY\n'
                     'GEOIP,CN,DIRECT,no-resolve\n'
-                    'MATCH,PROXY',
+                    'MATCH,PROXY\n'
+                    'https://…/direct.txt',
                 alignLabelWithHint: true,
                 border: OutlineInputBorder(),
               ),
@@ -90,7 +91,9 @@ Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
             Text(
               '认 YAML 片段里的 rules / proxy-groups / rule-providers / '
               'proxy-providers：策略组会一起合并（成员在当前配置里不存在就跳过），'
-              '规则会插到 MATCH 之前，重复的自动跳过。',
+              '规则会插到 MATCH 之前，重复的自动跳过。\n'
+              '只填一个 URL 时按规则集处理（Loyalsoldier/clash-rules 这类 '
+              'payload 列表），会自动建 rule-providers 并加一条 RULE-SET。',
               style: Theme.of(ctx).textTheme.bodySmall,
             ),
           ],

@@ -5,6 +5,7 @@ import '../core/schema/field_spec.dart';
 import '../core/schema/proxy_schema.dart';
 import '../core/schema/schema_prune.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 /// 新增/编辑一个节点。表单完全由 [kProxySchemas] 驱动，
 /// schema 没覆盖到的字段会落在「其它字段」里，保证任何 mihomo 字段都能手改。
@@ -374,6 +375,23 @@ class _NodeFormPageState extends State<NodeFormPage> {
                 onPressed: _addExtraField,
                 icon: const Icon(Icons.add),
                 label: const Text('添加字段'),
+              ),
+            ),
+          ],
+          // 删除入口放在表单底部，比 AppBar 里的小图标更容易找到。
+          if (widget.onDelete != null) ...[
+            const SizedBox(height: Insets.md),
+            const Hairline(),
+            const SizedBox(height: Insets.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _confirmDelete,
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('删除这个节点'),
               ),
             ),
           ],

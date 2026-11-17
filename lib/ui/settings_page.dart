@@ -207,7 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // ip addr 有 198.18.0.1/30，但 core.log 没有任何连接、网页空白；gvisor 正常。
               _ChoiceRow<String>(
                 label: 'TUN 协议栈',
-                description: '默认 gvisor；system / mixed 可能无法转发流量',
+                description: '默认 gvisor；换成其他栈可能上不了网',
                 value: state.tunStack,
                 items: const ['gvisor', 'system', 'mixed'],
                 labelOf: (v) => v,

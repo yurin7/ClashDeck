@@ -4,6 +4,7 @@ import '../core/edit/config_ops.dart';
 import '../core/model/profile.dart';
 import '../core/schema/group_schema.dart';
 import '../core/yaml/yaml_doc.dart';
+import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'theme.dart';
@@ -24,12 +25,20 @@ class _DragData {
 
 /// 按策略组组织的节点面板：跨组拖拽、增删节点、改组成员。
 class ProxyBoard extends StatefulWidget {
-  const ProxyBoard({super.key, required this.state, this.onSubscriptionSaved});
+  const ProxyBoard({
+    super.key,
+    required this.state,
+    this.onSubscriptionSaved,
+    this.runtime,
+  });
 
   final EditorState state;
 
   /// 用户导入/记下订阅地址时回调（编辑器用它把地址写进 sidecar meta）。
   final Future<void> Function(String url)? onSubscriptionSaved;
+
+  /// 非空时，组内点节点 = 让这个组改用该节点（运行期切换）。
+  final RuntimeController? runtime;
 
   @override
   State<ProxyBoard> createState() => _ProxyBoardState();
@@ -180,6 +189,22 @@ class _ProxyBoardState extends State<ProxyBoard> {
     if (!s.apply((d) => ConfigOps.updateProxy(d, node.name, result))) _fail();
   }
 
+  /// 组内点节点 = 让这个组在运行期改用该节点。
+  Future<void> _selectNodeForGroup(String group, ProxyEntry node) async {
+    final runtime = widget.runtime;
+    if (runtime == null) return;
+    if (runtime.phase != RuntimePhase.running) {
+      _toast('先启动内核，才能在配置页切换这个组的节点');
+      return;
+    }
+    final ok = await runtime.selectNode(group, node.name);
+    if (!ok) {
+      _toast('切换失败，内核可能已经退出');
+      return;
+    }
+    _toast('「$group」现在用 ${node.name}');
+  }
+
   Future<void> _deleteNode(ProxyEntry node) async {
     final ok = await _confirm('删除节点「${node.name}」？', '会同时从所有策略组里移除它。');
     if (ok != true) return;
@@ -282,165 +307,45 @@ class _ProxyBoardState extends State<ProxyBoard> {
   }
 
   Future<void> _addGroup() async {
-    final ctrl = TextEditingController();
-    var type = 'select';
-    final result = await showDialog<String>(
+    final spec = await showDialog<_NewGroupSpec>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('新建策略组'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: '组名',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: type,
-                decoration: const InputDecoration(
-                  labelText: '类型',
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final t in kGroupTypes)
-                    DropdownMenuItem(value: t, child: Text(_groupTypeLabel(t))),
-                ],
-                onChanged: (v) => setLocal(() => type = v ?? type),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('创建'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _NewGroupDialog(),
     );
-    ctrl.dispose();
-    if (result == null || result.isEmpty) return;
+    if (spec == null || spec.name.isEmpty) return;
     if (!s.apply(
-      (d) => ConfigOps.addGroup(d, {'name': result, 'type': type}),
+      (d) => ConfigOps.addGroup(
+        d,
+        {'name': spec.name, 'type': spec.type},
+        // 手动选择组默认带 DIRECT，刚建好就能选；测速/故障转移组不塞，免得污染测速结果。
+        members: spec.type == 'select' ? const ['DIRECT'] : const [],
+      ),
     )) {
       _fail();
     }
   }
 
   Future<void> _editGroup(GroupEntry group) async {
-    final nameCtrl = TextEditingController(text: group.name);
-    final urlCtrl = TextEditingController(text: '${group.raw['url'] ?? ''}');
-    final intervalCtrl = TextEditingController(
-      text: '${group.raw['interval'] ?? ''}',
-    );
-    var type = group.type;
-    var hidden = group.raw['hidden'] == true;
-
-    final ok = await showDialog<bool>(
+    final result = await showDialog<_GroupEditResult>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('编辑策略组'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '组名',
-                    helperText: '改名会同步规则与其它组里的引用',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: type,
-                  decoration: const InputDecoration(
-                    labelText: '类型',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    for (final t in kGroupTypes)
-                      DropdownMenuItem(
-                        value: t,
-                        child: Text(_groupTypeLabel(t)),
-                      ),
-                  ],
-                  onChanged: (v) => setLocal(() => type = v ?? type),
-                ),
-                if (type == 'url-test' ||
-                    type == 'fallback' ||
-                    type == 'load-balance') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: urlCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '测速 URL',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: intervalCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '间隔（秒）',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('在面板中隐藏'),
-                  value: hidden,
-                  onChanged: (v) => setLocal(() => hidden = v),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => _EditGroupDialog(group: group),
     );
-    final newName = nameCtrl.text.trim();
-    urlCtrl.dispose();
-    intervalCtrl.dispose();
-    if (ok != true) return;
+    if (result == null) return;
 
+    final newName = result.name.trim();
     var doc = s.doc;
     try {
       if (newName.isNotEmpty && newName != group.name) {
         doc = ConfigOps.renameGroup(doc, group.name, newName);
       }
       final changes = <String, Object?>{
-        'type': type,
-        if (type == 'url-test' ||
-            type == 'fallback' ||
-            type == 'load-balance') ...{
-          'url': urlCtrl.text.trim().isEmpty ? null : urlCtrl.text.trim(),
-          'interval': int.tryParse(intervalCtrl.text.trim()),
+        'type': result.type,
+        if (result.type == 'url-test' ||
+            result.type == 'fallback' ||
+            result.type == 'load-balance') ...{
+          'url': result.url.trim().isEmpty ? null : result.url.trim(),
+          'interval': int.tryParse(result.interval.trim()),
         },
-        'hidden': hidden ? true : null,
+        'hidden': result.hidden ? true : null,
       };
       doc = ConfigOps.patchGroup(
         doc,
@@ -490,6 +395,17 @@ class _ProxyBoardState extends State<ProxyBoard> {
 
   @override
   Widget build(BuildContext context) {
+    final runtime = widget.runtime;
+    if (runtime == null) return _buildBody(context);
+    // 运行期切换（点组内节点）后，RuntimeController 里 selected 变了；这里跟着重建，
+    // 才能把新选中的芯片高亮出来。
+    return ListenableBuilder(
+      listenable: runtime,
+      builder: (context, _) => _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final profile = s.profile;
 
@@ -527,6 +443,10 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onMove: (n, from) => _moveDialog(n, from),
               onDeleteNode: _deleteNode,
               onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
+              selectedName: widget.runtime?.selected[group.name],
+              onSelectNode: widget.runtime == null
+                  ? null
+                  : (n) => _selectNodeForGroup(group.name, n),
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
               onAddMember: () async {
@@ -759,6 +679,8 @@ class _GroupCard extends StatelessWidget {
     required this.onDrop,
     required this.onRemove,
     this.onMenuNode,
+    this.selectedName,
+    this.onSelectNode,
   });
 
   final GroupEntry group;
@@ -769,6 +691,13 @@ class _GroupCard extends StatelessWidget {
 
   /// 手机上点芯片右侧 ⋮ 打开操作表（编辑 / 移动 / 从组移除 / 删除）。
   final void Function(ProxyEntry, String?)? onMenuNode;
+
+  /// 运行期这个组当前选中的节点名（用于高亮）。
+  final String? selectedName;
+
+  /// 非空时，点芯片 = 让这个组改用该节点。
+  final void Function(ProxyEntry)? onSelectNode;
+
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onAddMember;
@@ -907,6 +836,10 @@ class _GroupCard extends StatelessWidget {
                             onMove: () => onMove(node, group.name),
                             onDelete: () => onDeleteNode(node),
                             onRemove: () => onRemove(name),
+                            selected: selectedName == node.name,
+                            onSelect: onSelectNode == null
+                                ? null
+                                : () => onSelectNode!(node),
                             onMenu: onMenuNode == null
                                 ? null
                                 : () => onMenuNode!(node, group.name),
@@ -975,7 +908,8 @@ class NodeChip extends StatelessWidget {
     required this.onDelete,
     required this.onRemove,
     this.onMenu,
-    this.highlight,
+    this.onSelect,
+    this.selected = false,
   });
 
   final ProxyEntry node;
@@ -989,7 +923,12 @@ class NodeChip extends StatelessWidget {
 
   /// 手机上没有右键，点这个 ⋮ 打开「编辑 / 移动 / 删除」操作表。
   final VoidCallback? onMenu;
-  final String? highlight;
+
+  /// 组内芯片：点按 = 让这个组改用该节点（不打开编辑页）。
+  final VoidCallback? onSelect;
+
+  /// 该节点是否正是所属组当前选中的那个。
+  final bool selected;
 
   static String _typeBadge(String type) => switch (type) {
     'vless' => 'V',
@@ -1014,14 +953,24 @@ class NodeChip extends StatelessWidget {
     final scheme = theme.colorScheme;
     final chip = Container(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.16)
+            : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(
+          color: selected ? scheme.primary : scheme.outlineVariant,
+          width: selected ? 1.4 : 1,
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(5, 3, 3, 3),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (selected)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(Icons.check_circle, size: 13, color: scheme.primary),
+            ),
           Container(
             width: 18,
             height: 18,
@@ -1107,17 +1056,239 @@ class NodeChip extends StatelessWidget {
           }
         },
         child: Tooltip(
-          message: '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
+          message: onSelect != null
+              ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
+              : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
           // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
           // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
           triggerMode: TooltipTriggerMode.manual,
           child: InkWell(
-            onTap: onOpen,
+            onTap: onSelect ?? onOpen,
             borderRadius: BorderRadius.circular(10),
             child: chip,
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 新建策略组的结果。
+class _NewGroupSpec {
+  const _NewGroupSpec({required this.name, required this.type});
+
+  final String name;
+  final String type;
+}
+
+/// 新建策略组对话框。
+///
+/// 控制器归这个 State 所有：早先的写法是在调用方 `await showDialog(...)` 之后立刻
+/// `dispose()`，而对话框还在退场动画里引用控制器，会撞 `_dependents.isEmpty` 断言。
+class _NewGroupDialog extends StatefulWidget {
+  const _NewGroupDialog();
+
+  @override
+  State<_NewGroupDialog> createState() => _NewGroupDialogState();
+}
+
+class _NewGroupDialogState extends State<_NewGroupDialog> {
+  final TextEditingController _ctrl = TextEditingController();
+  String _type = 'select';
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新建策略组'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '组名',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _type,
+            decoration: const InputDecoration(
+              labelText: '类型',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final t in kGroupTypes)
+                DropdownMenuItem(
+                  value: t,
+                  child: Text(_ProxyBoardState._groupTypeLabel(t)),
+                ),
+            ],
+            onChanged: (v) => setState(() => _type = v ?? _type),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _NewGroupSpec(name: _ctrl.text.trim(), type: _type),
+          ),
+          child: const Text('创建'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 编辑策略组的结果。
+class _GroupEditResult {
+  const _GroupEditResult({
+    required this.name,
+    required this.type,
+    required this.url,
+    required this.interval,
+    required this.hidden,
+  });
+
+  final String name;
+  final String type;
+  final String url;
+  final String interval;
+  final bool hidden;
+}
+
+/// 编辑策略组对话框（控制器同样归 State 所有，理由见 [_NewGroupDialog]）。
+class _EditGroupDialog extends StatefulWidget {
+  const _EditGroupDialog({required this.group});
+
+  final GroupEntry group;
+
+  @override
+  State<_EditGroupDialog> createState() => _EditGroupDialogState();
+}
+
+class _EditGroupDialogState extends State<_EditGroupDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _urlCtrl;
+  late final TextEditingController _intervalCtrl;
+  late String _type;
+  late bool _hidden;
+
+  @override
+  void initState() {
+    super.initState();
+    final group = widget.group;
+    _nameCtrl = TextEditingController(text: group.name);
+    _urlCtrl = TextEditingController(text: '${group.raw['url'] ?? ''}');
+    _intervalCtrl = TextEditingController(
+      text: '${group.raw['interval'] ?? ''}',
+    );
+    _type = group.type;
+    _hidden = group.raw['hidden'] == true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _urlCtrl.dispose();
+    _intervalCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _timed =>
+      _type == 'url-test' || _type == 'fallback' || _type == 'load-balance';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('编辑策略组'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: '组名',
+                helperText: '改名会同步规则与其它组里的引用',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _type,
+              decoration: const InputDecoration(
+                labelText: '类型',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final t in kGroupTypes)
+                  DropdownMenuItem(
+                    value: t,
+                    child: Text(_ProxyBoardState._groupTypeLabel(t)),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _type = v ?? _type),
+            ),
+            if (_timed) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _urlCtrl,
+                decoration: const InputDecoration(
+                  labelText: '测速 URL',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _intervalCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '间隔（秒）',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('在面板中隐藏'),
+              value: _hidden,
+              onChanged: (v) => setState(() => _hidden = v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _GroupEditResult(
+              name: _nameCtrl.text.trim(),
+              type: _type,
+              url: _urlCtrl.text,
+              interval: _intervalCtrl.text,
+              hidden: _hidden,
+            ),
+          ),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

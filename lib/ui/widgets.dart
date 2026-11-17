@@ -616,3 +616,10 @@ class _SparkPainter extends CustomPainter {
       oldDelegate.stroke != stroke ||
       oldDelegate.fill != fill;
 }
+
+/// 对话框关闭后，控件树在退场动画里还会短暂引用控制器；此刻直接 `dispose()`
+/// 会撞 `_dependents.isEmpty` 断言（Flutter 3.50 的 `TextEditingController`）。
+/// 这个帮助函数把释放推迟到动画结束之后。
+void disposeAfterDialog(ChangeNotifier notifier) {
+  Future<void>.delayed(const Duration(milliseconds: 600), notifier.dispose);
+}

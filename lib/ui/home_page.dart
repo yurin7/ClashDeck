@@ -7,6 +7,7 @@ import '../core/parse/share_link.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_controller.dart';
 import 'editor_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -17,6 +18,7 @@ class HomePage extends StatefulWidget {
     this.activeFileName,
     this.onSetActive,
     this.onProfilesChanged,
+    this.runtime,
     this.bottomInset = 0,
   });
 
@@ -28,6 +30,9 @@ class HomePage extends StatefulWidget {
 
   /// 配置列表变化（新建/导入/改名/删除）后的回调。
   final Future<void> Function()? onProfilesChanged;
+
+  /// 全局唯一的运行控制器；传给编辑页后，配置页「点组内节点 = 切换该组出口」才生效。
+  final RuntimeController? runtime;
 
   /// 给底部悬浮岛留出的空白。
   final double bottomInset;
@@ -162,6 +167,7 @@ class _HomePageState extends State<HomePage> {
           fileName: item.fileName,
           initialText: null,
           displayName: item.name,
+          runtime: widget.runtime,
         ),
       ),
     );
@@ -196,7 +202,7 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
-    ctrl.dispose();
+    disposeAfterDialog(ctrl);
     if (name == null || name.isEmpty) return null;
     return name;
   }

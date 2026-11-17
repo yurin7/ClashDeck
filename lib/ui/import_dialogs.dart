@@ -58,10 +58,37 @@ Future<String?> showPasteLinksDialog(
   );
 }
 
-/// 「导入规则」对话框：粘贴规则行或 Clash 配置片段，返回原文；取消返回 null。
-Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
+/// 「导入规则」对话框的返回值。
+class RuleImportInput {
+  const RuleImportInput({
+    required this.text,
+    required this.group,
+    this.preset = false,
+  });
+
+  /// 规则行 / 配置片段 / 规则集地址。
+  final String text;
+
+  /// 目标组名：留空表示「用规则集自己的名字」（如 direct.txt → direct）。
+  final String group;
+
+  /// 用户点的是「常用规则集」，不是粘贴内容。
+  final bool preset;
+}
+
+/// 「导入规则」对话框：粘贴规则行 / 配置片段 / 规则集地址。
+///
+/// 组名输入框默认留空，只有填了单个规则集地址时才有意义：留空就用规则集名字
+/// （direct.txt → direct），同名组不存在会自动建，存在就直接附加进去。右侧箭头
+/// 列出当前配置里已有的组，点一下覆盖输入框，避免「选组」和「建组」两套交互。
+Future<RuleImportInput?> showRuleImportDialog(
+  BuildContext context, {
+  String? initial,
+  List<String> groups = const [],
+}) {
   final ctrl = TextEditingController(text: initial ?? '');
-  return showDialog<String>(
+  final groupCtrl = TextEditingController();
+  return showDialog<RuleImportInput>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('导入规则'),
@@ -87,6 +114,30 @@ Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: groupCtrl,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: InputDecoration(
+                labelText: '目标组',
+                hintText: '留空 = 用规则集名称',
+                helperText: groups.isEmpty
+                    ? '规则集地址导入时用；同名组不存在会自动新建'
+                    : '规则集地址导入时用；右侧箭头可挑已有组',
+                border: const OutlineInputBorder(),
+                suffixIcon: groups.isEmpty
+                    ? const Icon(Icons.expand_more, size: 18)
+                    : PopupMenuButton<String>(
+                        tooltip: '选择已有组',
+                        icon: const Icon(Icons.expand_more, size: 18),
+                        onSelected: (value) => groupCtrl.text = value,
+                        itemBuilder: (_) => [
+                          for (final name in groups)
+                            PopupMenuItem(value: name, child: Text(name)),
+                        ],
+                      ),
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               '认 YAML 片段里的 rules / proxy-groups / rule-providers / '
@@ -100,12 +151,23 @@ Future<String?> showRuleImportDialog(BuildContext context, {String? initial}) {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: () => Navigator.pop(
+            ctx,
+            const RuleImportInput(text: '', group: '', preset: true),
+          ),
+          icon: const Icon(Icons.auto_awesome, size: 18),
+          label: const Text('常用规则集'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('取消'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(ctx, ctrl.text),
+          onPressed: () => Navigator.pop(
+            ctx,
+            RuleImportInput(text: ctrl.text, group: groupCtrl.text.trim()),
+          ),
           child: const Text('导入'),
         ),
       ],

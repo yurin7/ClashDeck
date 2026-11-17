@@ -7,9 +7,12 @@ import 'widgets.dart';
 
 /// 运行页：启动/停止内核，看运行期策略组、切换节点、看日志与速度。
 class RuntimePage extends StatefulWidget {
-  const RuntimePage({super.key, required this.state});
+  const RuntimePage({super.key, required this.state, this.controller});
 
   final EditorState state;
+
+  /// 外部传入的控制器（全局唯一那个）；为空时自己开一个，兼容旧调用。
+  final RuntimeController? controller;
 
   @override
   State<RuntimePage> createState() => _RuntimePageState();
@@ -17,6 +20,9 @@ class RuntimePage extends StatefulWidget {
 
 class _RuntimePageState extends State<RuntimePage> {
   late final RuntimeController _controller;
+
+  /// 自己创建的控制器要自己释放，外部传进来的不能动。
+  bool _ownsController = false;
 
   /// 最近若干次采样（下行字节/秒），画迷你折线用。
   final List<double> _history = <double>[];
@@ -26,7 +32,10 @@ class _RuntimePageState extends State<RuntimePage> {
   @override
   void initState() {
     super.initState();
-    _controller = RuntimeController(configProvider: () => widget.state.doc);
+    _controller =
+        widget.controller ??
+        RuntimeController(configProvider: () => widget.state.doc);
+    _ownsController = widget.controller == null;
     _controller.addListener(_sample);
     _controller.refreshStatus();
   }
@@ -34,7 +43,7 @@ class _RuntimePageState extends State<RuntimePage> {
   @override
   void dispose() {
     _controller.removeListener(_sample);
-    _controller.dispose();
+    if (_ownsController) _controller.dispose();
     super.dispose();
   }
 

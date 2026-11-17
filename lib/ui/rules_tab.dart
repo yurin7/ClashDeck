@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/import_rules.dart';
+import '../core/edit/rule_presets.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import '../core/net/fetch_text.dart';
@@ -80,18 +81,26 @@ class _RulesTabState extends State<RulesTab> {
   /// - 单行 URL → 当成 rule-provider 规则集（Loyalsoldier/clash-rules 那种）；
   /// - 其余 → 纯规则行，或带 proxy-groups / provider 的配置片段。
   Future<void> _importRules() async {
-    final text = await showRuleImportDialog(context);
-    if (text == null || text.trim().isEmpty) return;
-    final trimmed = text.trim();
+    final input = await showRuleImportDialog(
+      context,
+      groups: [for (final g in s.profile.groups) g.name],
+    );
+    if (input == null) return;
+    if (input.preset) {
+      await _importLoyalPreset();
+      return;
+    }
+    if (input.text.trim().isEmpty) return;
+    final trimmed = input.text.trim();
 
     if (_urlPattern.hasMatch(trimmed)) {
-      await _importRuleProviderFromUrl(trimmed);
+      await _importRuleProviderFromUrl(trimmed, groupName: input.group);
       return;
     }
 
     final RuleImportOutcome outcome;
     try {
-      outcome = importRules(s.doc, text);
+      outcome = importRules(s.doc, input.text);
     } on ConfigEditException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -126,8 +135,14 @@ class _RulesTabState extends State<RulesTab> {
 
   static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
 
-  /// 从规则集地址导入：拉下来 → 猜 behavior → 起名 + 选目标组 → 写 provider + RULE-SET。
-  Future<void> _importRuleProviderFromUrl(String url) async {
+  /// 从规则集地址导入：拉下来 → 猜 behavior → 写 provider + RULE-SET。
+  ///
+  /// [groupName] 为空时目标组就用规则集自己的名字（direct.txt → direct），
+  /// 同名组不存在会新建，存在就直接附加进去。
+  Future<void> _importRuleProviderFromUrl(
+    String url, {
+    String groupName = '',
+  }) async {
     String body;
     try {
       body = await _withBusy('正在拉取规则集…', () => fetchText(url));
@@ -141,10 +156,8 @@ class _RulesTabState extends State<RulesTab> {
       return;
     }
 
-    final name = await _promptProviderName(parsed.name ?? 'rules');
-    if (name == null) return;
-    final target = await _pickTargetGroup();
-    if (target == null) return;
+    final name = parsed.name ?? 'rules';
+    final target = groupName.isEmpty ? name : groupName;
 
     final RuleImportOutcome outcome;
     try {
@@ -167,6 +180,75 @@ class _RulesTabState extends State<RulesTab> {
       '已导入「$name」：${parsed.count} 条 ${parsed.behavior} 规则，'
       '目标 $target（${outcome.summary}）',
     );
+  }
+
+  /// 一键导入 Loyalsoldier/clash-rules 的常用规则集。
+  Future<void> _importLoyalPreset() async {
+    final groupNames = [for (final g in s.profile.groups) g.name];
+    final choice = await showDialog<_PresetChoice>(
+      context: context,
+      builder: (_) => _RulePresetSheet(
+        proxyGroup: suggestProxyGroup(groupNames),
+        groupNames: groupNames,
+      ),
+    );
+    if (choice == null || choice.presets.isEmpty) return;
+
+    final fetched = await _withBusy(
+      '正在拉取 ${choice.presets.length} 个规则集…',
+      () => Future.wait(choice.presets.map(_fetchPreset)),
+    );
+
+    var doc = s.doc;
+    final applied = <String>[];
+    final failed = <String>[];
+    for (final item in fetched) {
+      final body = item.body;
+      if (body == null) {
+        failed.add('${item.preset.id}（${item.error ?? '解析失败'}）');
+        continue;
+      }
+      try {
+        final outcome = importRuleProvider(
+          doc,
+          body: body,
+          name: item.preset.id,
+          target: presetTargetFor(item.preset, choice.proxyGroup),
+          url: item.preset.url,
+        );
+        doc = outcome.doc;
+        applied.add(item.preset.id);
+      } on ConfigEditException catch (e) {
+        failed.add('${item.preset.id}（${e.message}）');
+      }
+    }
+
+    if (applied.isEmpty) {
+      _toast('一个规则集都没导入成功：${failed.isEmpty ? '未知原因' : failed.first}');
+      return;
+    }
+    if (!s.apply((_) => doc)) {
+      _fail();
+      return;
+    }
+    _toast(
+      failed.isEmpty
+          ? '已导入 ${applied.length} 组规则集'
+          : '已导入 ${applied.length} 组，${failed.length} 组失败：${failed.first}',
+    );
+  }
+
+  Future<_PresetFetch> _fetchPreset(RulePreset preset) async {
+    try {
+      final text = await fetchText(preset.url);
+      final parsed = parseRuleProviderBody(text, url: preset.url);
+      if (parsed == null) {
+        return _PresetFetch(preset, error: '没识别出规则集内容');
+      }
+      return _PresetFetch(preset, body: parsed);
+    } on ConfigEditException catch (e) {
+      return _PresetFetch(preset, error: e.message);
+    }
   }
 
   void _toast(String message) {
@@ -204,36 +286,6 @@ class _RulesTabState extends State<RulesTab> {
     } finally {
       if (!closed) navigator.pop();
     }
-  }
-
-  Future<String?> _promptProviderName(String initial) {
-    return showDialog<String>(
-      context: context,
-      builder: (_) => _ProviderNameDialog(initial: initial),
-    );
-  }
-
-  /// 规则目标：策略组 + 内置出站。
-  Future<String?> _pickTargetGroup() {
-    final profile = s.profile;
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('这些规则走哪个目标？'),
-        children: [
-          for (final group in profile.groups)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, group.name),
-              child: Text('${group.name}  ·  ${group.typeLabel}'),
-            ),
-          for (final builtin in const ['DIRECT', 'REJECT'])
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, builtin),
-              child: Text(builtin),
-            ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -478,44 +530,105 @@ class _RuleRow extends StatelessWidget {
   }
 }
 
-/// 给规则集起名字的小对话框（默认用文件名推出来的名字）。
-class _ProviderNameDialog extends StatefulWidget {
-  const _ProviderNameDialog({required this.initial});
+/// 抓取一个预设规则集的结果。
+class _PresetFetch {
+  const _PresetFetch(this.preset, {this.body, this.error});
 
-  final String initial;
-
-  @override
-  State<_ProviderNameDialog> createState() => _ProviderNameDialogState();
+  final RulePreset preset;
+  final RuleProviderBody? body;
+  final String? error;
 }
 
-class _ProviderNameDialogState extends State<_ProviderNameDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initial,
-  );
+/// 预设面板的返回值：选了哪些、代理流量走哪个组。
+class _PresetChoice {
+  const _PresetChoice(this.presets, this.proxyGroup);
+
+  final List<RulePreset> presets;
+  final String proxyGroup;
+}
+
+/// 「常用规则集」面板：勾选要导入的规则集，并指定代理流量走哪个组。
+class _RulePresetSheet extends StatefulWidget {
+  const _RulePresetSheet({required this.proxyGroup, required this.groupNames});
+
+  final String proxyGroup;
+  final List<String> groupNames;
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  State<_RulePresetSheet> createState() => _RulePresetSheetState();
+}
+
+class _RulePresetSheetState extends State<_RulePresetSheet> {
+  late final Set<String> _picked = {
+    for (final p in kLoyalRulesPresets)
+      if (p.enabledByDefault) p.id,
+  };
+  late String _proxyGroup = widget.proxyGroup;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final presets = kLoyalRulesPresets;
     return AlertDialog(
-      title: const Text('规则集叫什么名字？'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '名称',
-              helperText: '写进 rule-providers，规则里用 RULE-SET 引用',
-            ),
+      title: const Text('常用规则集'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '来自 Loyalsoldier/clash-rules，勾选后会写成 rule-providers '
+                '并各加一条 RULE-SET（插在 MATCH 之前）。',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: Insets.sm),
+              DropdownButtonFormField<String>(
+                initialValue: _proxyGroup,
+                decoration: const InputDecoration(
+                  labelText: '代理流量走哪个组',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final name in widget.groupNames)
+                    DropdownMenuItem(value: name, child: Text(name)),
+                ],
+                onChanged: (v) {
+                  if (v != null) setState(() => _proxyGroup = v);
+                },
+              ),
+              const SizedBox(height: Insets.sm),
+              for (final preset in presets)
+                CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: _picked.contains(preset.id),
+                  onChanged: (v) => setState(() {
+                    if (v == true) {
+                      _picked.add(preset.id);
+                    } else {
+                      _picked.remove(preset.id);
+                    }
+                  }),
+                  title: Text('${preset.label}  ·  ${preset.id}'),
+                  subtitle: Text(
+                    '${preset.description} → '
+                    '${presetTargetFor(preset, _proxyGroup)}'
+                    '${preset.behavior == 'ipcidr' ? '  ·  IP 段' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  secondary: Icon(
+                    preset.behavior == 'ipcidr'
+                        ? Icons.lan_outlined
+                        : Icons.language,
+                    size: 18,
+                    color: scheme.primary,
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -523,12 +636,16 @@ class _ProviderNameDialogState extends State<_ProviderNameDialog> {
           child: const Text('取消'),
         ),
         FilledButton(
-          onPressed: () {
-            final name = _controller.text.trim();
-            if (name.isEmpty) return;
-            Navigator.pop(context, name);
-          },
-          child: const Text('下一步'),
+          onPressed: _picked.isEmpty
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  _PresetChoice([
+                    for (final p in presets)
+                      if (_picked.contains(p.id)) p,
+                  ], _proxyGroup),
+                ),
+          child: Text('导入 ${_picked.length} 组'),
         ),
       ],
     );

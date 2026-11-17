@@ -453,7 +453,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
-    controller.dispose();
+    disposeAfterDialog(controller);
     if (result == null || result.isEmpty) return;
     await _run(() => onSaved(result));
   }

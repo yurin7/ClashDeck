@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/validate/validator.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'proxy_board.dart';
@@ -19,6 +20,7 @@ class EditorPage extends StatefulWidget {
     required this.fileName,
     this.initialText,
     this.displayName,
+    this.runtime,
   });
 
   final ProfileStore store;
@@ -27,6 +29,9 @@ class EditorPage extends StatefulWidget {
   /// 给定则不再从磁盘读，直接作为初始内容（新建/导入流程用）。
   final String? initialText;
   final String? displayName;
+
+  /// 全局唯一的运行控制器：代理页点节点直接切组、运行页复用同一个实例。
+  final RuntimeController? runtime;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -284,7 +289,8 @@ class _EditorPageState extends State<EditorPage> {
                 tooltip: '运行',
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => RuntimePage(state: state),
+                    builder: (_) =>
+                        RuntimePage(state: state, controller: widget.runtime),
                   ),
                 ),
                 icon: const Icon(Icons.play_circle_outline),
@@ -359,6 +365,7 @@ class _EditorPageState extends State<EditorPage> {
                   children: [
                     ProxyBoard(
                       state: state,
+                      runtime: widget.runtime,
                       onSubscriptionSaved: _rememberSubscription,
                     ),
                     RulesTab(state: state),

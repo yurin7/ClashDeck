@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../state/editor_state.dart';
+import 'widgets.dart';
 
 /// 只读 YAML 源码视图 + 整体替换编辑。
 class RawYamlTab extends StatelessWidget {
@@ -40,7 +41,7 @@ class RawYamlTab extends StatelessWidget {
         ],
       ),
     );
-    ctrl.dispose();
+    disposeAfterDialog(ctrl);
     if (result == null || result == state.doc.text) return;
     state.replaceText(result);
     if (!context.mounted) return;

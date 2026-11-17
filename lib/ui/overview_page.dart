@@ -336,6 +336,22 @@ class _QuickControls extends StatelessWidget {
           ),
           const SizedBox(height: Insets.sm),
           Text(state.app.proxyMode.description, style: hintStyle(context)),
+          if (state.app.proxyMode == ProxyMode.tun) ...[
+            const SizedBox(height: Insets.md),
+            const MicroLabel('TUN 协议栈'),
+            const SizedBox(height: Insets.sm),
+            _Segmented<String>(
+              values: const ['gvisor', 'system', 'mixed'],
+              selected: state.tunStack,
+              labelOf: (stack) => stack,
+              onSelected: (stack) async {
+                await state.setTunStack(stack);
+                onChanged();
+              },
+            ),
+            const SizedBox(height: Insets.xs),
+            Text('默认 gvisor；换成其他栈可能上不了网。改动需重启内核生效。', style: hintStyle(context)),
+          ],
           const SizedBox(height: Insets.lg),
           const MicroLabel('分流模式'),
           const SizedBox(height: Insets.md),
@@ -355,8 +371,91 @@ class _QuickControls extends StatelessWidget {
               onChanged();
             },
           ),
+          if (state.mode == 'global') ...[
+            const SizedBox(height: Insets.md),
+            _GlobalExitRow(runtime: runtime, onChanged: onChanged),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// 全局模式下的出口：显示 GLOBAL 当前选中的节点，点一下就能换。
+class _GlobalExitRow extends StatelessWidget {
+  const _GlobalExitRow({required this.runtime, required this.onChanged});
+
+  final RuntimeController runtime;
+  final VoidCallback onChanged;
+
+  Future<void> _pick(BuildContext context) async {
+    final members = runtime.members['GLOBAL'] ?? const <String>[];
+    if (runtime.phase != RuntimePhase.running || members.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('先启动内核，才能切换全局出口')));
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => ListView(
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Insets.lg,
+              0,
+              Insets.lg,
+              Insets.sm,
+            ),
+            child: Text('GLOBAL 走哪个节点', style: display(16, weight: 700)),
+          ),
+          for (final name in members)
+            ListTile(
+              dense: true,
+              title: Text(name),
+              trailing: runtime.selected['GLOBAL'] == name
+                  ? const Icon(Icons.check, size: 18)
+                  : null,
+              onTap: () => Navigator.pop(ctx, name),
+            ),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    final ok = await runtime.selectNode('GLOBAL', picked);
+    if (!ok) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('切换失败，内核可能已经退出')));
+      }
+      return;
+    }
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = runtime.selected['GLOBAL'];
+    return Row(
+      children: [
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '全局出口  ', style: hintStyle(context)),
+                TextSpan(
+                  text: current ?? '未连接',
+                  style: mono(12, color: Theme.of(context).colorScheme.primary),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        TextButton(onPressed: () => _pick(context), child: const Text('切换')),
+      ],
     );
   }
 }

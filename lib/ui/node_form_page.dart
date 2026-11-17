@@ -644,8 +644,8 @@ class _NodeFormPageState extends State<NodeFormPage> {
         ],
       ),
     );
-    keyCtrl.dispose();
-    valueCtrl.dispose();
+    disposeAfterDialog(keyCtrl);
+    disposeAfterDialog(valueCtrl);
     if (result == null) return;
     setState(() {
       _values[result.key] = result.value;

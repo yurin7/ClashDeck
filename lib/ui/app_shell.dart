@@ -195,7 +195,11 @@ class _AppShellState extends State<AppShell> {
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => EditorPage(store: widget.store, fileName: fileName),
+        builder: (_) => EditorPage(
+          store: widget.store,
+          fileName: fileName,
+          runtime: _runtime,
+        ),
       ),
     );
     await _reloadProfiles();
@@ -254,7 +258,11 @@ class _AppShellState extends State<AppShell> {
   Future<void> _openEditorFor(String fileName) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => EditorPage(store: widget.store, fileName: fileName),
+        builder: (_) => EditorPage(
+          store: widget.store,
+          fileName: fileName,
+          runtime: _runtime,
+        ),
       ),
     );
     await _reloadProfiles();
@@ -428,6 +436,7 @@ class _AppShellState extends State<AppShell> {
                   activeFileName: _activeFileName,
                   onSetActive: _setActive,
                   onProfilesChanged: _reloadProfiles,
+                  runtime: _runtime,
                   bottomInset: _bottomInset,
                 ),
                 SafeArea(

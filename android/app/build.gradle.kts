@@ -6,16 +6,21 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 发布签名：把 android/key.properties 和 android/app/clashdeck-release.jks 放进仓库，
-// 每次构建就用同一个 key 签名，新包能直接覆盖安装升级。
-// 缺这两个文件时回退到 debug 签名（CI 每次新生成，所以那种包必须卸载才能重装）。
+// 发布签名：android/key.properties 指向一把固定 keystore（本地放 android/app/*.jks，
+// CI 由 Secrets 还原到临时目录），每次构建都用同一个 key，新包才能覆盖安装升级。
+// 缺 key.properties 或它指向的 keystore 不存在时回退到 debug 签名（CI 每次新生成，
+// 那种包签名不同，必须卸载才能重装）。
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
+val releaseKeystorePath = keystoreProperties.getProperty("storeFile")
+val releaseKeystoreFile = releaseKeystorePath?.let { file(it) }
 val hasReleaseKeystore =
-    keystorePropertiesFile.exists() && keystoreProperties.getProperty("storeFile") != null
+    keystorePropertiesFile.exists() &&
+        releaseKeystoreFile != null &&
+        releaseKeystoreFile.exists()
 
 android {
     namespace = "dev.clashdeck"

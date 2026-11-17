@@ -101,6 +101,30 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Configure signing
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::没有配置 KEYSTORE_BASE64，本次用 debug 签名。每次 runner 生成的 debug key 都不同，装新版本必须先卸载旧版本。"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=${KEYSTORE_PASSWORD}"
+            echo "keyAlias=${KEY_ALIAS}"
+            echo "keyPassword=${KEY_PASSWORD}"
+          } > android/key.properties
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "已配置正式签名（alias: ${KEY_ALIAS}）"
+
       - name: Build APK (split per ABI)
         run: |
           # 只出有内核的 ABI：armeabi-v7a 没有 libmihomo.so，打出来也用不了
@@ -130,6 +154,15 @@ jobs:
           name: apk-${{ steps.v.outputs.name }}
           path: dist/*.apk
           retention-days: 14
+
+      - name: Show signer
+        run: |
+          set -euo pipefail
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)"
+          for f in dist/*.apk; do
+            echo "== $f"
+            "$apksigner" verify --print-certs "$f" | grep -E 'Signer #1 certificate (DN|SHA-256)' || true
+          done
 
       - name: Compose release body
         env:

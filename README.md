@@ -146,19 +146,41 @@ git push origin v0.1.3
 
 ### 签名与覆盖升级
 
-`android/app/build.gradle.kts` 优先用仓库里的固定 keystore 签名：
+**现象**：装新版本时提示要先卸载旧版本。
 
-- `android/key.properties`（`storeFile` / `storePassword` / `keyAlias` / `keyPassword`）
-- `android/app/clashdeck-release.jks`
+**原因**：仓库里没有固定 keystore 时，Gradle 回退到 debug 签名；而 GitHub 的 runner 每次都是干净的
+机器，动态生成的 debug key 每构建一次就换一把，证书不同 → Android 拒绝覆盖安装
+（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。
 
-两个文件缺任意一个就回退到 debug 签名——**CI 上现生成的 debug key 每次都不一样**，
-那样打出来的包签名不同，装新版本前必须先卸载旧版本。生成固定 keystore：
+**修法：用一把固定的 key 签名，本地和 CI 都用它。**
+
+本地生成（只需一次）：
 
 ```powershell
-pwsh -File tool\setup_signing.ps1   # 已生成过会跳过
+pwsh -File tool\setup_signing.ps1
 ```
 
-生成后把 `android/app/clashdeck-release.jks` 和 `android/key.properties` 一起提交。
+它会生成 `android/app/clashdeck-release.jks` 和 `android/key.properties`，本地构建从此可以覆盖安装。
+`android/key.properties` 指向 keystore，**不要把 keystore 提交到仓库**——CI 里由 Secrets 提供。
+
+让 CI 也用同一把 key：把 keystore 转成一行 base64，存到仓库的
+Settings → Secrets and variables → Actions：
+
+| Secret | 值 |
+| --- | --- |
+| `KEYSTORE_BASE64` | `[Convert]::ToBase64String([IO.File]::ReadAllBytes('android/app/clashdeck-release.jks'))` 的输出 |
+| `KEYSTORE_PASSWORD` | `key.properties` 里的 `storePassword` |
+| `KEY_ALIAS` | `key.properties` 里的 `keyAlias` |
+| `KEY_PASSWORD` | `key.properties` 里的 `keyPassword` |
+
+工作流会把这些还原成临时 keystore 并写入 `android/key.properties`；没配置时会打印警告继续用 debug
+签名。构建日志最后的 `Show signer` 步骤会打印证书 SHA-256，可以对比本地 `apksigner` 的结果确认一致。
+
+**两点注意**：
+
+- 从「每次不同签名」切到「固定签名」时，需要**先卸载一次**旧包（旧包证书不同，无法覆盖）。
+- 覆盖安装还要求 `versionCode` 不降：CI 用构建序号（`--build-number`），本地手动构建时请显式给一个
+  不小于已安装版本的值，例如 `flutter build apk --release --build-number=2026`。
 
 ## 目录
 

@@ -43,6 +43,11 @@ $props = @(
 [System.IO.File]::WriteAllText($propsFile, $props + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "已写入：$propsFile"
 Write-Host ''
-Write-Host '别忘了把这两个文件提交进仓库：'
-Write-Host '  android/app/clashdeck-release.jks'
-Write-Host '  android/key.properties'
+Write-Host '本地构建现在就会用这把 key 签名，可以直接覆盖安装旧版本。'
+Write-Host '要让 GitHub Actions 也用同一把 key，把下面这条命令的输出存进仓库的 Secrets：'
+Write-Host "  [Convert]::ToBase64String([IO.File]::ReadAllBytes('$keystore'))"
+Write-Host '对应变量（Settings → Secrets and variables → Actions → New repository secret）：'
+Write-Host '  KEYSTORE_BASE64    = 上面命令输出的一整行 base64'
+Write-Host '  KEYSTORE_PASSWORD  = clashdeck2026'
+Write-Host '  KEY_ALIAS          = clashdeck'
+Write-Host '  KEY_PASSWORD       = clashdeck2026'

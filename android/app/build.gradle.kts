@@ -6,8 +6,9 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 发布签名：android/key.properties 指向一把固定 keystore（本地放 android/app/*.jks，
-// CI 由 Secrets 还原到临时目录），每次构建都用同一个 key，新包才能覆盖安装升级。
+// 发布签名：android/key.properties 的 storeFile 指向一把固定 keystore。本机把 keystore
+// 放仓库外（%USERPROFILE%\.clashdeck\，由 tool/setup_signing.ps1 生成），CI 由 Secrets
+// 还原到临时目录；仓库里不保存任何签名材料。每次构建都用同一个 key，新包才能覆盖安装升级。
 // 缺 key.properties 或它指向的 keystore 不存在时回退到 debug 签名（CI 每次新生成，
 // 那种包签名不同，必须卸载才能重装）。
 val keystorePropertiesFile = rootProject.file("key.properties")

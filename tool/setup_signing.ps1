@@ -1,9 +1,11 @@
 # 一次性生成固定的发布签名，让后续每个 APK 都能覆盖安装升级。
 # 用法：在仓库根目录执行  pwsh -File tool\setup_signing.ps1
 #
-# 【绝不提交】keystore 与 key.properties 都只放在仓库外的用户目录
-# （默认 $env:USERPROFILE\.clashdeck\），本仓库是公开的，任何 jks / key.properties
-# 出现在仓库里都等于把发布私钥公开。CI 不从仓库读 key，而是从
+# 【绝不提交】任何签名材料。本仓库是公开的，jks / key.properties 出现在仓库里
+# 都等于把发布私钥公开。
+#   - keystore 与 signing-secrets.txt：仓库外 $env:USERPROFILE\.clashdeck\
+#   - android/key.properties：只写本地路径（已被 .gitignore 排除）
+# CI 不从仓库读 key，而是从
 # GitHub Actions Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS /
 # KEY_PASSWORD）还原同一把 key。
 # 已经有一把生产 key 时不要重跑本脚本，改用 key.properties 指向那把 key。

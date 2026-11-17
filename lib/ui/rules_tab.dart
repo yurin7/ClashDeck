@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +7,7 @@ import '../core/edit/config_ops.dart';
 import '../core/edit/geosite_index.dart';
 import '../core/edit/import_plan.dart';
 import '../core/edit/import_rules.dart';
+import '../core/edit/online_import.dart';
 import '../core/edit/rule_layout.dart';
 import '../core/edit/rule_presets.dart';
 import '../core/model/profile.dart';
@@ -19,11 +19,12 @@ import '../data/app_prefs.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
-import 'geosite_picker.dart';
 import 'import_dialogs.dart';
 import 'picker_sheet.dart';
 import 'rule_edit_dialog.dart';
 import 'dropdown.dart';
+import 'rules/geo_import_sheet.dart';
+import 'rules/online_import_sheet.dart';
 import 'rules/rule_row_card.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -79,34 +80,48 @@ class _RulesTabState extends State<RulesTab> {
     showToast(context, msg);
   }
 
-  /// 打开 GEO 选择器，往 GEO 区写一条 `GEOSITE,<code>,<target>`。
-  Future<void> _addGeoRule() async {
-    final names = [for (final g in s.profile.groups) g.name];
-    final pick = await showGeositePicker(context, groupNames: names);
-    if (pick == null || !mounted) return;
-    final target = pick.target.isEmpty
-        ? sanitizeGroupName(geositeLabelOf(pick.code))
-        : pick.target;
-    if (s.profile.group(target) == null) {
-      final members = [for (final p in s.profile.proxies) p.name];
-      final ok = s.apply(
-        (doc) => ConfigOps.addGroup(doc, {
-          'name': target,
-          'type': 'select',
-        }, members: members.isEmpty ? const ['DIRECT'] : members),
+  /// GEO 面板：勾选或手输 code，批量写 `GEOSITE,<code>,DEFAULT` 到 GEO 区。
+  ///
+  /// 目标组统一 DEFAULT；插入位置由 `insertRuleLines` 决定（GEO 区末尾，
+  /// 也就是 MATCH 之前），已存在的 code 会跳过，所以反复点「添加」是幂等的。
+  Future<void> _openGeoImport() async {
+    final existing = <String>{
+      for (final rule in s.profile.rules)
+        if (rule.type == 'GEOSITE') rule.payload,
+    };
+    final codes = await showGeoImportSheet(context, existingCodes: existing);
+    if (codes == null || codes.isEmpty || !mounted) return;
+    final target = _resolveTarget(kDefaultGroupName);
+    final plan = planGeositeRules(
+      codes: codes,
+      existingCodes: existing,
+      target: target,
+    );
+    if (plan.rules.isEmpty) {
+      _toast(
+        plan.invalid.isEmpty
+            ? '这些 GEO 词库都已经在配置里了'
+            : '这些 code 不合法：${plan.invalid.join('、')}',
       );
-      if (!ok) {
-        _fail();
-        return;
-      }
+      return;
     }
-    if (!s.addRule('GEOSITE,${pick.code},$target')) {
+    final RuleImportOutcome outcome;
+    try {
+      final base = ConfigOps.ensureDefaultGroup(s.doc);
+      outcome = insertRuleLines(base, plan.rules, createMissingGroups: false);
+    } on ConfigEditException catch (e) {
+      _toast(e.message);
+      return;
+    }
+    if (!s.apply((_) => outcome.doc)) {
       _fail();
       return;
     }
-    if (mounted) {
-      showToast(context, '已添加 GEOSITE,${pick.code},$target');
-    }
+    final skipped = plan.skipped.length + outcome.rulesSkipped;
+    _toast(
+      '已添加 ${outcome.rulesAdded} 条 GEOSITE'
+      '${skipped > 0 ? '，跳过 $skipped 条已存在' : ''}（目标 $target）',
+    );
   }
 
   Future<void> _editRule({RuleEntry? initial, int? index}) async {
@@ -221,27 +236,25 @@ class _RulesTabState extends State<RulesTab> {
     return parts.where((part) => part.isNotEmpty).join(',');
   }
 
-  /// 导入规则：
-  /// - 单行 URL → 当成 rule-provider 规则集（Loyalsoldier/clash-rules 那种）；
-  /// - 其余 → 纯规则行，或带 proxy-groups / provider 的配置片段。
-  /// 在线面板的「自定义规则集地址」：只收一个 URL，按 rule-provider 导入。
-  Future<void> _addCustomRuleProvider() async {
-    final input = await showRuleImportDialog(
-      context,
-      initial: 'https://',
-      groups: [for (final g in s.profile.groups) g.name],
-    );
-    if (input == null) return;
-    final url = input.text.trim();
-    if (!_urlPattern.hasMatch(url)) {
-      if (!mounted) return;
-      showToast(context, '这里只接收规则集地址（http/https）');
-      return;
+  /// 在线面板：勾选整包规则集，或填一个自定义地址；目标一律 DEFAULT。
+  Future<void> _openOnlineImport() async {
+    final request = await showOnlineImportSheet(context);
+    if (request == null || !mounted) return;
+    switch (request) {
+      case OnlinePresetRequest():
+        await _applyOnlinePresets(request.presets);
+      case OnlineCustomUrlRequest():
+        await _importRuleProviderFromUrl(
+          request.url,
+          groupName: kDefaultGroupName,
+        );
     }
-    await _importRuleProviderFromUrl(url, groupName: input.group);
   }
 
-  Future<void> _importRules() async {
+  /// 在线区头 ⋮ 里的「粘贴导入…」：多行规则 / YAML 片段 / 规则集地址。
+  ///
+  /// 仍是原来那个对话框，只是入口挪进了菜单，主面板不再摆一个大粘贴框。
+  Future<void> _pasteImport() async {
     final input = await showRuleImportDialog(
       context,
       groups: [for (final g in s.profile.groups) g.name],
@@ -250,20 +263,23 @@ class _RulesTabState extends State<RulesTab> {
     if (input.preset) {
       // 让上一个对话框的退场动画先跑完，否则新路由的入场动画会停在 0。
       await Future<void>.delayed(const Duration(milliseconds: 280));
-      await _importLoyalPreset();
+      await _openOnlineImport();
       return;
     }
-    if (input.text.trim().isEmpty) return;
-    final trimmed = input.text.trim();
-
-    if (_urlPattern.hasMatch(trimmed)) {
-      await _importRuleProviderFromUrl(trimmed, groupName: input.group);
+    final text = input.text.trim();
+    if (text.isEmpty) return;
+    if (_urlPattern.hasMatch(text)) {
+      await _importRuleProviderFromUrl(
+        text,
+        groupName: input.group.isEmpty
+            ? kDefaultGroupName
+            : _resolveTarget(input.group),
+      );
       return;
     }
-
     final RuleImportOutcome outcome;
     try {
-      outcome = importRules(s.doc, input.text);
+      outcome = importRules(s.doc, text);
     } on ConfigEditException catch (e) {
       if (!mounted) return;
       showToast(context, e.message);
@@ -285,6 +301,113 @@ class _RulesTabState extends State<RulesTab> {
     }
     if (!mounted) return;
     showToast(context, '已导入：${outcome.summary}');
+  }
+
+  /// 拉取勾选的规则集 → 预览 → 写入 provider + `RULE-SET,<id>,DEFAULT`。
+  ///
+  /// [only] 非空表示只重试这些失败项。
+  Future<void> _applyOnlinePresets(
+    List<RulePreset> presets, {
+    List<RulePreset> only = const <RulePreset>[],
+  }) async {
+    final wanted = only.isEmpty ? presets : only;
+    if (wanted.isEmpty) return;
+    _cancelled = false;
+    _fetchDone = 0;
+    _fetchTotal = wanted.length;
+    _progress.value = '';
+    final fetched = await _withBusy(
+      '正在拉取 ${wanted.length} 个规则集…',
+      () => _runWithConcurrency([
+        for (final preset in wanted) () => _fetchPreset(preset),
+      ]),
+      progress: _progress,
+      cancellable: true,
+    );
+    if (_cancelled) {
+      _toast('已取消导入');
+      return;
+    }
+    // 拉到就落本地缓存：内核自己拉 provider 在部分网络下会 EOF，
+    // 所以规则集一律走 file provider，运行时不再依赖出网。
+    final cache = await RuleCache.open();
+    final target = _resolveTarget(kDefaultGroupName);
+    final preview = await planOnlineImport(
+      s.doc,
+      fetched,
+      target: target,
+      cachedBody: cache.read,
+    );
+    if (!await _confirmPlan(preview.plan)) {
+      _toast('已取消导入');
+      return;
+    }
+    for (final item in preview.toApply) {
+      final body = item.body;
+      if (body == null) continue;
+      await cache.write(
+        item.preset.id,
+        item.text == null
+            ? ruleCacheBody(body.entries, body.behavior)
+            : ruleCacheBodyFromRaw(item.text!, body.behavior),
+        sourceUrl: item.preset.url,
+      );
+    }
+    final result = applyOnlineImport(
+      s.doc,
+      preview,
+      target: target,
+      cachePathFor: cache.pathFor,
+    );
+    final failed = <String>[
+      for (final item in fetched)
+        if (item.body == null) '${item.preset.label}（${item.error ?? '解析失败'}）',
+      ...result.failed,
+    ];
+    final failedPresets = <RulePreset>[
+      for (final item in fetched)
+        if (item.body == null) item.preset,
+      ...result.failedPresets,
+    ];
+    if (result.isEmpty) {
+      _toast(
+        '一个都没导入成功：${failed.isEmpty ? '未知原因' : failed.first}',
+        action: failedPresets.isEmpty
+            ? null
+            : SnackBarAction(
+                label: '重试失败项',
+                onPressed: () =>
+                    _applyOnlinePresets(wanted, only: failedPresets),
+              ),
+      );
+      return;
+    }
+    if (!s.apply((_) => result.doc)) {
+      _fail();
+      return;
+    }
+    await _refreshCacheTimes();
+    final parts = <String>[
+      '${result.applied.length} 个规则集',
+      if (result.providersUpdated > 0) '更新 ${result.providersUpdated} 个同名规则集',
+      if (result.groupsMade > 0) '新建 ${result.groupsMade} 个节点组',
+      if (result.rulesRetargeted > 0) '改写 ${result.rulesRetargeted} 条目标',
+      if (preview.skippedIds.isNotEmpty)
+        '跳过 ${preview.skippedIds.length} 个内容相同的规则集',
+    ];
+    final failedHint = failed.isEmpty
+        ? ''
+        : '，失败 ${failed.length} 项（${failed.first}）';
+    final hintsHint = result.hints.isEmpty ? '' : '；${result.hints.first}';
+    _toast(
+      '成功 ${result.applied.length} 项：${parts.join(' + ')}$failedHint$hintsHint',
+      action: failedPresets.isEmpty
+          ? null
+          : SnackBarAction(
+              label: '重试失败项',
+              onPressed: () => _applyOnlinePresets(wanted, only: failedPresets),
+            ),
+    );
   }
 
   static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
@@ -333,106 +456,6 @@ class _RulesTabState extends State<RulesTab> {
     _toast(
       '已导入「$name」：${parsed.count} 条 ${parsed.behavior} 规则，'
       '目标 $target（${outcome.summary}）',
-    );
-  }
-
-  /// 一键导入常用规则集：Loyalsoldier / ACL4SSR 走 rule-provider，
-  /// GEOSITE 直接写进 rules（离线命中）。
-  Future<void> _importLoyalPreset() async {
-    final groupNames = [for (final g in s.profile.groups) g.name];
-    final choice = await showAppDialog<_PresetChoice>(
-      context,
-      builder: (_) => _RulePresetSheet(
-        proxyGroup: suggestProxyGroup(groupNames),
-        groupNames: groupNames,
-      ),
-    );
-    if (choice == null) return;
-    if (choice.presets.isEmpty && choice.geosites.isEmpty) return;
-    await _applyPresetChoice(choice);
-  }
-
-  /// 落地一次导入。`only` 非空时 = 只重试这些规则集（GEOSITE 不重复写）。
-  /// 导入前算一遍计划：新建/复用组、新增/更新规则集、疑似重名。
-  ///
-  /// 只做统计，不写任何东西；确认后由 [_applyPresetChoice] 用同一份数据落地。
-  Future<ImportPlan> _buildPresetPlan(
-    List<_PresetFetch> fetched,
-    _PresetChoice choice,
-    RuleCache cache,
-  ) async {
-    final existing = <String, String>{};
-    final raw = s.doc.plainAt(['rule-providers']);
-    if (raw is Map) {
-      for (final entry in raw.entries) {
-        final value = entry.value;
-        if (value is Map) {
-          final url = value['url'];
-          existing['${entry.key}'] = url is String
-              ? normalizeRuleSetUrl(url)
-              : '';
-        }
-      }
-    }
-    final groupNames = {for (final g in s.profile.groups) g.name};
-    final newGroups = <String>[];
-    final reusedGroups = <String>[];
-    final newProviders = <String>[];
-    final updatedProviders = <String>[];
-    final similar = <String, String>{};
-    var skipped = 0;
-    for (final item in fetched) {
-      final body = item.body;
-      if (body == null) {
-        skipped += 1;
-        continue;
-      }
-      final name = item.preset.id;
-      final url = normalizeRuleSetUrl(item.preset.url);
-      // 同一份地址（忽略分支/query/末尾斜杠）换个名字导入，也算已存在。
-      final sameUrl = existing.entries.any(
-        (e) => e.value == url && url.isNotEmpty,
-      );
-      if (existing.containsKey(name) || sameUrl) {
-        updatedProviders.add(name);
-      } else {
-        // 内容相同但名字不同 → 视为同一个规则集，不重复建 provider。
-        var sameAsCached = false;
-        final text = item.text ?? ruleCacheBody(body.entries, body.behavior);
-        for (final other in existing.keys) {
-          final cached = await cache.read(other);
-          if (cached != null && cached == text) {
-            sameAsCached = true;
-            break;
-          }
-        }
-        if (sameAsCached) {
-          skipped += 1;
-          continue;
-        }
-        for (final other in existing.keys) {
-          if (looksLikeSameName(other, name)) {
-            similar[name] = other;
-            break;
-          }
-        }
-        newProviders.add(name);
-      }
-      final target = _resolveTarget(choice.groupFor(item.preset));
-      if (groupNames.contains(target)) {
-        if (!reusedGroups.contains(target)) reusedGroups.add(target);
-      } else if (!newGroups.contains(target)) {
-        newGroups.add(target);
-      }
-    }
-    return ImportPlan(
-      newGroups: newGroups,
-      reusedGroups: reusedGroups,
-      newProviders: newProviders,
-      updatedProviders: updatedProviders,
-      skippedRules: skipped,
-      rulesToAdd: fetched.length - skipped,
-      similarNames: similar,
     );
   }
 
@@ -489,148 +512,6 @@ class _RulesTabState extends State<RulesTab> {
     return kDefaultGroupName;
   }
 
-  Future<void> _applyPresetChoice(
-    _PresetChoice choice, {
-    List<RulePreset> only = const <RulePreset>[],
-  }) async {
-    final presets = only.isEmpty ? choice.presets : only;
-    var doc = s.doc;
-    final applied = <String>[];
-    final failed = <String>[];
-    final failedPresets = <RulePreset>[];
-    final hints = <String>[];
-    var updated = 0;
-    var groupsMade = 0;
-    var groupsReused = 0;
-    var retargeted = 0;
-
-    if (presets.isNotEmpty) {
-      _cancelled = false;
-      _fetchDone = 0;
-      _fetchTotal = presets.length;
-      _progress.value = "";
-      final fetched = await _withBusy(
-        '正在拉取 ${presets.length} 个规则集…',
-        () => _runWithConcurrency([
-          for (final preset in presets) () => _fetchPreset(preset),
-        ]),
-        progress: _progress,
-        cancellable: true,
-      );
-      if (_cancelled) {
-        _toast('已取消导入');
-        return;
-      }
-      // 拉到就落本地缓存：内核自己拉 provider 在部分网络下会 EOF，
-      // 所以规则集一律走 file provider，运行时不再依赖出网。
-      final cache = await RuleCache.open();
-      // 导入前先算一次预览：新建/复用组、新增/更新规则集、疑似重名。
-      // 确认后按同一份数据继续写入，不重复计算。
-      final plan = await _buildPresetPlan(fetched, choice, cache);
-      if (!await _confirmPlan(plan)) {
-        _toast('已取消导入');
-        return;
-      }
-      for (final item in fetched) {
-        final body = item.body;
-        if (body == null) {
-          failed.add('${item.preset.label}（${item.error ?? '解析失败'}）');
-          failedPresets.add(item.preset);
-          continue;
-        }
-        await cache.write(
-          item.preset.id,
-          item.text == null
-              ? ruleCacheBody(body.entries, body.behavior)
-              : ruleCacheBodyFromRaw(item.text!, body.behavior),
-          sourceUrl: item.preset.url,
-        );
-        final target = _resolveTarget(choice.groupFor(item.preset));
-        try {
-          final outcome = importRuleProvider(
-            doc,
-            body: body,
-            name: item.preset.id,
-            target: target,
-            url: item.preset.url,
-            filePath: cache.pathFor(item.preset.id),
-          );
-          doc = outcome.doc;
-          applied.add(item.preset.label);
-          updated += outcome.providersUpdated.length;
-          groupsMade += outcome.groupsAdded.length;
-          groupsReused += outcome.groupsMerged.length;
-          retargeted += outcome.rulesRetargeted;
-          hints.addAll(outcome.warnings);
-        } on ConfigEditException catch (e) {
-          failed.add('${item.preset.label}（${e.message}）');
-          failedPresets.add(item.preset);
-        }
-      }
-    }
-
-    var geoAdded = 0;
-    if (only.isEmpty && choice.geosites.isNotEmpty) {
-      // 一次最多 50 条，免得一口气把规则列表撑得太长。
-      final lines = <String>[];
-      for (final pick in choice.geosites.take(50)) {
-        final target = _resolveTarget(choice.geositeGroupFor(pick));
-        lines.add('GEOSITE,${pick.code},$target');
-      }
-      if (lines.isEmpty) {
-        // 全部建组失败，下面统一走失败分支。
-      } else {
-        try {
-          final outcome = insertRuleLines(doc, lines);
-          doc = outcome.doc;
-          geoAdded = outcome.rulesAdded;
-          hints.addAll(outcome.warnings);
-        } on ConfigEditException catch (e) {
-          failed.add('GEOSITE（${e.message}）');
-        }
-      }
-    }
-
-    if (applied.isEmpty && geoAdded == 0) {
-      _toast(
-        '一个都没导入成功：${failed.isEmpty ? '未知原因' : failed.first}',
-        action: failedPresets.isEmpty
-            ? null
-            : SnackBarAction(
-                label: '重试失败项',
-                onPressed: () =>
-                    _applyPresetChoice(choice, only: failedPresets),
-              ),
-      );
-      return;
-    }
-    if (!s.apply((_) => doc)) {
-      _fail();
-      return;
-    }
-    final parts = <String>[
-      if (applied.isNotEmpty) '${applied.length} 组规则集',
-      if (geoAdded > 0) 'GEOSITE $geoAdded 条',
-      if (groupsMade > 0) '新建 $groupsMade 个节点组',
-      if (groupsReused > 0) '复用 $groupsReused 个同名组',
-      if (retargeted > 0) '改写 $retargeted 条目标',
-      if (updated > 0) '更新 $updated 个同名规则集',
-    ];
-    final failedHint = failed.isEmpty
-        ? ''
-        : '，失败 ${failed.length} 项（${failed.first}）';
-    final hintsHint = hints.isEmpty ? '' : '；${hints.first}';
-    _toast(
-      '成功 ${applied.length + geoAdded} 项：${parts.join(' + ')}$failedHint$hintsHint',
-      action: failedPresets.isEmpty
-          ? null
-          : SnackBarAction(
-              label: '重试失败项',
-              onPressed: () => _applyPresetChoice(choice, only: failedPresets),
-            ),
-    );
-  }
-
   /// 导入时按「取消」后置位，`_runWithConcurrency` 会在下一个任务前停下。
   bool _cancelled = false;
   int _fetchDone = 0;
@@ -664,7 +545,8 @@ class _RulesTabState extends State<RulesTab> {
     return [for (final item in results) item as T];
   }
 
-  Future<_PresetFetch> _fetchPreset(RulePreset preset) async {
+  /// 拉一个规则集：内容、原文和失败原因都带回去，由导入计划决定怎么用。
+  Future<FetchedPreset> _fetchPreset(RulePreset preset) async {
     try {
       final fetched = await fetchTextWithMirrors(
         preset.url,
@@ -672,16 +554,11 @@ class _RulesTabState extends State<RulesTab> {
       );
       final parsed = parseRuleProviderBody(fetched.text, url: fetched.url);
       if (parsed == null) {
-        return _PresetFetch(preset, error: '没识别出规则集内容', url: fetched.url);
+        return FetchedPreset(preset: preset, error: '没识别出规则集内容');
       }
-      return _PresetFetch(
-        preset,
-        body: parsed,
-        url: fetched.url,
-        text: fetched.text,
-      );
+      return FetchedPreset(preset: preset, body: parsed, text: fetched.text);
     } on ConfigEditException catch (e) {
-      return _PresetFetch(preset, error: e.message);
+      return FetchedPreset(preset: preset, error: e.message);
     }
   }
 
@@ -882,13 +759,6 @@ class _RulesTabState extends State<RulesTab> {
             ),
           ),
           const SizedBox(width: Insets.xs),
-          IconButton(
-            onPressed: _refreshing ? null : _addCustomRuleProvider,
-            tooltip: '自定义规则集地址',
-            icon: const Icon(Icons.link, size: 18),
-            visualDensity: VisualDensity.compact,
-          ),
-          const SizedBox(width: Insets.xs),
           OutlinedButton.icon(
             onPressed: (_refreshing || empty)
                 ? null
@@ -958,7 +828,15 @@ class _RulesTabState extends State<RulesTab> {
               zone: RuleZone.online,
               open: _onlineOpen,
               onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
-              onAdd: _importRules,
+              onAdd: _openOnlineImport,
+              menu: PopupMenuButton<String>(
+                tooltip: '更多操作',
+                icon: const Icon(Icons.more_vert, size: 18),
+                onSelected: (_) => _pasteImport(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'paste', child: Text('粘贴导入…')),
+                ],
+              ),
             ),
           ),
         ),
@@ -988,7 +866,7 @@ class _RulesTabState extends State<RulesTab> {
               zone: RuleZone.geo,
               open: _geoOpen,
               onToggle: () => setState(() => _geoOpen = !_geoOpen),
-              onAdd: _addGeoRule,
+              onAdd: _openGeoImport,
             ),
           ),
         ),
@@ -1045,6 +923,7 @@ class _RulesTabState extends State<RulesTab> {
     required bool open,
     required VoidCallback onToggle,
     VoidCallback? onAdd,
+    Widget? menu,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final accent = switch (zone) {
@@ -1086,6 +965,7 @@ class _RulesTabState extends State<RulesTab> {
               padding: const EdgeInsets.only(right: Insets.xs),
               child: Text(_onlineSummary, style: hintStyle(context)),
             ),
+          ?menu,
           if (onAdd != null)
             IconButton(
               onPressed: onAdd,
@@ -1357,398 +1237,6 @@ String? _ruleNote(RuleEntry rule) {
   }
   if (rule.type == 'RULE-SET') return _presetLabelOf(payload);
   return null;
-}
-
-/// 抓取一个预设规则集的结果。
-class _PresetFetch {
-  const _PresetFetch(this.preset, {this.body, this.error, this.url, this.text});
-
-  final RulePreset preset;
-  final RuleProviderBody? body;
-
-  /// 拉到手的原文。缓存直接写原文：ACL 的 classical 行不能经过 payload 重排。
-  final String? text;
-  final String? error;
-
-  /// 实际拉到内容的地址（可能是镜像）。写 rule-providers 时用它。
-  final String? url;
-}
-
-/// 预设面板的返回值：选了哪些规则集、哪些 GEOSITE，代理流量走哪个组。
-class _PresetChoice {
-  const _PresetChoice(
-    this.presets,
-    this.geosites,
-    this.proxyGroup,
-    this.rowGroups,
-    this.geositeGroups,
-  );
-
-  final List<RulePreset> presets;
-  final List<GeositePick> geosites;
-
-  /// GEOSITE 的目标组（面板里不再让用户选，沿用已有的建议逻辑）。
-  final String proxyGroup;
-
-  /// 每个规则集要写进的节点组：空串 = 新建同名组，否则 = 复用的已有组。
-  final Map<String, String> rowGroups;
-
-  /// 每条 GEOSITE 要写进的节点组：空串 = 新建同名组（名字取标签清洗后）。
-  final Map<String, String> geositeGroups;
-
-  /// 这个规则集该用哪个组名。
-  String groupFor(RulePreset preset) => (rowGroups[preset.id] ?? '').isEmpty
-      ? preset.label
-      : rowGroups[preset.id]!;
-
-  /// 这条 GEOSITE 该用哪个组名：没选就用标签清洗后的同名组。
-  String geositeGroupFor(GeositePick pick) =>
-      (geositeGroups[pick.code] ?? '').isEmpty
-      ? sanitizeGroupName(pick.label)
-      : geositeGroups[pick.code]!;
-}
-
-/// 「常用规则集」面板：精选（Loyalsoldier + ACL4SSR）与 GEOSITE 服务两组。
-class _RulePresetSheet extends StatefulWidget {
-  const _RulePresetSheet({required this.proxyGroup, required this.groupNames});
-
-  final String proxyGroup;
-  final List<String> groupNames;
-
-  @override
-  State<_RulePresetSheet> createState() => _RulePresetSheetState();
-}
-
-class _RulePresetSheetState extends State<_RulePresetSheet> {
-  late final Set<String> _picked = {
-    for (final p in [...kLoyalRulesPresets, ...kAclRulesPresets])
-      if (p.enabledByDefault) p.id,
-  };
-  late final String _proxyGroup = widget.proxyGroup;
-
-  /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
-  final Map<String, String> _rowGroups = <String, String>{};
-
-  /// 折叠起来的区块名（精选两段、服务各分类）。
-  final Set<String> _collapsed = <String>{};
-
-  /// 「缓存于 <时间>」：本地规则集缓存最近一次写入时间。
-  String _cacheLabel = '';
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadCacheLabel());
-  }
-
-  Future<void> _loadCacheLabel() async {
-    try {
-      final cache = await RuleCache.open();
-      DateTime? latest;
-      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
-        final at = await cache.fetchedAt(preset.id);
-        if (at != null && (latest == null || at.isAfter(latest))) latest = at;
-      }
-      if (!mounted) return;
-      setState(() {
-        _cacheLabel = latest == null
-            ? '规则集尚未缓存，点「导入」会下载并缓存到本机'
-            : '缓存于 ${_formatCacheTime(latest)}（再次导入会刷新）';
-      });
-    } catch (_) {
-      // 缓存时间只是提示，读不到就不显示。
-    }
-  }
-
-  String _formatCacheTime(DateTime at) {
-    final local = at.toLocal();
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${local.month}/${local.day} ${two(local.hour)}:${two(local.minute)}';
-  }
-
-  /// 每个规则集要写进的组：没记录 = 新建同名组，有记录 = 复用这个已有组。
-  String _groupFor(RulePreset preset) => _rowGroups[preset.id] ?? '';
-
-  void _setGroup(RulePreset preset, String value) {
-    setState(() => _rowGroups[preset.id] = value);
-  }
-
-  int get _total => _picked.length;
-
-  int get _pickedCount => _picked.length;
-
-  int get _presetTotal => kLoyalRulesPresets.length + kAclRulesPresets.length;
-
-  /// 当前页签全选。
-  void _selectAll() {
-    setState(() {
-      for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
-        _picked.add(preset.id);
-      }
-    });
-  }
-
-  /// 当前页签清空。
-  void _clearAll() {
-    setState(() {
-      _picked.clear();
-    });
-  }
-
-  void _toggle(Set<String> target, String key, bool? on) {
-    setState(() {
-      if (on == true) {
-        target.add(key);
-      } else {
-        target.remove(key);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      title: const Text('常用规则集'),
-      content: SizedBox(
-        width: math.min(480, MediaQuery.sizeOf(context).width - 48),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Loyalsoldier 与 ACL4SSR 的规则集，勾选后写成 rule-providers '
-                '并各加一条 RULE-SET（插在 MATCH 之前）。',
-                style: theme.textTheme.bodySmall,
-              ),
-              if (_cacheLabel.isNotEmpty) ...[
-                const SizedBox(height: Insets.xs),
-                Text(
-                  _cacheLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              const SizedBox(height: Insets.sm),
-              Row(
-                children: [
-                  TextButton(onPressed: _selectAll, child: const Text('全选')),
-                  TextButton(onPressed: _clearAll, child: const Text('清空')),
-                  const Spacer(),
-                  Text(
-                    '已选 $_pickedCount / $_presetTotal',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              ..._buildPresets(theme),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: _total == 0
-              ? null
-              : () => Navigator.pop(
-                  context,
-                  _PresetChoice(
-                    [
-                      for (final p in [
-                        ...kLoyalRulesPresets,
-                        ...kAclRulesPresets,
-                      ])
-                        if (_picked.contains(p.id)) p,
-                    ],
-                    const <GeositePick>[],
-                    _proxyGroup,
-                    {
-                      for (final p in [
-                        ...kLoyalRulesPresets,
-                        ...kAclRulesPresets,
-                      ])
-                        if (_picked.contains(p.id)) p.id: _groupFor(p),
-                    },
-                    <String, String>{},
-                  ),
-                ),
-          child: Text('导入 $_total 项（$_pickedCount 规则集）'),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _buildPresets(ThemeData theme) {
-    final scheme = theme.colorScheme;
-    return [
-      _sectionBlock(
-        theme,
-        'Loyalsoldier',
-        '通用、体积小，优先用这批',
-        [for (final p in kLoyalRulesPresets) p.id],
-        _picked,
-        [for (final p in kLoyalRulesPresets) _presetTile(theme, scheme, p)],
-      ),
-      _sectionBlock(
-        theme,
-        'ACL4SSR',
-        '厂商与流媒体细分，classical 格式',
-        [for (final p in kAclRulesPresets) p.id],
-        _picked,
-        [for (final p in kAclRulesPresets) _presetTile(theme, scheme, p)],
-      ),
-    ];
-  }
-
-  /// 一个可折叠分区：标题 + 已选/总数 + 区级三态全选。
-  ///
-  /// 三态框只显示推导状态，点击永远在「全选 / 清空」之间跳，不会停在半选；
-  /// 半选态只是「本区选了一部分」的视觉反馈。
-  Widget _sectionBlock(
-    ThemeData theme,
-    String title,
-    String hint,
-    List<String> ids,
-    Set<String> selected,
-    List<Widget> tiles,
-  ) {
-    final scheme = theme.colorScheme;
-    final count = ids.where(selected.contains).length;
-    final collapsed = _collapsed.contains(title);
-    final all = count == ids.length && ids.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          onTap: () => setState(() {
-            if (collapsed) {
-              _collapsed.remove(title);
-            } else {
-              _collapsed.add(title);
-            }
-          }),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Row(
-              children: [
-                Icon(
-                  collapsed ? Icons.chevron_right : Icons.expand_more,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 2),
-                Text(title, style: display(12, weight: 600)),
-                const SizedBox(width: 6),
-                Text(
-                  '$count/${ids.length}',
-                  style: mono(11, color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    hint,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-                SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: Checkbox(
-                    tristate: true,
-                    value: count == 0 ? false : (all ? true : null),
-                    onChanged: (_) => setState(() {
-                      if (all) {
-                        selected.removeAll(ids);
-                      } else {
-                        selected.addAll(ids);
-                      }
-                    }),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (!collapsed) ...tiles,
-        const SizedBox(height: Insets.xs),
-        Hairline(),
-      ],
-    );
-  }
-
-  Widget _presetTile(ThemeData theme, ColorScheme scheme, RulePreset preset) {
-    final ipBased = preset.behavior == 'ipcidr';
-    final group = _groupFor(preset);
-    final target = group.isEmpty ? preset.label : group;
-    final tile = CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      value: _picked.contains(preset.id),
-      onChanged: (v) => _toggle(_picked, preset.id, v),
-      title: Text(
-        '${preset.label}  ·  ${preset.source}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${preset.description} → $target'
-        '${preset.behavior == 'classical' ? '  ·  classical' : ''}'
-        '${ipBased ? '  ·  IP 段' : ''}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodySmall,
-      ),
-      secondary: Icon(
-        ipBased ? Icons.lan_outlined : Icons.language,
-        size: 18,
-        color: scheme.primary,
-      ),
-    );
-    final groupPicker = AppDropdown<String>(
-      compact: true,
-      value: group,
-      options: [
-        DropdownOption('', '默认组'),
-        for (final name in widget.groupNames) DropdownOption(name, name),
-      ],
-      onChanged: (value) => _setGroup(preset, value),
-    );
-
-    // 窄屏（手机竖屏）一行放不下勾选框 + 组下拉，中文会被压成逐字竖排；
-    // 这种宽度下改成两行：上面整行勾选，下面右对齐放组下拉。
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 420) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              tile,
-              Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox(width: 160, child: groupPicker),
-              ),
-              const SizedBox(height: Insets.xs),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: tile),
-            SizedBox(width: 150, child: groupPicker),
-          ],
-        );
-      },
-    );
-  }
 }
 
 class _ZoneHeaderDelegate extends SliverPersistentHeaderDelegate {

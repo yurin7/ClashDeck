@@ -3,6 +3,8 @@
 /// 这里的函数都是纯函数，方便单测；真正写配置仍然由 `import_rules.dart` 负责。
 library;
 
+import 'config_ops.dart';
+
 /// 规范化规则集地址，用来判断「是不是同一个规则集」。
 ///
 /// 同一个 provider 在不同来源里经常长这样：
@@ -130,4 +132,71 @@ class ImportPlan {
   List<String> get similarLines => [
     for (final entry in similarNames.entries) '${entry.key} ≈ ${entry.value}',
   ];
+}
+
+/// GEOSITE code 的合法形状：内核只认小写字母、数字和短横线。
+final RegExp _geositeCodePattern = RegExp(r'^[a-z0-9-]+$');
+
+/// 精选词库里还有 `category-ai-!cn` 这种带感叹号的分类名，
+/// 它们写进规则行是安全的，不能按上面的严格形状拦掉。
+final RegExp _geositeSafePattern = RegExp(r'^[a-z0-9!-]+$');
+
+/// 能不能直接写进 `GEOSITE,<code>`；用户手输的 code 先过这一关。
+bool isValidGeositeCode(String code) =>
+    _geositeCodePattern.hasMatch(code.trim());
+
+/// 能不能安全地拼进规则行：只拦会破坏 `GEOSITE,<code>,<target>` 的字符。
+bool _isSafeGeositeCode(String code) => _geositeSafePattern.hasMatch(code);
+
+/// 一次批量 GEO 导入的预估结果。
+class GeositePlan {
+  const GeositePlan({
+    this.rules = const [],
+    this.skipped = const [],
+    this.invalid = const [],
+  });
+
+  /// 要写入的 `GEOSITE,<code>,<target>` 规则行，顺序与输入一致。
+  final List<String> rules;
+
+  /// 配置里已经有、直接跳过的 code。
+  final List<String> skipped;
+
+  /// 形状不合法的输入（原样保留，方便提示用户）。
+  final List<String> invalid;
+
+  bool get isEmpty => rules.isEmpty;
+}
+
+/// 批量 GEO 导入的计划：去重、跳过已存在、丢弃非法 code。
+///
+/// 目标组统一 [target]（默认 [kDefaultGroupName]），不再为每个词库新建同名组。
+GeositePlan planGeositeRules({
+  required Iterable<String> codes,
+  Iterable<String> existingCodes = const [],
+  String target = kDefaultGroupName,
+}) {
+  final group = target.trim().isEmpty ? kDefaultGroupName : target.trim();
+  final existing = {
+    for (final code in existingCodes) code.trim().toLowerCase(),
+  };
+  final seen = <String>{};
+  final rules = <String>[];
+  final skipped = <String>[];
+  final invalid = <String>[];
+  for (final raw in codes) {
+    final code = raw.trim().toLowerCase();
+    if (code.isEmpty) continue;
+    if (!_isSafeGeositeCode(code)) {
+      invalid.add(raw.trim());
+      continue;
+    }
+    if (!seen.add(code)) continue;
+    if (existing.contains(code)) {
+      skipped.add(code);
+      continue;
+    }
+    rules.add('GEOSITE,$code,$group');
+  }
+  return GeositePlan(rules: rules, skipped: skipped, invalid: invalid);
 }

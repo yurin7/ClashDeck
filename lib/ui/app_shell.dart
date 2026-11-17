@@ -136,11 +136,44 @@ class _AppShellState extends State<AppShell> {
     if (mounted) setState(() {});
   }
 
+  /// 切换运行配置。
+  ///
+  /// 内核在跑的时候要真的把流量切过去：先停（否则旧配置的 TUN/端口还占着，
+  /// 新配置起不来），换好配置再重新启动，全程对用户只表现为「停顿一下」。
   Future<void> _setActive(String fileName) async {
+    if (fileName == _activeFileName) return;
+    final wasRunning =
+        _runtime.phase == RuntimePhase.running ||
+        _runtime.phase == RuntimePhase.starting;
+    if (_runtime.isBusy) return;
+    if (wasRunning) {
+      await _runtime.stop();
+    }
     await _prefs?.setActiveProfile(fileName);
+    // 先改内存里的 active 再重载：`_reloadProfiles` 会把 `_activeFileName`
+    // 当第一候选，顺序反了它就会拿旧值把偏好写回去。
+    if (mounted) {
+      setState(() => _activeFileName = fileName);
+    }
     await _reloadProfiles();
     if (!mounted) return;
-    setState(() => _activeFileName = fileName);
+    if (!wasRunning) {
+      _toast('已切换到「${_profileName(fileName)}」，启动内核后生效');
+      return;
+    }
+    try {
+      await _runtime.start();
+      if (mounted) _toast('已切换到「${_profileName(fileName)}」并重启内核');
+    } catch (error) {
+      if (mounted) _toast('切换后启动内核失败：$error');
+    }
+  }
+
+  String _profileName(String fileName) {
+    for (final item in _profiles) {
+      if (item.fileName == fileName) return item.name;
+    }
+    return fileName;
   }
 
   Future<void> _pickProfile() async {
@@ -199,7 +232,7 @@ class _AppShellState extends State<AppShell> {
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
-          autoSave: _settings?.autoSave ?? true,
+          autoSave: _settings?.autoSave ?? false,
         ),
       ),
     );
@@ -263,7 +296,7 @@ class _AppShellState extends State<AppShell> {
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
-          autoSave: _settings?.autoSave ?? true,
+          autoSave: _settings?.autoSave ?? false,
         ),
       ),
     );
@@ -439,7 +472,7 @@ class _AppShellState extends State<AppShell> {
                   onSetActive: _setActive,
                   onProfilesChanged: _reloadProfiles,
                   runtime: _runtime,
-                  autoSave: _settings?.autoSave ?? true,
+                  autoSave: _settings?.autoSave ?? false,
                   bottomInset: _bottomInset,
                 ),
                 SafeArea(

@@ -101,8 +101,49 @@ rules:
     expect(find.text('坏配置'), findsOneWidget);
     expect(find.text('校验通过'), findsNWidgets(2));
     expect(find.text('↳ sub.example.com'), findsOneWidget);
-    expect(find.byTooltip('更多操作'), findsNWidgets(3));
+    // 行尾是「编辑配置」入口（不再弹菜单），三行各一个。
+    expect(find.byTooltip('编辑配置'), findsNWidgets(3));
     expect(find.text('还没有配置'), findsNothing);
+  });
+
+  testWidgets('运行配置：标「运行中」并置顶，点行回调激活、点图标进编辑器', (tester) async {
+    final activated = <String>[];
+    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        home: HomePage(
+          // 运行的是列表最后一份（订阅），验证它会排到第一位。
+          activeFileName: '订阅.yaml',
+          onSetActive: (fileName) async => activated.add(fileName),
+        ),
+      ),
+    );
+    await pumpUntil(
+      tester,
+      () =>
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+          find.text('读取中').evaluate().isEmpty,
+    );
+
+    expect(find.text('运行中'), findsOneWidget);
+    // 置顶：订阅那份的标题先于「正常」出现。
+    final subscriptionY = tester.getTopLeft(find.text('订阅').first).dy;
+    final normalY = tester.getTopLeft(find.text('正常').first).dy;
+    expect(subscriptionY, lessThan(normalY));
+
+    // 点非运行的那一行 → 激活它。
+    await tester.tap(find.text('正常').first);
+    await tester.pump();
+    expect(activated, ['正常.yaml']);
+
+    // 点运行中那一行 → 不重复激活。
+    await tester.tap(find.text('订阅').first);
+    await tester.pump();
+    expect(activated, ['正常.yaml']);
   });
 
   testWidgets('深色：同样可渲染', (tester) async {

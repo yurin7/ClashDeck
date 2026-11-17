@@ -19,7 +19,7 @@ class HomePage extends StatefulWidget {
     this.onSetActive,
     this.onProfilesChanged,
     this.runtime,
-    this.autoSave = true,
+    this.autoSave = false,
     this.bottomInset = 0,
   });
 
@@ -159,6 +159,25 @@ class _HomePageState extends State<HomePage> {
   String? _subscriptionOf(StoredProfile item) {
     final url = _subscriptions[item.fileName];
     return url == null || url.isEmpty ? null : url;
+  }
+
+  /// 运行中的配置排最前；其余保持存储层给的顺序（最近修改在前）。
+  List<StoredProfile> get _orderedItems {
+    final active = widget.activeFileName;
+    if (active == null || _items.length < 2) return _items;
+    final index = _items.indexWhere((item) => item.fileName == active);
+    if (index <= 0) return _items;
+    return <StoredProfile>[
+      _items[index],
+      for (var i = 0; i < _items.length; i++)
+        if (i != index) _items[i],
+    ];
+  }
+
+  /// 点整行 = 把这份配置设为运行配置（内核在跑时由上层停→切→重启）。
+  Future<void> _activate(StoredProfile item) async {
+    if (item.fileName == widget.activeFileName) return;
+    await widget.onSetActive?.call(item.fileName);
   }
 
   Future<void> _open(StoredProfile item) async {
@@ -402,22 +421,11 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     switch (action) {
       case 'activate':
-        await widget.onSetActive?.call(item.fileName);
+        await _activate(item);
       case 'rename':
         await _rename(item);
       case 'delete':
         await _delete(item);
-    }
-  }
-
-  void _handleMenu(StoredProfile item, String action) {
-    switch (action) {
-      case 'activate':
-        widget.onSetActive?.call(item.fileName);
-      case 'rename':
-        _rename(item);
-      case 'delete':
-        _delete(item);
     }
   }
 
@@ -436,6 +444,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final items = _orderedItems;
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -542,16 +551,16 @@ class _HomePageState extends State<HomePage> {
                 padding: EdgeInsets.zero,
                 child: Column(
                   children: [
-                    for (var i = 0; i < _items.length; i++) ...[
+                    for (var i = 0; i < items.length; i++) ...[
                       if (i > 0) const Hairline(indent: Insets.lg),
                       _ProfileRow(
-                        item: _items[i],
-                        summary: _summaries[_items[i].fileName],
-                        subscriptionUrl: _subscriptionOf(_items[i]),
-                        onTap: () => _open(_items[i]),
-                        onLongPress: () => _showItemMenu(_items[i]),
-                        onMenuSelected: (action) =>
-                            _handleMenu(_items[i], action),
+                        item: items[i],
+                        summary: _summaries[items[i].fileName],
+                        subscriptionUrl: _subscriptionOf(items[i]),
+                        active: items[i].fileName == widget.activeFileName,
+                        onTap: () => _activate(items[i]),
+                        onLongPress: () => _showItemMenu(items[i]),
+                        onSettings: () => _open(items[i]),
                       ),
                     ],
                   ],
@@ -662,15 +671,18 @@ class _VDivider extends StatelessWidget {
   );
 }
 
-/// 单份配置：图标 + 名称 + 元信息 + 状态 + 更多菜单（行式，面板内用细线分隔）。
+/// 单份配置：图标 + 名称 + 元信息 + 状态 + 设置入口（行式，面板内用细线分隔）。
+///
+/// 点整行 = 设为运行配置；右上角图标直接进这份配置的编辑器。
 class _ProfileRow extends StatelessWidget {
   const _ProfileRow({
     required this.item,
     required this.summary,
     required this.subscriptionUrl,
+    required this.active,
     required this.onTap,
     required this.onLongPress,
-    required this.onMenuSelected,
+    required this.onSettings,
   });
 
   final StoredProfile item;
@@ -678,9 +690,14 @@ class _ProfileRow extends StatelessWidget {
   /// null 表示摘要仍在读取。
   final ConfigSummary? summary;
   final String? subscriptionUrl;
+
+  /// 是否是当前运行配置（行首高亮 + 「运行中」标记）。
+  final bool active;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-  final ValueChanged<String> onMenuSelected;
+
+  /// 进入这份配置的编辑器（点行不再进编辑器，改成激活）。
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -718,14 +735,22 @@ class _ProfileRow extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
+                color: active
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(Radiuses.sm),
-                border: Border.all(color: scheme.outlineVariant),
+                border: Border.all(
+                  color: active ? scheme.primary : scheme.outlineVariant,
+                ),
               ),
               child: Icon(
-                hasSubscription ? Icons.rss_feed : Icons.description_outlined,
+                active
+                    ? Icons.play_circle_outline
+                    : hasSubscription
+                    ? Icons.rss_feed
+                    : Icons.description_outlined,
                 size: 17,
-                color: hasSubscription
+                color: active || hasSubscription
                     ? scheme.primary
                     : scheme.onSurfaceVariant,
               ),
@@ -751,6 +776,9 @@ class _ProfileRow extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: Insets.sm),
+                      if (active)
+                        Pill(label: '运行中', color: scheme.primary, dense: true),
+                      if (active) const SizedBox(width: 4),
                       if (s == null)
                         const Pill(label: '读取中', dense: true)
                       else if (s.valid)
@@ -785,19 +813,14 @@ class _ProfileRow extends StatelessWidget {
                 ],
               ),
             ),
-            PopupMenuButton<String>(
-              tooltip: '更多操作',
-              padding: EdgeInsets.zero,
+            IconButton(
+              tooltip: '编辑配置',
+              onPressed: onSettings,
               icon: Icon(
-                Icons.more_vert,
+                Icons.tune,
                 size: 18,
-                color: scheme.onSurfaceVariant,
+                color: active ? scheme.primary : scheme.onSurfaceVariant,
               ),
-              onSelected: onMenuSelected,
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'rename', child: Text('重命名')),
-                PopupMenuItem(value: 'delete', child: Text('删除')),
-              ],
             ),
           ],
         ),

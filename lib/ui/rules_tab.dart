@@ -201,6 +201,7 @@ class _RulesTabState extends State<RulesTab> {
     var doc = s.doc;
     final applied = <String>[];
     final failed = <String>[];
+    var updated = 0;
 
     if (choice.presets.isNotEmpty) {
       final fetched = await _withBusy(
@@ -223,6 +224,7 @@ class _RulesTabState extends State<RulesTab> {
           );
           doc = outcome.doc;
           applied.add(item.preset.id);
+          updated += outcome.providersUpdated.length;
         } on ConfigEditException catch (e) {
           failed.add('${item.preset.id}（${e.message}）');
         }
@@ -257,6 +259,7 @@ class _RulesTabState extends State<RulesTab> {
     final parts = <String>[
       if (applied.isNotEmpty) '${applied.length} 组规则集',
       if (geoAdded > 0) 'GEOSITE $geoAdded 条',
+      if (updated > 0) '更新 $updated 个同名规则集',
     ];
     _toast(
       failed.isEmpty

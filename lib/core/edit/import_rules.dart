@@ -13,6 +13,7 @@ class RuleImportOutcome {
     required this.groupsMerged,
     required this.targetGroupsCreated,
     required this.providersAdded,
+    required this.providersUpdated,
     required this.warnings,
   });
 
@@ -28,13 +29,18 @@ class RuleImportOutcome {
   /// 顺带合并进来的 `rule-providers` / `proxy-providers`，形如 `rule-providers/cn`。
   final List<String> providersAdded;
 
+  /// 同名 provider 已存在、但 `behavior` 与这次导入不一致而被改写的，形如
+  /// `rule-providers/cn`。老配置里写错 behavior 的规则集靠它纠正。
+  final List<String> providersUpdated;
+
   final List<String> warnings;
 
   bool get isEmpty =>
       rulesAdded == 0 &&
       groupsAdded.isEmpty &&
       groupsMerged.isEmpty &&
-      providersAdded.isEmpty;
+      providersAdded.isEmpty &&
+      providersUpdated.isEmpty;
 
   /// 给 SnackBar 用的一句话总结。
   String get summary {
@@ -46,6 +52,7 @@ class RuleImportOutcome {
       if (targetGroupsCreated.isNotEmpty)
         '为缺失目标建了 ${targetGroupsCreated.length} 个组',
       if (providersAdded.isNotEmpty) '合并 ${providersAdded.length} 个 provider',
+      if (providersUpdated.isNotEmpty) '更新 ${providersUpdated.length} 个同名规则集',
       if (warnings.isNotEmpty) '${warnings.length} 条提示',
     ];
     return parts.isEmpty ? '没有可导入的内容' : parts.join(' · ');
@@ -197,6 +204,7 @@ RuleImportOutcome importRules(
     groupsMerged: groupsMerged,
     targetGroupsCreated: targetGroupsCreated,
     providersAdded: providersAdded,
+    providersUpdated: const [],
     warnings: warnings,
   );
 }
@@ -263,6 +271,7 @@ RuleImportOutcome insertRuleLines(
     groupsMerged: const [],
     targetGroupsCreated: targetGroupsCreated,
     providersAdded: const [],
+    providersUpdated: const [],
     warnings: warnings,
   );
 }
@@ -529,12 +538,42 @@ RuleImportOutcome importRuleProvider(
   var next = doc;
   final warnings = <String>[];
   final providersAdded = <String>[];
+  final providersUpdated = <String>[];
 
   final existingProviders = next.plainAt(const ['rule-providers']);
-  final already =
-      existingProviders is Map && existingProviders.containsKey(providerName);
-  if (already) {
-    warnings.add('rule-providers 里已有「$providerName」，沿用原有定义');
+  final existing = existingProviders is Map
+      ? existingProviders[providerName]
+      : null;
+  if (existing is Map) {
+    // 同名 provider 已存在：behavior 一致就沿用，不一致就纠正。
+    // 老配置里 ACL4SSR 这类 classical 列表曾被写成 domain，内核按 domain
+    // 解析带类型前缀的行会失败，所以这里必须覆盖而不是静默跳过。
+    final current = existing['behavior'];
+    final currentBehavior = current is String ? current : null;
+    if (currentBehavior == body.behavior) {
+      warnings.add('rule-providers 里已有「$providerName」，沿用原有定义');
+    } else {
+      final merged = <String, Object?>{
+        for (final entry in existing.entries)
+          if (entry.key is String) entry.key as String: entry.value,
+      };
+      merged['behavior'] = body.behavior;
+      if (url != null && url.trim().isNotEmpty) {
+        merged['type'] = 'http';
+        merged['url'] = url.trim();
+        merged['path'] = merged['path'] ?? './ruleset/$providerName.yaml';
+        merged['interval'] = interval;
+      }
+      next = ConfigOps.setAtOrCreate(next, [
+        'rule-providers',
+        providerName,
+      ], merged);
+      providersUpdated.add('rule-providers/$providerName');
+      warnings.add(
+        '「$providerName」的 behavior 从 ${currentBehavior ?? '未写'} '
+        '改成 ${body.behavior}（旧定义会让内核解析失败）',
+      );
+    }
   } else {
     final Map<String, Object?> provider;
     if (url != null && url.trim().isNotEmpty) {
@@ -605,6 +644,7 @@ RuleImportOutcome importRuleProvider(
     groupsMerged: const [],
     targetGroupsCreated: targetGroupsCreated,
     providersAdded: providersAdded,
+    providersUpdated: providersUpdated,
     warnings: warnings,
   );
 }

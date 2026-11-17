@@ -77,7 +77,7 @@ void _check(int bytes, String digest) {
   final recordedBytes = json['bytes'];
   if (recorded != digest || recordedBytes != bytes) {
     stderr.writeln(
-      '${_indexPath} 与 ${_sourcePath} 不同版本：\n'
+      '$_indexPath 与 $_sourcePath 不同版本：\n'
       '  索引 sha256=$recorded bytes=$recordedBytes\n'
       '  数据 sha256=$digest bytes=$bytes\n'
       '请重新运行 `dart run tool/build_geosite_index.dart`。',
@@ -134,8 +134,9 @@ List<_GeositeName> _readGeositeNames(Uint8List bytes) {
           domains++;
       }
     }
-    if (code != null && code.isNotEmpty)
+    if (code != null && code.isNotEmpty) {
       result.add(_GeositeName(code, domains));
+    }
   }
   return result;
 }

@@ -1,3 +1,4 @@
+import 'package:clashdeck/core/edit/config_ops.dart';
 import 'package:clashdeck/core/edit/import_rules.dart';
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
@@ -249,6 +250,71 @@ payload:
         Profile.from(out.doc).rules.map((r) => r.raw),
         contains('RULE-SET,acl-apple,媒体'),
       );
+    });
+  });
+
+  group('importRuleProvider：同名 provider 的 behavior 纠正', () {
+    test('旧定义是 domain、这次是 classical 时覆盖并留提示', () {
+      final first = importRuleProvider(
+        _doc(),
+        body: parseRuleProviderBody(
+          'DOMAIN-SUFFIX,apple.com\n',
+          url: 'https://example.com/Apple.list',
+        )!,
+        name: 'acl-apple',
+        target: '媒体',
+        url: 'https://example.com/Apple.list',
+      );
+      // 模拟老版本写坏的 provider。
+      final broken = ConfigOps.setAtOrCreate(first.doc, const [
+        'rule-providers',
+        'acl-apple',
+        'behavior',
+      ], 'domain');
+
+      final out = importRuleProvider(
+        broken,
+        body: parseRuleProviderBody(
+          'DOMAIN-SUFFIX,apple.com\nDOMAIN-KEYWORD,icloud\n',
+          url: 'https://example.com/Apple.list',
+        )!,
+        name: 'acl-apple',
+        target: '媒体',
+        url: 'https://example.com/Apple.list',
+      );
+
+      final providers =
+          (out.doc.plainRoot['rule-providers'] as Map)['acl-apple'] as Map;
+      expect(providers['behavior'], 'classical');
+      expect(out.providersUpdated, ['rule-providers/acl-apple']);
+      expect(out.providersAdded, isEmpty);
+      expect(
+        out.warnings.any(
+          (w) => w.contains('domain') && w.contains('classical'),
+        ),
+        isTrue,
+      );
+      expect(out.summary, contains('更新 1 个同名规则集'));
+    });
+
+    test('behavior 一致时沿用旧定义、只留一条提示', () {
+      final first = importRuleProvider(
+        _doc(),
+        body: parseRuleProviderBody('DOMAIN-SUFFIX,apple.com\n')!,
+        name: 'acl-apple',
+        target: '媒体',
+        url: 'https://example.com/Apple.list',
+      );
+      final out = importRuleProvider(
+        first.doc,
+        body: parseRuleProviderBody('DOMAIN-SUFFIX,icloud.com\n')!,
+        name: 'acl-apple',
+        target: '媒体',
+        url: 'https://example.com/Apple.list',
+      );
+      expect(out.providersUpdated, isEmpty);
+      expect(out.providersAdded, isEmpty);
+      expect(out.warnings.single, contains('沿用原有定义'));
     });
   });
 

@@ -21,8 +21,10 @@ import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'geosite_picker.dart';
 import 'import_dialogs.dart';
+import 'picker_sheet.dart';
 import 'rule_edit_dialog.dart';
 import 'dropdown.dart';
+import 'rules/rule_row_card.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -129,31 +131,7 @@ class _RulesTabState extends State<RulesTab> {
     if (result == null) return; // 取消
     if (result == 'delete') {
       if (index == null) return;
-      if (!mounted) return;
-      final confirmed = await showAppDialog<bool>(
-        context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('删除这条规则？'),
-          content: Text(
-            '这条规则会从当前配置里移除，删掉后只能重新添加。',
-            style: Theme.of(ctx).textTheme.bodySmall,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error,
-              ),
-              child: const Text('删除'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true && !s.deleteRule(index)) _fail();
+      await _confirmDeleteRule(index);
       return;
     }
     final draft = result as RuleDraft;
@@ -171,6 +149,76 @@ class _RulesTabState extends State<RulesTab> {
         ? s.addRule(rule)
         : s.apply((d) => ConfigOps.updateRule(d, index, rule));
     if (!ok) _fail();
+  }
+
+  /// 行尾「⋮ → 删除」的入口。
+  Future<void> _confirmDelete(RuleEntry rule) => _confirmDeleteRule(rule.index);
+
+  /// 删除一条规则前的二次确认（编辑对话框里的删除走同一套）。
+  Future<void> _confirmDeleteRule(int index) async {
+    if (!mounted) return;
+    final confirmed = await showAppDialog<bool>(
+      context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除这条规则？'),
+        content: Text(
+          '这条规则会从当前配置里移除，删掉后只能重新添加。',
+          style: Theme.of(ctx).textTheme.bodySmall,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && !s.deleteRule(index)) _fail();
+  }
+
+  /// 把一条规则改挂到别的策略组：只替换目标，其余 token 原样保留。
+  Future<void> _moveRuleToGroup(RuleEntry rule) async {
+    final targets = s.profile.allTargets.toList();
+    if (targets.isEmpty) return;
+    final picked = await showPickerSheet<String>(
+      context,
+      title: '改挂到组',
+      subtitle: rule.raw,
+      options: [
+        for (final name in targets)
+          PickerOption(
+            name,
+            name,
+            subtitle: s.profile.group(name)?.typeLabel,
+            icon: Icons.account_tree_outlined,
+          ),
+      ],
+      current: rule.target,
+    );
+    if (picked == null || picked == rule.target || !mounted) return;
+    final updated = _ruleString(rule, target: picked);
+    if (!s.apply((doc) => ConfigOps.updateRule(doc, rule.index, updated))) {
+      _fail();
+    }
+  }
+
+  /// 用规则原有 token 重新拼出规则行，只替换目标组。
+  String _ruleString(RuleEntry rule, {String? target}) {
+    final parts = <String>[
+      rule.type,
+      if (!rule.isTerminal) rule.payload,
+      target ?? rule.target,
+      if (rule.noResolve) 'no-resolve',
+      ...rule.options.where((option) => option != 'no-resolve'),
+    ];
+    return parts.where((part) => part.isNotEmpty).join(',');
   }
 
   /// 导入规则：
@@ -1108,9 +1156,10 @@ class _RulesTabState extends State<RulesTab> {
                 return Padding(
                   key: ValueKey('rule-${rule.index}'),
                   padding: const EdgeInsets.only(bottom: Insets.sm),
-                  child: _RuleRow(
+                  child: RuleRowCard(
                     rule: rule,
                     trailing: _rowTrailing(context, rule),
+                    note: _ruleNote(rule),
                     dragHandle: ReorderableDragStartListener(
                       index: i,
                       child: MouseRegion(
@@ -1118,7 +1167,7 @@ class _RulesTabState extends State<RulesTab> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: Insets.xs,
-                            vertical: Insets.sm,
+                            vertical: Insets.xs,
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -1140,6 +1189,9 @@ class _RulesTabState extends State<RulesTab> {
                       ),
                     ),
                     onTap: () => _editRule(initial: rule, index: rule.index),
+                    onEdit: () => _editRule(initial: rule, index: rule.index),
+                    onMoveToGroup: () => _moveRuleToGroup(rule),
+                    onDelete: () => _confirmDelete(rule),
                   ),
                 );
               },
@@ -1256,7 +1308,7 @@ class _RulesTabState extends State<RulesTab> {
               const SizedBox(width: Insets.sm),
               Expanded(
                 child: Text(
-                  '拖动左侧手柄排序，点击一行编辑；MATCH 必须在最后',
+                  '拖动右侧手柄排序，点击一行编辑；MATCH 必须在最后',
                   style: hintStyle(context),
                 ),
               ),
@@ -1286,7 +1338,6 @@ class _RulesTabState extends State<RulesTab> {
   }
 }
 
-/// 一行规则：拖手柄 | 类型 + 匹配内容 → 目标。
 /// `RULE-SET` 里的 provider 名 → 预设中文名（查不到返回 null）。
 String? _presetLabelOf(String providerName) {
   for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
@@ -1295,141 +1346,17 @@ String? _presetLabelOf(String providerName) {
   return null;
 }
 
-/// 规则行第二行展示的匹配内容：`GEOSITE` / `RULE-SET` 顺带把中文名带出来。
-String _rulePayloadLabel(RuleEntry rule) {
-  if (rule.isTerminal) return '所有未匹配流量';
+/// 规则行的补充说明：`GEOSITE` / `RULE-SET` 顺带把中文名带出来（没有就返回 null）。
+String? _ruleNote(RuleEntry rule) {
+  if (rule.isTerminal) return null;
   final payload = rule.payload;
-  if (payload.isEmpty) return payload;
+  if (payload.isEmpty) return null;
   if (rule.type == 'GEOSITE') {
     final label = geositeLabelOf(payload);
-    return label == payload ? payload : '$payload  ·  $label';
+    return label == payload ? null : label;
   }
-  if (rule.type == 'RULE-SET') {
-    final label = _presetLabelOf(payload);
-    return label == null ? payload : '$payload  ·  $label';
-  }
-  return payload;
-}
-
-class _RuleRow extends StatelessWidget {
-  const _RuleRow({
-    required this.rule,
-
-    required this.dragHandle,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final RuleEntry rule;
-
-  final Widget dragHandle;
-  final VoidCallback onTap;
-
-  /// 行尾附加信息（在线规则集的来源 / 缓存时间 / 更新按钮）。
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final terminal = rule.isTerminal;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                dragHandle,
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: Insets.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                rule.type,
-                                style: mono(
-                                  12.5,
-                                  weight: 700,
-                                  letterSpacing: 0.3,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (terminal) ...[
-                              const SizedBox(width: Insets.sm),
-                              Pill(
-                                label: '兜底',
-                                color: context.semantic.warn,
-                                icon: Icons.flag_outlined,
-                                dense: true,
-                              ),
-                            ],
-                            if (rule.noResolve) ...[
-                              const SizedBox(width: Insets.xs),
-                              const Pill(label: 'no-resolve', dense: true),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _rulePayloadLabel(rule),
-                                style: mono(12, color: scheme.onSurfaceVariant),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_right_alt,
-                              size: 16,
-                              color: scheme.outline,
-                            ),
-                            const SizedBox(width: 2),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 150),
-                              child: Text(
-                                rule.target,
-                                style: mono(
-                                  12,
-                                  color: scheme.primary,
-                                  weight: 600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                ?trailing,
-                Padding(
-                  padding: const EdgeInsets.only(right: Insets.sm),
-                  child: Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: scheme.outline,
-                  ),
-                ),
-              ],
-            ),
-            const Hairline(indent: Insets.lg),
-          ],
-        ),
-      ),
-    );
-  }
+  if (rule.type == 'RULE-SET') return _presetLabelOf(payload);
+  return null;
 }
 
 /// 抓取一个预设规则集的结果。

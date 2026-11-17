@@ -440,6 +440,24 @@ class _GlobalExitRow extends StatelessWidget {
     return names;
   }
 
+  /// 某个策略组的成员；不是组就返回空。
+  List<String> _membersOf(String group) {
+    final list = settings.doc.plainAt(['proxy-groups']);
+    if (list is! List) return const <String>[];
+    for (final item in list) {
+      if (item is! Map || item['name'] != group) continue;
+      final proxies = item['proxies'];
+      if (proxies is List) {
+        return [
+          for (final name in proxies)
+            if (name is String && name.isNotEmpty) name,
+        ];
+      }
+      return const <String>[];
+    }
+    return const <String>[];
+  }
+
   Future<void> _pick(BuildContext context) async {
     final candidates = _candidates();
     final picked = await showModalBottomSheet<String>(
@@ -469,10 +487,49 @@ class _GlobalExitRow extends StatelessWidget {
         ],
       ),
     );
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
+
+    // 选中的是策略组时，再问一次「组里用哪个节点」，这样一次点选就把
+    // GLOBAL → 组 → 节点 这条链走完，不用再去运行页翻两层。
+    final members = _membersOf(picked);
+    String? member;
+    if (members.isNotEmpty) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Insets.lg,
+                0,
+                Insets.lg,
+                Insets.sm,
+              ),
+              child: Text('「$picked」里用哪个节点', style: display(16, weight: 700)),
+            ),
+            for (final name in ['', ...members])
+              ListTile(
+                dense: true,
+                title: Text(name.isEmpty ? '跟着组自己的选择走' : name),
+                trailing: (settings.groupNodes[picked] ?? '') == name
+                    ? const Icon(Icons.check, size: 18)
+                    : null,
+                onTap: () => Navigator.pop(ctx, name),
+              ),
+          ],
+        ),
+      );
+      if (choice == null || !context.mounted) return;
+      member = choice.isEmpty ? null : choice;
+    }
+
     // 先落盘：内核没起来也要记住这个选择。
     await settings.setGlobalNode(picked);
+    if (members.isNotEmpty) await settings.setGroupNode(picked, member);
     if (runtime.phase == RuntimePhase.running) {
+      if (member != null) await runtime.selectNode(picked, member);
       final ok = await runtime.selectNode('GLOBAL', picked);
       if (!ok && context.mounted) {
         ScaffoldMessenger.of(context)
@@ -675,47 +732,85 @@ class _Segmented<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final count = values.length;
+    final rawIndex = values.indexOf(selected);
+    final index = rawIndex < 0 ? 0 : rawIndex;
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.all(Radius.circular(Insets.sm)),
       ),
-      child: Row(
-        children: [
-          for (final value in values)
-            Expanded(
-              child: GestureDetector(
-                onTap: value == selected ? null : () => onSelected(value),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final segmentWidth = constraints.maxWidth / count;
+          return SizedBox(
+            height: 34,
+            child: Stack(
+              children: [
+                // 选中底板用 AnimatedPositioned 滑过去，模仿 iOS 分段控件的拇指。
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
+                  left: segmentWidth * index,
+                  top: 0,
+                  width: segmentWidth,
                   height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: value == selected
-                        ? scheme.surfaceContainerHighest
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.all(Radius.circular(6)),
-                  ),
-                  child: TweenAnimationBuilder<Color?>(
-                    tween: ColorTween(
-                      end: value == selected
-                          ? scheme.primary
-                          : scheme.onSurfaceVariant,
-                    ),
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, color, _) => Text(
-                      labelOf(value),
-                      style: display(12.5, weight: 600, color: color),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: const BorderRadius.all(Radius.circular(6)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.22),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
+                Row(
+                  children: [
+                    for (final value in values)
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: value == selected
+                              ? null
+                              : () => onSelected(value),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            height: 34,
+                            child: Center(
+                              child: TweenAnimationBuilder<Color?>(
+                                tween: ColorTween(
+                                  end: value == selected
+                                      ? scheme.primary
+                                      : scheme.onSurfaceVariant,
+                                ),
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, color, _) => Text(
+                                  labelOf(value),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: display(
+                                    12.5,
+                                    weight: 600,
+                                    color: color,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
-        ],
+          );
+        },
       ),
     );
   }

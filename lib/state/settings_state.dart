@@ -110,6 +110,9 @@ class SettingsState extends ChangeNotifier {
   /// 「全局」模式下选定的出口；null 表示跟随内核默认（DIRECT）。
   String? get globalNode => app.globalNode;
 
+  /// 组 → 组内节点，概览里选完组再选节点时存下来，起内核后按顺序还原。
+  Map<String, String> get groupNodes => app.groupNodes;
+
   Future<void> reload() async {
     final text = await store.read(fileName);
     _doc = YamlDoc.parse(text);
@@ -175,6 +178,17 @@ class SettingsState extends ChangeNotifier {
 
   Future<void> setGlobalNode(String? value) =>
       _updateApp(app.copyWith(globalNode: value));
+
+  /// 记下某个组里要用的节点；传 null 表示「跟着组自己的选择走」。
+  Future<void> setGroupNode(String group, String? node) {
+    final next = Map<String, String>.from(app.groupNodes);
+    if (node == null || node.isEmpty) {
+      next.remove(group);
+    } else {
+      next[group] = node;
+    }
+    return _updateApp(app.copyWith(groupNodes: next));
+  }
 
   /// 把一批解析好的节点写进这份配置（订阅刷新用：同名跳过）。
   ///

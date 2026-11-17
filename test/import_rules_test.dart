@@ -195,4 +195,84 @@ rules:
       expect(out.warnings.any((w) => w.contains('按 YAML 解析失败')), isTrue);
     });
   });
+  group('parseRuleProviderBody：behavior 推断', () {
+    test('ACL4SSR 的 classical 列表不会被当成 domain', () {
+      final body = parseRuleProviderBody('''
+# 内容：Microsoft
+# 数量：3条
+DOMAIN-KEYWORD,1drv
+DOMAIN-SUFFIX,microsoft.com
+DOMAIN-SUFFIX,office.com
+''', url: 'https://example.com/Microsoft.list');
+      expect(body, isNotNull);
+      expect(body!.behavior, 'classical');
+      expect(body.entries.first, 'DOMAIN-KEYWORD,1drv');
+    });
+
+    test('Loyalsoldier 的纯域名列表仍然是 domain', () {
+      final body = parseRuleProviderBody('''
+payload:
+  - '+.openai.com'
+  - '+.chatgpt.com'
+''');
+      expect(body!.behavior, 'domain');
+    });
+
+    test('纯 IP 段列表是 ipcidr', () {
+      final body = parseRuleProviderBody('''
+payload:
+  - 10.0.0.0/8
+  - 192.168.0.0/16
+''');
+      expect(body!.behavior, 'ipcidr');
+    });
+  });
+
+  group('importRuleProvider：写进配置', () {
+    test('classical provider 的 behavior 原样写进 rule-providers', () {
+      final body = parseRuleProviderBody(
+        'DOMAIN-SUFFIX,apple.com\nDOMAIN-SUFFIX,icloud.com\n',
+        url: 'https://example.com/Apple.list',
+      )!;
+      final out = importRuleProvider(
+        _doc(),
+        body: body,
+        name: 'acl-apple',
+        target: '媒体',
+        url: 'https://example.com/Apple.list',
+      );
+      final providers =
+          (out.doc.plainRoot['rule-providers'] as Map)['acl-apple'] as Map;
+      expect(providers['behavior'], 'classical');
+      expect(providers['url'], 'https://example.com/Apple.list');
+      expect(
+        Profile.from(out.doc).rules.map((r) => r.raw),
+        contains('RULE-SET,acl-apple,媒体'),
+      );
+    });
+  });
+
+  group('insertRuleLines：批量插 GEOSITE', () {
+    test('插在 MATCH 之前、重复的跳过', () {
+      final out = insertRuleLines(_doc(), [
+        'GEOSITE,openai,PROXY',
+        'GEOSITE,netflix,媒体',
+        'GEOSITE,openai,PROXY',
+      ]);
+      expect(out.rulesAdded, 2);
+      expect(out.rulesSkipped, 1);
+      final rules = Profile.from(out.doc).rules.map((r) => r.raw).toList();
+      expect(
+        rules.indexOf('GEOSITE,openai,PROXY'),
+        lessThan(rules.indexWhere((r) => r.startsWith('MATCH'))),
+      );
+      expect(rules.last, startsWith('MATCH'));
+    });
+
+    test('目标组不存在时自动建组', () {
+      final out = insertRuleLines(_doc(), ['GEOSITE,openai,新目标']);
+      expect(out.targetGroupsCreated, ['新目标']);
+      expect(Profile.from(out.doc).group('新目标')?.members, ['DIRECT']);
+    });
+  });
 }

@@ -201,6 +201,72 @@ RuleImportOutcome importRules(
   );
 }
 
+/// 把现成的规则行（例如 `GEOSITE,openai,PROXY`）插到 MATCH 之前。
+///
+/// 和 [importRules] 的区别：调用方已经拿到了最终规则文本，不需要再解析片段或
+/// 建 rule-provider；这里只做去重、补缺失目标组、定位插入点。
+RuleImportOutcome insertRuleLines(
+  YamlDoc doc,
+  List<String> rules, {
+  bool createMissingGroups = true,
+}) {
+  var next = doc;
+  final warnings = <String>[];
+  final targetGroupsCreated = <String>[];
+  var rulesAdded = 0;
+  var rulesSkipped = 0;
+
+  for (final raw in rules) {
+    final rule = raw.trim();
+    if (rule.isEmpty) continue;
+    final profile = Profile.from(next);
+    final existing = ConfigOps.ruleStrings(profile).map(_compact).toSet();
+    if (existing.contains(_compact(rule))) {
+      rulesSkipped++;
+      continue;
+    }
+    if (createMissingGroups) {
+      final entry = RuleEntry.parse(profile.rules.length, rule);
+      final target = entry.target;
+      final known =
+          target.isEmpty ||
+          Profile.builtinTargets.contains(target) ||
+          profile.proxy(target) != null ||
+          profile.group(target) != null;
+      if (!known) {
+        try {
+          next = ConfigOps.addGroup(
+            next,
+            {'name': target, 'type': 'select'},
+            members: const ['DIRECT'],
+          );
+          targetGroupsCreated.add(target);
+        } on ConfigEditException catch (e) {
+          warnings.add('无法为规则目标「$target」建组：${e.message}');
+        }
+      }
+    }
+    final terminalAt = Profile.from(next).rules.indexWhere((r) => r.isTerminal);
+    next = ConfigOps.addRule(
+      next,
+      rule,
+      at: terminalAt < 0 ? null : terminalAt,
+    );
+    rulesAdded++;
+  }
+
+  return RuleImportOutcome(
+    doc: next,
+    rulesAdded: rulesAdded,
+    rulesSkipped: rulesSkipped,
+    groupsAdded: const [],
+    groupsMerged: const [],
+    targetGroupsCreated: targetGroupsCreated,
+    providersAdded: const [],
+    warnings: warnings,
+  );
+}
+
 /// 试读 YAML 片段；不是 YAML 或者解析失败时什么都不加（交给逐行文本兜底）。
 void _readYamlFragment(
   String text,
@@ -345,7 +411,9 @@ RuleProviderBody? parseRuleProviderBody(String text, {String? url}) {
         }
       }
       final behavior = '${root['behavior'] ?? ''}'.trim().toLowerCase();
-      if (behavior == 'domain' || behavior == 'ipcidr') {
+      if (behavior == 'domain' ||
+          behavior == 'ipcidr' ||
+          behavior == 'classical') {
         declaredBehavior = behavior;
       }
       final name = '${root['name'] ?? ''}'.trim();
@@ -394,11 +462,31 @@ String _cleanProviderEntry(String value) {
 final RegExp _cidrV4 = RegExp(r'^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$');
 final RegExp _cidrV6 = RegExp(r'^[0-9a-fA-F:]+/\d{1,3}$');
 
+/// 猜一条 payload 列表的 behavior。
+///
+/// - 全是 IP / CIDR → `ipcidr`
+/// - 大半是 `DOMAIN-SUFFIX,xx` 这种带类型的规则行 → `classical`
+///   （ACL4SSR 的 `.list` 就是这种，写成 `domain` 会被内核判成非法）
+/// - 其余 → `domain`
 String _inferBehavior(List<String> entries) {
   final allIp = entries.every(
     (e) => _cidrV4.hasMatch(e) || _cidrV6.hasMatch(e),
   );
-  return allIp ? 'ipcidr' : 'domain';
+  if (allIp) return 'ipcidr';
+  final ruleLines = entries.where(_looksLikeRuleLine).length;
+  if (ruleLines * 2 >= entries.length) return 'classical';
+  return 'domain';
+}
+
+/// 判断一行是不是 `DOMAIN-SUFFIX,example.com` 这类完整规则。
+bool _looksLikeRuleLine(String entry) {
+  final comma = entry.indexOf(',');
+  if (comma <= 0) return false;
+  final type = entry.substring(0, comma);
+  if (!type.contains(RegExp(r'[A-Z]'))) return false;
+  return type
+      .split('-')
+      .every((part) => part.isNotEmpty && part.toUpperCase() == part);
 }
 
 String? _nameFromUrl(String? url) {

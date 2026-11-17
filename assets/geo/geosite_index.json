@@ -1,0 +1,6272 @@
+{
+  "version": 1,
+  "generatedFrom": "geosite.dat",
+  "sha256": "acb166b2846dc86a89d85c5cf78ca96c001a411531cdf146244a5f5a15d3736f",
+  "bytes": 4356378,
+  "names": [
+    {
+      "code": "0x0",
+      "domains": 1
+    },
+    {
+      "code": "115",
+      "domains": 14
+    },
+    {
+      "code": "1337x",
+      "domains": 10
+    },
+    {
+      "code": "17zuoye",
+      "domains": 3
+    },
+    {
+      "code": "18comic",
+      "domains": 52
+    },
+    {
+      "code": "2ch",
+      "domains": 4
+    },
+    {
+      "code": "2gis",
+      "domains": 14
+    },
+    {
+      "code": "2kgames",
+      "domains": 6
+    },
+    {
+      "code": "36kr",
+      "domains": 6
+    },
+    {
+      "code": "4399",
+      "domains": 63
+    },
+    {
+      "code": "4chan",
+      "domains": 3
+    },
+    {
+      "code": "4pda",
+      "domains": 1
+    },
+    {
+      "code": "4plebs",
+      "domains": 2
+    },
+    {
+      "code": "51job",
+      "domains": 5
+    },
+    {
+      "code": "54647",
+      "domains": 4
+    },
+    {
+      "code": "58tongcheng",
+      "domains": 42
+    },
+    {
+      "code": "5ch",
+      "domains": 3
+    },
+    {
+      "code": "6park",
+      "domains": 7
+    },
+    {
+      "code": "7tv",
+      "domains": 2
+    },
+    {
+      "code": "800best",
+      "domains": 29
+    },
+    {
+      "code": "8btc",
+      "domains": 5
+    },
+    {
+      "code": "928plus",
+      "domains": 2
+    },
+    {
+      "code": "9news",
+      "domains": 14
+    },
+    {
+      "code": "9to5",
+      "domains": 7
+    },
+    {
+      "code": "aamgame",
+      "domains": 5
+    },
+    {
+      "code": "abc",
+      "domains": 4
+    },
+    {
+      "code": "abema",
+      "domains": 21
+    },
+    {
+      "code": "accuweather",
+      "domains": 2
+    },
+    {
+      "code": "acer",
+      "domains": 3
+    },
+    {
+      "code": "acfun",
+      "domains": 8
+    },
+    {
+      "code": "actalis",
+      "domains": 2
+    },
+    {
+      "code": "activision",
+      "domains": 21
+    },
+    {
+      "code": "activision-blizzard",
+      "domains": 52
+    },
+    {
+      "code": "adblock",
+      "domains": 2
+    },
+    {
+      "code": "adblockplus",
+      "domains": 1
+    },
+    {
+      "code": "addthis",
+      "domains": 3
+    },
+    {
+      "code": "addtoany",
+      "domains": 1
+    },
+    {
+      "code": "adguard",
+      "domains": 19
+    },
+    {
+      "code": "adidas",
+      "domains": 90
+    },
+    {
+      "code": "adjust",
+      "domains": 4
+    },
+    {
+      "code": "adobe",
+      "domains": 260
+    },
+    {
+      "code": "adobe-activation",
+      "domains": 134
+    },
+    {
+      "code": "aerogard",
+      "domains": 3
+    },
+    {
+      "code": "afdian",
+      "domains": 4
+    },
+    {
+      "code": "afp",
+      "domains": 2
+    },
+    {
+      "code": "agilebits",
+      "domains": 15
+    },
+    {
+      "code": "agora",
+      "domains": 5
+    },
+    {
+      "code": "aiqicha",
+      "domains": 3
+    },
+    {
+      "code": "airbnb",
+      "domains": 83
+    },
+    {
+      "code": "airchina",
+      "domains": 40
+    },
+    {
+      "code": "airwick",
+      "domains": 40
+    },
+    {
+      "code": "aisiku",
+      "domains": 14
+    },
+    {
+      "code": "aixcoder",
+      "domains": 2
+    },
+    {
+      "code": "akamai",
+      "domains": 81
+    },
+    {
+      "code": "akiko",
+      "domains": 3
+    },
+    {
+      "code": "alibaba",
+      "domains": 466
+    },
+    {
+      "code": "alibabacloud",
+      "domains": 12
+    },
+    {
+      "code": "aligames",
+      "domains": 5
+    },
+    {
+      "code": "aliyun",
+      "domains": 88
+    },
+    {
+      "code": "aliyun-drive",
+      "domains": 6
+    },
+    {
+      "code": "aljazeera",
+      "domains": 7
+    },
+    {
+      "code": "alphabet",
+      "domains": 1090
+    },
+    {
+      "code": "amap",
+      "domains": 16
+    },
+    {
+      "code": "amazon",
+      "domains": 250
+    },
+    {
+      "code": "amazontrust",
+      "domains": 3
+    },
+    {
+      "code": "amc",
+      "domains": 5
+    },
+    {
+      "code": "amd",
+      "domains": 6
+    },
+    {
+      "code": "amp",
+      "domains": 6
+    },
+    {
+      "code": "amplitude",
+      "domains": 22
+    },
+    {
+      "code": "anaconda",
+      "domains": 4
+    },
+    {
+      "code": "anandtech",
+      "domains": 1
+    },
+    {
+      "code": "android",
+      "domains": 4
+    },
+    {
+      "code": "anexia",
+      "domains": 33
+    },
+    {
+      "code": "anime",
+      "domains": 21
+    },
+    {
+      "code": "anker",
+      "domains": 12
+    },
+    {
+      "code": "annas-archive",
+      "domains": 8
+    },
+    {
+      "code": "anon-v",
+      "domains": 2
+    },
+    {
+      "code": "anthropic",
+      "domains": 21
+    },
+    {
+      "code": "ap",
+      "domains": 2
+    },
+    {
+      "code": "apa",
+      "domains": 2
+    },
+    {
+      "code": "aparat",
+      "domains": 3
+    },
+    {
+      "code": "apifox",
+      "domains": 2
+    },
+    {
+      "code": "apipost",
+      "domains": 2
+    },
+    {
+      "code": "apkcombo",
+      "domains": 1
+    },
+    {
+      "code": "apkmirror",
+      "domains": 2
+    },
+    {
+      "code": "apkpure",
+      "domains": 6
+    },
+    {
+      "code": "apple",
+      "domains": 1794
+    },
+    {
+      "code": "apple-cn",
+      "domains": 165
+    },
+    {
+      "code": "apple-dev",
+      "domains": 47
+    },
+    {
+      "code": "apple-intelligence",
+      "domains": 5
+    },
+    {
+      "code": "apple-music",
+      "domains": 18
+    },
+    {
+      "code": "apple-pki",
+      "domains": 8
+    },
+    {
+      "code": "apple-podcasts",
+      "domains": 4
+    },
+    {
+      "code": "apple-tvplus",
+      "domains": 8
+    },
+    {
+      "code": "apple-update",
+      "domains": 21
+    },
+    {
+      "code": "appledaily",
+      "domains": 32
+    },
+    {
+      "code": "applysquare",
+      "domains": 2
+    },
+    {
+      "code": "aptoide",
+      "domains": 1
+    },
+    {
+      "code": "archive",
+      "domains": 18
+    },
+    {
+      "code": "archiveofourown",
+      "domains": 4
+    },
+    {
+      "code": "archivetoday",
+      "domains": 7
+    },
+    {
+      "code": "archlinux",
+      "domains": 6
+    },
+    {
+      "code": "arphic",
+      "domains": 4
+    },
+    {
+      "code": "artstation",
+      "domains": 2
+    },
+    {
+      "code": "asahi",
+      "domains": 7
+    },
+    {
+      "code": "askdiandian",
+      "domains": 2
+    },
+    {
+      "code": "asobo",
+      "domains": 3
+    },
+    {
+      "code": "asproex",
+      "domains": 2
+    },
+    {
+      "code": "asus",
+      "domains": 4
+    },
+    {
+      "code": "atlassian",
+      "domains": 11
+    },
+    {
+      "code": "att",
+      "domains": 135
+    },
+    {
+      "code": "attwatchtv",
+      "domains": 5
+    },
+    {
+      "code": "autodesk",
+      "domains": 558
+    },
+    {
+      "code": "autoru",
+      "domains": 5
+    },
+    {
+      "code": "auxgroup",
+      "domains": 31
+    },
+    {
+      "code": "avaxhome",
+      "domains": 7
+    },
+    {
+      "code": "aviasales",
+      "domains": 3
+    },
+    {
+      "code": "avito",
+      "domains": 5
+    },
+    {
+      "code": "avmoo",
+      "domains": 3
+    },
+    {
+      "code": "awempire",
+      "domains": 5
+    },
+    {
+      "code": "aws",
+      "domains": 80
+    },
+    {
+      "code": "aws-cn",
+      "domains": 28
+    },
+    {
+      "code": "azure",
+      "domains": 154
+    },
+    {
+      "code": "b3log",
+      "domains": 4
+    },
+    {
+      "code": "bahamut",
+      "domains": 5
+    },
+    {
+      "code": "baidu",
+      "domains": 132
+    },
+    {
+      "code": "baishancloud",
+      "domains": 3
+    },
+    {
+      "code": "baltamatica",
+      "domains": 4
+    },
+    {
+      "code": "bamtech",
+      "domains": 3
+    },
+    {
+      "code": "bandcamp",
+      "domains": 2
+    },
+    {
+      "code": "bandwagonhost",
+      "domains": 7
+    },
+    {
+      "code": "bangumi",
+      "domains": 3
+    },
+    {
+      "code": "barrons",
+      "domains": 4
+    },
+    {
+      "code": "bbc",
+      "domains": 28
+    },
+    {
+      "code": "bdsmhub",
+      "domains": 2
+    },
+    {
+      "code": "beats",
+      "domains": 716
+    },
+    {
+      "code": "beget",
+      "domains": 14
+    },
+    {
+      "code": "beisen",
+      "domains": 8
+    },
+    {
+      "code": "bestbuy",
+      "domains": 82
+    },
+    {
+      "code": "bestchange",
+      "domains": 3
+    },
+    {
+      "code": "bestore",
+      "domains": 3
+    },
+    {
+      "code": "bestv",
+      "domains": 7
+    },
+    {
+      "code": "betboom",
+      "domains": 2
+    },
+    {
+      "code": "bethesda",
+      "domains": 6
+    },
+    {
+      "code": "betterexplained",
+      "domains": 1
+    },
+    {
+      "code": "bilibili",
+      "domains": 53
+    },
+    {
+      "code": "bilibili-cdn",
+      "domains": 14
+    },
+    {
+      "code": "bilibili-game",
+      "domains": 6
+    },
+    {
+      "code": "bilibili2",
+      "domains": 4
+    },
+    {
+      "code": "biliintl",
+      "domains": 11
+    },
+    {
+      "code": "binance",
+      "domains": 45
+    },
+    {
+      "code": "bing",
+      "domains": 41
+    },
+    {
+      "code": "bitauto",
+      "domains": 5
+    },
+    {
+      "code": "bitflyer",
+      "domains": 2
+    },
+    {
+      "code": "bitly",
+      "domains": 3
+    },
+    {
+      "code": "bitrix",
+      "domains": 11
+    },
+    {
+      "code": "bitsquare",
+      "domains": 3
+    },
+    {
+      "code": "bitwarden",
+      "domains": 5
+    },
+    {
+      "code": "bjyouth",
+      "domains": 4
+    },
+    {
+      "code": "blender",
+      "domains": 3
+    },
+    {
+      "code": "blizzard",
+      "domains": 25
+    },
+    {
+      "code": "blogspot",
+      "domains": 76
+    },
+    {
+      "code": "bloomberg",
+      "domains": 61
+    },
+    {
+      "code": "bluearchive",
+      "domains": 3
+    },
+    {
+      "code": "bluepoch",
+      "domains": 2
+    },
+    {
+      "code": "bluepoch-games",
+      "domains": 1
+    },
+    {
+      "code": "bluesky",
+      "domains": 3
+    },
+    {
+      "code": "blurams",
+      "domains": 2
+    },
+    {
+      "code": "bmw",
+      "domains": 729
+    },
+    {
+      "code": "boboporn",
+      "domains": 4
+    },
+    {
+      "code": "boc",
+      "domains": 20
+    },
+    {
+      "code": "bohemia",
+      "domains": 9
+    },
+    {
+      "code": "bongacams",
+      "domains": 5
+    },
+    {
+      "code": "booking",
+      "domains": 3
+    },
+    {
+      "code": "books",
+      "domains": 2
+    },
+    {
+      "code": "boomerang",
+      "domains": 2
+    },
+    {
+      "code": "bootcdn",
+      "domains": 4
+    },
+    {
+      "code": "bootstrap",
+      "domains": 2
+    },
+    {
+      "code": "borneoschematics",
+      "domains": 5
+    },
+    {
+      "code": "boslife",
+      "domains": 2
+    },
+    {
+      "code": "boxun",
+      "domains": 2
+    },
+    {
+      "code": "boylove",
+      "domains": 5
+    },
+    {
+      "code": "braveux",
+      "domains": 6
+    },
+    {
+      "code": "brazzers",
+      "domains": 5
+    },
+    {
+      "code": "bridgestone",
+      "domains": 98
+    },
+    {
+      "code": "brightcove",
+      "domains": 14
+    },
+    {
+      "code": "brilliant",
+      "domains": 1
+    },
+    {
+      "code": "broadcom",
+      "domains": 105
+    },
+    {
+      "code": "btdig",
+      "domains": 1
+    },
+    {
+      "code": "bttzyw",
+      "domains": 4
+    },
+    {
+      "code": "bushiroad",
+      "domains": 32
+    },
+    {
+      "code": "buymeacoffee",
+      "domains": 2
+    },
+    {
+      "code": "buypass",
+      "domains": 5
+    },
+    {
+      "code": "bybit",
+      "domains": 16
+    },
+    {
+      "code": "bytedance",
+      "domains": 961
+    },
+    {
+      "code": "bytedance-ai-!cn",
+      "domains": 7
+    },
+    {
+      "code": "c-span",
+      "domains": 2
+    },
+    {
+      "code": "cabletv",
+      "domains": 5
+    },
+    {
+      "code": "cainiao",
+      "domains": 10
+    },
+    {
+      "code": "calgoncarbon",
+      "domains": 19
+    },
+    {
+      "code": "cambridge",
+      "domains": 6
+    },
+    {
+      "code": "camwhores",
+      "domains": 2
+    },
+    {
+      "code": "canon",
+      "domains": 71
+    },
+    {
+      "code": "canonical",
+      "domains": 12
+    },
+    {
+      "code": "canva",
+      "domains": 6
+    },
+    {
+      "code": "capitalonline",
+      "domains": 2
+    },
+    {
+      "code": "carrotquest",
+      "domains": 23
+    },
+    {
+      "code": "cas",
+      "domains": 3
+    },
+    {
+      "code": "casimages",
+      "domains": 1
+    },
+    {
+      "code": "catchplay",
+      "domains": 2
+    },
+    {
+      "code": "category-acg",
+      "domains": 9
+    },
+    {
+      "code": "category-ads",
+      "domains": 849
+    },
+    {
+      "code": "category-ads-all",
+      "domains": 909
+    },
+    {
+      "code": "category-ads-and-telemetry",
+      "domains": 1147
+    },
+    {
+      "code": "category-ads-ir",
+      "domains": 7
+    },
+    {
+      "code": "category-ai-!cn",
+      "domains": 218
+    },
+    {
+      "code": "category-ai-chat-!cn",
+      "domains": 218
+    },
+    {
+      "code": "category-ai-cn",
+      "domains": 129
+    },
+    {
+      "code": "category-ai-ru",
+      "domains": 12
+    },
+    {
+      "code": "category-android-app-download",
+      "domains": 11
+    },
+    {
+      "code": "category-anticensorship",
+      "domains": 127
+    },
+    {
+      "code": "category-antivirus",
+      "domains": 166
+    },
+    {
+      "code": "category-automobile-cn",
+      "domains": 51
+    },
+    {
+      "code": "category-bank-cn",
+      "domains": 60
+    },
+    {
+      "code": "category-bank-ir",
+      "domains": 32
+    },
+    {
+      "code": "category-bank-jp",
+      "domains": 84
+    },
+    {
+      "code": "category-bank-mm",
+      "domains": 30
+    },
+    {
+      "code": "category-bank-ru",
+      "domains": 356
+    },
+    {
+      "code": "category-betting-ru",
+      "domains": 13
+    },
+    {
+      "code": "category-blog-cn",
+      "domains": 25
+    },
+    {
+      "code": "category-bourse-ir",
+      "domains": 48
+    },
+    {
+      "code": "category-browser-!cn",
+      "domains": 37
+    },
+    {
+      "code": "category-cas",
+      "domains": 259
+    },
+    {
+      "code": "category-cdn-!cn",
+      "domains": 195
+    },
+    {
+      "code": "category-cdn-cn",
+      "domains": 93
+    },
+    {
+      "code": "category-collaborate-cn",
+      "domains": 26
+    },
+    {
+      "code": "category-communication",
+      "domains": 160
+    },
+    {
+      "code": "category-companies",
+      "domains": 8675
+    },
+    {
+      "code": "category-consent-management",
+      "domains": 14
+    },
+    {
+      "code": "category-container",
+      "domains": 10
+    },
+    {
+      "code": "category-cryptocurrency",
+      "domains": 240
+    },
+    {
+      "code": "category-ddns",
+      "domains": 111
+    },
+    {
+      "code": "category-dev",
+      "domains": 693
+    },
+    {
+      "code": "category-dev-cn",
+      "domains": 134
+    },
+    {
+      "code": "category-documents-cn",
+      "domains": 23
+    },
+    {
+      "code": "category-doh",
+      "domains": 127
+    },
+    {
+      "code": "category-ecommerce",
+      "domains": 1329
+    },
+    {
+      "code": "category-ecommerce-ru",
+      "domains": 201
+    },
+    {
+      "code": "category-education-cn",
+      "domains": 202
+    },
+    {
+      "code": "category-education-ir",
+      "domains": 10
+    },
+    {
+      "code": "category-education-ru",
+      "domains": 20
+    },
+    {
+      "code": "category-electronic-cn",
+      "domains": 93
+    },
+    {
+      "code": "category-emby",
+      "domains": 83
+    },
+    {
+      "code": "category-enhance-gaming",
+      "domains": 18
+    },
+    {
+      "code": "category-enterprise-query-platform-cn",
+      "domains": 13
+    },
+    {
+      "code": "category-entertainment",
+      "domains": 2172
+    },
+    {
+      "code": "category-entertainment-cn",
+      "domains": 712
+    },
+    {
+      "code": "category-entertainment-ru",
+      "domains": 35
+    },
+    {
+      "code": "category-finance",
+      "domains": 661
+    },
+    {
+      "code": "category-flight-simulator",
+      "domains": 79
+    },
+    {
+      "code": "category-food-cn",
+      "domains": 66
+    },
+    {
+      "code": "category-forums",
+      "domains": 114
+    },
+    {
+      "code": "category-forums-ir",
+      "domains": 2
+    },
+    {
+      "code": "category-forums-ru",
+      "domains": 11
+    },
+    {
+      "code": "category-game-accelerator-cn",
+      "domains": 45
+    },
+    {
+      "code": "category-game-platforms-download",
+      "domains": 492
+    },
+    {
+      "code": "category-games",
+      "domains": 1063
+    },
+    {
+      "code": "category-games-!cn",
+      "domains": 884
+    },
+    {
+      "code": "category-games-cn",
+      "domains": 179
+    },
+    {
+      "code": "category-gov-ir",
+      "domains": 29
+    },
+    {
+      "code": "category-gov-ru",
+      "domains": 145
+    },
+    {
+      "code": "category-hospital-cn",
+      "domains": 11
+    },
+    {
+      "code": "category-httpdns-cn",
+      "domains": 50
+    },
+    {
+      "code": "category-insurance-ir",
+      "domains": 19
+    },
+    {
+      "code": "category-ip-geo-detect",
+      "domains": 1682
+    },
+    {
+      "code": "category-ipfs",
+      "domains": 21
+    },
+    {
+      "code": "category-ir",
+      "domains": 190
+    },
+    {
+      "code": "category-logistics-cn",
+      "domains": 158
+    },
+    {
+      "code": "category-media",
+      "domains": 1580
+    },
+    {
+      "code": "category-media-cn",
+      "domains": 459
+    },
+    {
+      "code": "category-media-ir",
+      "domains": 28
+    },
+    {
+      "code": "category-media-ru",
+      "domains": 148
+    },
+    {
+      "code": "category-media-ru-blocked",
+      "domains": 132
+    },
+    {
+      "code": "category-medicine-ru",
+      "domains": 45
+    },
+    {
+      "code": "category-mobile-repair",
+      "domains": 9
+    },
+    {
+      "code": "category-mooc-cn",
+      "domains": 11
+    },
+    {
+      "code": "category-netdisk-!cn",
+      "domains": 67
+    },
+    {
+      "code": "category-netdisk-cn",
+      "domains": 91
+    },
+    {
+      "code": "category-network-security-cn",
+      "domains": 5
+    },
+    {
+      "code": "category-news-ir",
+      "domains": 55
+    },
+    {
+      "code": "category-novel",
+      "domains": 3
+    },
+    {
+      "code": "category-ntp",
+      "domains": 116
+    },
+    {
+      "code": "category-ntp-cn",
+      "domains": 23
+    },
+    {
+      "code": "category-ntp-jp",
+      "domains": 28
+    },
+    {
+      "code": "category-number-verification-cn",
+      "domains": 7
+    },
+    {
+      "code": "category-olympiad-in-informatics",
+      "domains": 19
+    },
+    {
+      "code": "category-orgs",
+      "domains": 131
+    },
+    {
+      "code": "category-outsource-cn",
+      "domains": 1
+    },
+    {
+      "code": "category-password-management",
+      "domains": 32
+    },
+    {
+      "code": "category-payment-ir",
+      "domains": 17
+    },
+    {
+      "code": "category-porn",
+      "domains": 6661
+    },
+    {
+      "code": "category-proxy-tunnels",
+      "domains": 16
+    },
+    {
+      "code": "category-pt",
+      "domains": 126
+    },
+    {
+      "code": "category-public-tracker",
+      "domains": 437
+    },
+    {
+      "code": "category-remote-control",
+      "domains": 8
+    },
+    {
+      "code": "category-retail-ru",
+      "domains": 82
+    },
+    {
+      "code": "category-ru",
+      "domains": 1167
+    },
+    {
+      "code": "category-scholar-!cn",
+      "domains": 466
+    },
+    {
+      "code": "category-scholar-cn",
+      "domains": 96
+    },
+    {
+      "code": "category-scholar-hk",
+      "domains": 22
+    },
+    {
+      "code": "category-scholar-ir",
+      "domains": 8
+    },
+    {
+      "code": "category-scholar-uk",
+      "domains": 38
+    },
+    {
+      "code": "category-securities-cn",
+      "domains": 171
+    },
+    {
+      "code": "category-shopping-ir",
+      "domains": 15
+    },
+    {
+      "code": "category-social-media-!cn",
+      "domains": 627
+    },
+    {
+      "code": "category-social-media-cn",
+      "domains": 54
+    },
+    {
+      "code": "category-social-media-ir",
+      "domains": 11
+    },
+    {
+      "code": "category-speedtest",
+      "domains": 329
+    },
+    {
+      "code": "category-stun",
+      "domains": 359
+    },
+    {
+      "code": "category-tech-ir",
+      "domains": 45
+    },
+    {
+      "code": "category-tech-media",
+      "domains": 26
+    },
+    {
+      "code": "category-tech-media-ru",
+      "domains": 34
+    },
+    {
+      "code": "category-telemetry",
+      "domains": 298
+    },
+    {
+      "code": "category-tm",
+      "domains": 72
+    },
+    {
+      "code": "category-travel-ir",
+      "domains": 7
+    },
+    {
+      "code": "category-travel-ru",
+      "domains": 25
+    },
+    {
+      "code": "category-urlshortner",
+      "domains": 5
+    },
+    {
+      "code": "category-voip",
+      "domains": 9
+    },
+    {
+      "code": "category-vpnservices",
+      "domains": 69
+    },
+    {
+      "code": "category-web-archive",
+      "domains": 18
+    },
+    {
+      "code": "category-wiki-cn",
+      "domains": 15
+    },
+    {
+      "code": "cavporn",
+      "domains": 3
+    },
+    {
+      "code": "cbs",
+      "domains": 29
+    },
+    {
+      "code": "ccb",
+      "domains": 16
+    },
+    {
+      "code": "cctv",
+      "domains": 44
+    },
+    {
+      "code": "cdek",
+      "domains": 3
+    },
+    {
+      "code": "cdn77",
+      "domains": 2
+    },
+    {
+      "code": "cdprojekt",
+      "domains": 7
+    },
+    {
+      "code": "ceno",
+      "domains": 2
+    },
+    {
+      "code": "cerebras",
+      "domains": 1
+    },
+    {
+      "code": "cern",
+      "domains": 7
+    },
+    {
+      "code": "certinomis",
+      "domains": 2
+    },
+    {
+      "code": "certum",
+      "domains": 3
+    },
+    {
+      "code": "changyou",
+      "domains": 7
+    },
+    {
+      "code": "chaoxing",
+      "domains": 35
+    },
+    {
+      "code": "chatango",
+      "domains": 1
+    },
+    {
+      "code": "chatwhores",
+      "domains": 5
+    },
+    {
+      "code": "cheetahmobile",
+      "domains": 11
+    },
+    {
+      "code": "chegg",
+      "domains": 2
+    },
+    {
+      "code": "chesscom",
+      "domains": 2
+    },
+    {
+      "code": "chinabroadnet",
+      "domains": 9
+    },
+    {
+      "code": "chinamobile",
+      "domains": 39
+    },
+    {
+      "code": "chinanews",
+      "domains": 9
+    },
+    {
+      "code": "chinapost",
+      "domains": 19
+    },
+    {
+      "code": "chinapower",
+      "domains": 1
+    },
+    {
+      "code": "chinaso",
+      "domains": 2
+    },
+    {
+      "code": "chinatelecom",
+      "domains": 21
+    },
+    {
+      "code": "chinatower",
+      "domains": 5
+    },
+    {
+      "code": "chinaunicom",
+      "domains": 25
+    },
+    {
+      "code": "chinaz",
+      "domains": 2
+    },
+    {
+      "code": "cian",
+      "domains": 7
+    },
+    {
+      "code": "cisco",
+      "domains": 121
+    },
+    {
+      "code": "citic",
+      "domains": 17
+    },
+    {
+      "code": "citizenlab",
+      "domains": 2
+    },
+    {
+      "code": "cityu-hk",
+      "domains": 4
+    },
+    {
+      "code": "ciweimao",
+      "domains": 3
+    },
+    {
+      "code": "ck101",
+      "domains": 3
+    },
+    {
+      "code": "clarivate",
+      "domains": 5
+    },
+    {
+      "code": "clearasil",
+      "domains": 3
+    },
+    {
+      "code": "clearbit",
+      "domains": 3
+    },
+    {
+      "code": "clips4sale",
+      "domains": 3
+    },
+    {
+      "code": "cloudcone",
+      "domains": 4
+    },
+    {
+      "code": "cloudconvert",
+      "domains": 1
+    },
+    {
+      "code": "cloudflare",
+      "domains": 76
+    },
+    {
+      "code": "cloudflare-cn",
+      "domains": 19
+    },
+    {
+      "code": "cloudflare-ipfs",
+      "domains": 2
+    },
+    {
+      "code": "cloudinary",
+      "domains": 2
+    },
+    {
+      "code": "cloudns",
+      "domains": 2
+    },
+    {
+      "code": "clubhouse",
+      "domains": 3
+    },
+    {
+      "code": "cmb",
+      "domains": 22
+    },
+    {
+      "code": "cn",
+      "domains": 110177
+    },
+    {
+      "code": "cnb",
+      "domains": 2
+    },
+    {
+      "code": "cnbc",
+      "domains": 4
+    },
+    {
+      "code": "cnbeta",
+      "domains": 3
+    },
+    {
+      "code": "cnblogs",
+      "domains": 8
+    },
+    {
+      "code": "cnet",
+      "domains": 5
+    },
+    {
+      "code": "cnki",
+      "domains": 3
+    },
+    {
+      "code": "cnn",
+      "domains": 9
+    },
+    {
+      "code": "code",
+      "domains": 1
+    },
+    {
+      "code": "codeberg",
+      "domains": 2
+    },
+    {
+      "code": "codecademy",
+      "domains": 1
+    },
+    {
+      "code": "codeforces",
+      "domains": 1
+    },
+    {
+      "code": "coding",
+      "domains": 2
+    },
+    {
+      "code": "coinone",
+      "domains": 3
+    },
+    {
+      "code": "collabora",
+      "domains": 4
+    },
+    {
+      "code": "colorfulclouds",
+      "domains": 6
+    },
+    {
+      "code": "comfy",
+      "domains": 4
+    },
+    {
+      "code": "comfy-ui-launcher",
+      "domains": 1
+    },
+    {
+      "code": "comodo",
+      "domains": 2
+    },
+    {
+      "code": "comssone",
+      "domains": 9
+    },
+    {
+      "code": "connectivity-check",
+      "domains": 28
+    },
+    {
+      "code": "contentful",
+      "domains": 2
+    },
+    {
+      "code": "coolapk",
+      "domains": 3
+    },
+    {
+      "code": "coomer",
+      "domains": 3
+    },
+    {
+      "code": "copymanga",
+      "domains": 7
+    },
+    {
+      "code": "corel",
+      "domains": 5
+    },
+    {
+      "code": "costco",
+      "domains": 3
+    },
+    {
+      "code": "coupang",
+      "domains": 2
+    },
+    {
+      "code": "coursera",
+      "domains": 4
+    },
+    {
+      "code": "cowlevel",
+      "domains": 2
+    },
+    {
+      "code": "cowtransfer",
+      "domains": 3
+    },
+    {
+      "code": "craigslist",
+      "domains": 1
+    },
+    {
+      "code": "creativecommons",
+      "domains": 4
+    },
+    {
+      "code": "csdn",
+      "domains": 16
+    },
+    {
+      "code": "csis",
+      "domains": 2
+    },
+    {
+      "code": "ctexcel",
+      "domains": 5
+    },
+    {
+      "code": "ctrip",
+      "domains": 46
+    },
+    {
+      "code": "ctyun",
+      "domains": 67
+    },
+    {
+      "code": "cuhk",
+      "domains": 8
+    },
+    {
+      "code": "cuinc",
+      "domains": 2
+    },
+    {
+      "code": "curseforge",
+      "domains": 2
+    },
+    {
+      "code": "cursor",
+      "domains": 5
+    },
+    {
+      "code": "cuttly",
+      "domains": 1
+    },
+    {
+      "code": "cybertrust",
+      "domains": 2
+    },
+    {
+      "code": "cygames",
+      "domains": 5
+    },
+    {
+      "code": "cylink",
+      "domains": 2
+    },
+    {
+      "code": "dailymail",
+      "domains": 17
+    },
+    {
+      "code": "dailymotion",
+      "domains": 3
+    },
+    {
+      "code": "dandanplay",
+      "domains": 2
+    },
+    {
+      "code": "dandanzan",
+      "domains": 2
+    },
+    {
+      "code": "dangdang",
+      "domains": 2
+    },
+    {
+      "code": "dart",
+      "domains": 3
+    },
+    {
+      "code": "dazn",
+      "domains": 8
+    },
+    {
+      "code": "dcard",
+      "domains": 4
+    },
+    {
+      "code": "ddmaicai",
+      "domains": 9
+    },
+    {
+      "code": "debian",
+      "domains": 2
+    },
+    {
+      "code": "decryptipastore",
+      "domains": 1
+    },
+    {
+      "code": "dedao",
+      "domains": 10
+    },
+    {
+      "code": "deepin",
+      "domains": 15
+    },
+    {
+      "code": "deepseek",
+      "domains": 2
+    },
+    {
+      "code": "deezer",
+      "domains": 2
+    },
+    {
+      "code": "dell",
+      "domains": 210
+    },
+    {
+      "code": "demonoid",
+      "domains": 1
+    },
+    {
+      "code": "deppon",
+      "domains": 3
+    },
+    {
+      "code": "deribit",
+      "domains": 2
+    },
+    {
+      "code": "dettol",
+      "domains": 35
+    },
+    {
+      "code": "deviantart",
+      "domains": 3
+    },
+    {
+      "code": "dewu",
+      "domains": 45
+    },
+    {
+      "code": "didi",
+      "domains": 12
+    },
+    {
+      "code": "digicert",
+      "domains": 74
+    },
+    {
+      "code": "digitalocean",
+      "domains": 6
+    },
+    {
+      "code": "digitalplayground",
+      "domains": 2
+    },
+    {
+      "code": "dingdatech",
+      "domains": 5
+    },
+    {
+      "code": "dingtalk",
+      "domains": 11
+    },
+    {
+      "code": "discord",
+      "domains": 28
+    },
+    {
+      "code": "discourse",
+      "domains": 3
+    },
+    {
+      "code": "discoveryplus",
+      "domains": 3
+    },
+    {
+      "code": "discuz",
+      "domains": 3
+    },
+    {
+      "code": "disney",
+      "domains": 225
+    },
+    {
+      "code": "disqus",
+      "domains": 4
+    },
+    {
+      "code": "divar",
+      "domains": 3
+    },
+    {
+      "code": "dji",
+      "domains": 10
+    },
+    {
+      "code": "dlercloud",
+      "domains": 4
+    },
+    {
+      "code": "dlsite",
+      "domains": 10
+    },
+    {
+      "code": "dmit",
+      "domains": 2
+    },
+    {
+      "code": "dmm",
+      "domains": 17
+    },
+    {
+      "code": "dmm-porn",
+      "domains": 2
+    },
+    {
+      "code": "dnspod",
+      "domains": 14
+    },
+    {
+      "code": "docker",
+      "domains": 6
+    },
+    {
+      "code": "doi",
+      "domains": 2
+    },
+    {
+      "code": "dola",
+      "domains": 4
+    },
+    {
+      "code": "dongchedi",
+      "domains": 8
+    },
+    {
+      "code": "dongjiao",
+      "domains": 4
+    },
+    {
+      "code": "douban",
+      "domains": 3
+    },
+    {
+      "code": "doubao",
+      "domains": 33
+    },
+    {
+      "code": "douyin",
+      "domains": 71
+    },
+    {
+      "code": "douyu",
+      "domains": 7
+    },
+    {
+      "code": "dowjones",
+      "domains": 4
+    },
+    {
+      "code": "dribbble",
+      "domains": 2
+    },
+    {
+      "code": "dropbox",
+      "domains": 25
+    },
+    {
+      "code": "drweb",
+      "domains": 12
+    },
+    {
+      "code": "dslreports",
+      "domains": 3
+    },
+    {
+      "code": "dsn-host",
+      "domains": 3
+    },
+    {
+      "code": "duckduckgo",
+      "domains": 44
+    },
+    {
+      "code": "duitang",
+      "domains": 2
+    },
+    {
+      "code": "duolingo",
+      "domains": 5
+    },
+    {
+      "code": "duowan",
+      "domains": 2
+    },
+    {
+      "code": "durex",
+      "domains": 62
+    },
+    {
+      "code": "duyaoss",
+      "domains": 2
+    },
+    {
+      "code": "dw",
+      "domains": 2
+    },
+    {
+      "code": "dwion",
+      "domains": 14
+    },
+    {
+      "code": "dyna",
+      "domains": 5
+    },
+    {
+      "code": "dynu",
+      "domains": 21
+    },
+    {
+      "code": "dzen",
+      "domains": 4
+    },
+    {
+      "code": "ea",
+      "domains": 165
+    },
+    {
+      "code": "eastmoney",
+      "domains": 8
+    },
+    {
+      "code": "easylist",
+      "domains": 2
+    },
+    {
+      "code": "ebay",
+      "domains": 363
+    },
+    {
+      "code": "ebuyer",
+      "domains": 1
+    },
+    {
+      "code": "economist",
+      "domains": 4
+    },
+    {
+      "code": "eduhk",
+      "domains": 3
+    },
+    {
+      "code": "edx",
+      "domains": 2
+    },
+    {
+      "code": "egghead",
+      "domains": 1
+    },
+    {
+      "code": "ehentai",
+      "domains": 8
+    },
+    {
+      "code": "electron",
+      "domains": 1
+    },
+    {
+      "code": "eleme",
+      "domains": 12
+    },
+    {
+      "code": "elevenlabs",
+      "domains": 2
+    },
+    {
+      "code": "elsevier",
+      "domains": 14
+    },
+    {
+      "code": "embark",
+      "domains": 4
+    },
+    {
+      "code": "embedly",
+      "domains": 3
+    },
+    {
+      "code": "embl",
+      "domains": 7
+    },
+    {
+      "code": "emojipedia",
+      "domains": 4
+    },
+    {
+      "code": "eneba",
+      "domains": 2
+    },
+    {
+      "code": "enfa",
+      "domains": 31
+    },
+    {
+      "code": "entermediadb",
+      "domains": 2
+    },
+    {
+      "code": "entrust",
+      "domains": 10
+    },
+    {
+      "code": "envato",
+      "domains": 4
+    },
+    {
+      "code": "envybox",
+      "domains": 21
+    },
+    {
+      "code": "epicbrowser",
+      "domains": 1
+    },
+    {
+      "code": "epicgames",
+      "domains": 33
+    },
+    {
+      "code": "epochmediagroup",
+      "domains": 68
+    },
+    {
+      "code": "erolabs",
+      "domains": 13
+    },
+    {
+      "code": "escapefromtarkov",
+      "domains": 3
+    },
+    {
+      "code": "eset",
+      "domains": 9
+    },
+    {
+      "code": "espn",
+      "domains": 11
+    },
+    {
+      "code": "espressif",
+      "domains": 7
+    },
+    {
+      "code": "esri",
+      "domains": 3
+    },
+    {
+      "code": "ethereum",
+      "domains": 4
+    },
+    {
+      "code": "everbright",
+      "domains": 15
+    },
+    {
+      "code": "evernote",
+      "domains": 1
+    },
+    {
+      "code": "f-droid",
+      "domains": 4
+    },
+    {
+      "code": "facebook",
+      "domains": 397
+    },
+    {
+      "code": "facebook-dev",
+      "domains": 44
+    },
+    {
+      "code": "faceit",
+      "domains": 2
+    },
+    {
+      "code": "falungong",
+      "domains": 131
+    },
+    {
+      "code": "familymart",
+      "domains": 7
+    },
+    {
+      "code": "fandom",
+      "domains": 12
+    },
+    {
+      "code": "fanfiction",
+      "domains": 1
+    },
+    {
+      "code": "fans66",
+      "domains": 2
+    },
+    {
+      "code": "fansta",
+      "domains": 5
+    },
+    {
+      "code": "farfetch",
+      "domains": 8
+    },
+    {
+      "code": "faronics",
+      "domains": 18
+    },
+    {
+      "code": "fastlane",
+      "domains": 2
+    },
+    {
+      "code": "fastly",
+      "domains": 7
+    },
+    {
+      "code": "faststone",
+      "domains": 1
+    },
+    {
+      "code": "fcbox",
+      "domains": 2
+    },
+    {
+      "code": "fedora",
+      "domains": 6
+    },
+    {
+      "code": "feedly",
+      "domains": 1
+    },
+    {
+      "code": "feishu",
+      "domains": 43
+    },
+    {
+      "code": "fengxing",
+      "domains": 7
+    },
+    {
+      "code": "fflogs",
+      "domains": 3
+    },
+    {
+      "code": "fibank",
+      "domains": 3
+    },
+    {
+      "code": "ficbook",
+      "domains": 6
+    },
+    {
+      "code": "figma",
+      "domains": 1
+    },
+    {
+      "code": "filimo",
+      "domains": 2
+    },
+    {
+      "code": "finish",
+      "domains": 41
+    },
+    {
+      "code": "firebase",
+      "domains": 23
+    },
+    {
+      "code": "firefox",
+      "domains": 8
+    },
+    {
+      "code": "flatpak",
+      "domains": 2
+    },
+    {
+      "code": "flibusta",
+      "domains": 2
+    },
+    {
+      "code": "flickr",
+      "domains": 5
+    },
+    {
+      "code": "flowus",
+      "domains": 2
+    },
+    {
+      "code": "flowwow",
+      "domains": 2
+    },
+    {
+      "code": "flutter",
+      "domains": 3
+    },
+    {
+      "code": "fluxer",
+      "domains": 11
+    },
+    {
+      "code": "flyio",
+      "domains": 3
+    },
+    {
+      "code": "focuschina",
+      "domains": 5
+    },
+    {
+      "code": "fonbet",
+      "domains": 4
+    },
+    {
+      "code": "fontawesome",
+      "domains": 2
+    },
+    {
+      "code": "fontexplorer",
+      "domains": 1
+    },
+    {
+      "code": "fonts",
+      "domains": 2
+    },
+    {
+      "code": "fontshop",
+      "domains": 4
+    },
+    {
+      "code": "fontsinuse",
+      "domains": 1
+    },
+    {
+      "code": "forbes",
+      "domains": 2
+    },
+    {
+      "code": "formula1",
+      "domains": 3
+    },
+    {
+      "code": "forza",
+      "domains": 5
+    },
+    {
+      "code": "fox",
+      "domains": 245
+    },
+    {
+      "code": "fqnovel",
+      "domains": 47
+    },
+    {
+      "code": "framer",
+      "domains": 5
+    },
+    {
+      "code": "freebuff",
+      "domains": 2
+    },
+    {
+      "code": "freecodecamp",
+      "domains": 1
+    },
+    {
+      "code": "freenode",
+      "domains": 1
+    },
+    {
+      "code": "ft",
+      "domains": 22
+    },
+    {
+      "code": "ftv",
+      "domains": 3
+    },
+    {
+      "code": "funpay",
+      "domains": 3
+    },
+    {
+      "code": "futu",
+      "domains": 21
+    },
+    {
+      "code": "fzdm",
+      "domains": 2
+    },
+    {
+      "code": "gaijin",
+      "domains": 13
+    },
+    {
+      "code": "gamersky",
+      "domains": 6
+    },
+    {
+      "code": "gamesplanet",
+      "domains": 3
+    },
+    {
+      "code": "gandi",
+      "domains": 1
+    },
+    {
+      "code": "ganji",
+      "domains": 4
+    },
+    {
+      "code": "gannett",
+      "domains": 5
+    },
+    {
+      "code": "garena",
+      "domains": 16
+    },
+    {
+      "code": "gateio",
+      "domains": 8
+    },
+    {
+      "code": "geetest",
+      "domains": 2
+    },
+    {
+      "code": "gemfury",
+      "domains": 6
+    },
+    {
+      "code": "genotek-ru",
+      "domains": 9
+    },
+    {
+      "code": "geolocation-!cn",
+      "domains": 27459
+    },
+    {
+      "code": "geolocation-cn",
+      "domains": 5440
+    },
+    {
+      "code": "gettyimages",
+      "domains": 25
+    },
+    {
+      "code": "getui",
+      "domains": 7
+    },
+    {
+      "code": "gfw",
+      "domains": 4434
+    },
+    {
+      "code": "gfycat",
+      "domains": 1
+    },
+    {
+      "code": "ggsel",
+      "domains": 2
+    },
+    {
+      "code": "giffgaff",
+      "domains": 2
+    },
+    {
+      "code": "gigabyte",
+      "domains": 7
+    },
+    {
+      "code": "gimy",
+      "domains": 4
+    },
+    {
+      "code": "gismeteo",
+      "domains": 7
+    },
+    {
+      "code": "gitbook",
+      "domains": 2
+    },
+    {
+      "code": "gitee",
+      "domains": 2
+    },
+    {
+      "code": "github",
+      "domains": 66
+    },
+    {
+      "code": "github-copilot",
+      "domains": 7
+    },
+    {
+      "code": "github1s",
+      "domains": 2
+    },
+    {
+      "code": "gitlab",
+      "domains": 5
+    },
+    {
+      "code": "gitv",
+      "domains": 2
+    },
+    {
+      "code": "globalsign",
+      "domains": 21
+    },
+    {
+      "code": "globalvoices",
+      "domains": 2
+    },
+    {
+      "code": "globo",
+      "domains": 40
+    },
+    {
+      "code": "glyphs",
+      "domains": 1
+    },
+    {
+      "code": "gmo-internet",
+      "domains": 145
+    },
+    {
+      "code": "godaddy",
+      "domains": 5
+    },
+    {
+      "code": "gofundme",
+      "domains": 1
+    },
+    {
+      "code": "gog",
+      "domains": 8
+    },
+    {
+      "code": "golang",
+      "domains": 8
+    },
+    {
+      "code": "goodreads",
+      "domains": 2
+    },
+    {
+      "code": "google",
+      "domains": 1080
+    },
+    {
+      "code": "google-cn",
+      "domains": 112
+    },
+    {
+      "code": "google-deepmind",
+      "domains": 49
+    },
+    {
+      "code": "google-gemini",
+      "domains": 49
+    },
+    {
+      "code": "google-play",
+      "domains": 10
+    },
+    {
+      "code": "google-registry",
+      "domains": 13
+    },
+    {
+      "code": "google-registry-tld",
+      "domains": 20
+    },
+    {
+      "code": "google-scholar",
+      "domains": 76
+    },
+    {
+      "code": "google-trust-services",
+      "domains": 12
+    },
+    {
+      "code": "googlefcm",
+      "domains": 12
+    },
+    {
+      "code": "goproxy",
+      "domains": 2
+    },
+    {
+      "code": "gracg",
+      "domains": 2
+    },
+    {
+      "code": "grafanalabs",
+      "domains": 2
+    },
+    {
+      "code": "grapheneos",
+      "domains": 16
+    },
+    {
+      "code": "gravatar",
+      "domains": 1
+    },
+    {
+      "code": "greatfire",
+      "domains": 12
+    },
+    {
+      "code": "gree",
+      "domains": 7
+    },
+    {
+      "code": "groq",
+      "domains": 1
+    },
+    {
+      "code": "group-ib",
+      "domains": 30
+    },
+    {
+      "code": "growingio",
+      "domains": 6
+    },
+    {
+      "code": "gucci",
+      "domains": 7
+    },
+    {
+      "code": "guo",
+      "domains": 21
+    },
+    {
+      "code": "guokr",
+      "domains": 2
+    },
+    {
+      "code": "habr",
+      "domains": 2
+    },
+    {
+      "code": "haier",
+      "domains": 4
+    },
+    {
+      "code": "hainanairlines",
+      "domains": 4
+    },
+    {
+      "code": "haitang",
+      "domains": 17
+    },
+    {
+      "code": "hamivideo",
+      "domains": 19
+    },
+    {
+      "code": "hanyi",
+      "domains": 7
+    },
+    {
+      "code": "harpercollins",
+      "domains": 20
+    },
+    {
+      "code": "hashicorp",
+      "domains": 8
+    },
+    {
+      "code": "haskell",
+      "domains": 3
+    },
+    {
+      "code": "haveibeenpwned",
+      "domains": 2
+    },
+    {
+      "code": "hbo",
+      "domains": 65
+    },
+    {
+      "code": "hcaptcha",
+      "domains": 3
+    },
+    {
+      "code": "hdrezka",
+      "domains": 16
+    },
+    {
+      "code": "headhunter",
+      "domains": 8
+    },
+    {
+      "code": "hentaichen",
+      "domains": 6
+    },
+    {
+      "code": "hentaivn",
+      "domains": 4
+    },
+    {
+      "code": "herogame",
+      "domains": 5
+    },
+    {
+      "code": "heroku",
+      "domains": 12
+    },
+    {
+      "code": "hetzner",
+      "domains": 15
+    },
+    {
+      "code": "heyzo",
+      "domains": 2
+    },
+    {
+      "code": "hikvision",
+      "domains": 8
+    },
+    {
+      "code": "hinet",
+      "domains": 6
+    },
+    {
+      "code": "hinet-eca",
+      "domains": 5
+    },
+    {
+      "code": "hisense",
+      "domains": 6
+    },
+    {
+      "code": "hitun",
+      "domains": 2
+    },
+    {
+      "code": "hkbn",
+      "domains": 6
+    },
+    {
+      "code": "hkbu",
+      "domains": 3
+    },
+    {
+      "code": "hkedcity",
+      "domains": 3
+    },
+    {
+      "code": "hketgroup",
+      "domains": 13
+    },
+    {
+      "code": "hkgolden",
+      "domains": 2
+    },
+    {
+      "code": "hkt",
+      "domains": 12
+    },
+    {
+      "code": "hku",
+      "domains": 4
+    },
+    {
+      "code": "hkust",
+      "domains": 4
+    },
+    {
+      "code": "hm",
+      "domains": 2
+    },
+    {
+      "code": "homebrew",
+      "domains": 2
+    },
+    {
+      "code": "homedepot",
+      "domains": 2
+    },
+    {
+      "code": "hongkongpost",
+      "domains": 2
+    },
+    {
+      "code": "honor",
+      "domains": 8
+    },
+    {
+      "code": "hooligapps",
+      "domains": 8
+    },
+    {
+      "code": "hotstar",
+      "domains": 6
+    },
+    {
+      "code": "hoyoverse",
+      "domains": 9
+    },
+    {
+      "code": "hp",
+      "domains": 158
+    },
+    {
+      "code": "hpe",
+      "domains": 16
+    },
+    {
+      "code": "hsbc",
+      "domains": 48
+    },
+    {
+      "code": "hsbc-cn",
+      "domains": 3
+    },
+    {
+      "code": "httpdns",
+      "domains": 22
+    },
+    {
+      "code": "huanghuagang",
+      "domains": 1
+    },
+    {
+      "code": "huawei",
+      "domains": 345
+    },
+    {
+      "code": "huawei-dev",
+      "domains": 23
+    },
+    {
+      "code": "huaweicloud",
+      "domains": 291
+    },
+    {
+      "code": "hubblephone",
+      "domains": 2
+    },
+    {
+      "code": "huffpost",
+      "domains": 18
+    },
+    {
+      "code": "hugecore",
+      "domains": 3
+    },
+    {
+      "code": "huggingface",
+      "domains": 3
+    },
+    {
+      "code": "hujiang",
+      "domains": 5
+    },
+    {
+      "code": "hulu",
+      "domains": 48
+    },
+    {
+      "code": "humblebundle",
+      "domains": 2
+    },
+    {
+      "code": "hunantv",
+      "domains": 13
+    },
+    {
+      "code": "huobi",
+      "domains": 10
+    },
+    {
+      "code": "hupu",
+      "domains": 4
+    },
+    {
+      "code": "hupun",
+      "domains": 5
+    },
+    {
+      "code": "hurricaneelectric",
+      "domains": 1
+    },
+    {
+      "code": "huya",
+      "domains": 2
+    },
+    {
+      "code": "ibkr",
+      "domains": 21
+    },
+    {
+      "code": "ibm",
+      "domains": 20
+    },
+    {
+      "code": "icable",
+      "domains": 6
+    },
+    {
+      "code": "icbc",
+      "domains": 58
+    },
+    {
+      "code": "icloud",
+      "domains": 52
+    },
+    {
+      "code": "icloudprivaterelay",
+      "domains": 3
+    },
+    {
+      "code": "ideco-ru",
+      "domains": 3
+    },
+    {
+      "code": "identrust",
+      "domains": 3
+    },
+    {
+      "code": "idg",
+      "domains": 8
+    },
+    {
+      "code": "ieee",
+      "domains": 54
+    },
+    {
+      "code": "ifanr",
+      "domains": 7
+    },
+    {
+      "code": "ifast",
+      "domains": 14
+    },
+    {
+      "code": "iflytek",
+      "domains": 11
+    },
+    {
+      "code": "ihuman",
+      "domains": 2
+    },
+    {
+      "code": "iina",
+      "domains": 1
+    },
+    {
+      "code": "ikea",
+      "domains": 95
+    },
+    {
+      "code": "illgames",
+      "domains": 2
+    },
+    {
+      "code": "illusion",
+      "domains": 2
+    },
+    {
+      "code": "illusion-nonofficial",
+      "domains": 29
+    },
+    {
+      "code": "imagebam",
+      "domains": 1
+    },
+    {
+      "code": "imagecurl",
+      "domains": 3
+    },
+    {
+      "code": "imageshack",
+      "domains": 2
+    },
+    {
+      "code": "imagetwist",
+      "domains": 1
+    },
+    {
+      "code": "imdb",
+      "domains": 5
+    },
+    {
+      "code": "imgbb",
+      "domains": 3
+    },
+    {
+      "code": "imgix",
+      "domains": 2
+    },
+    {
+      "code": "imgur",
+      "domains": 3
+    },
+    {
+      "code": "imperialcollege",
+      "domains": 4
+    },
+    {
+      "code": "infowars",
+      "domains": 3
+    },
+    {
+      "code": "infrapedia",
+      "domains": 1
+    },
+    {
+      "code": "inoreader",
+      "domains": 1
+    },
+    {
+      "code": "inshot",
+      "domains": 3
+    },
+    {
+      "code": "insider",
+      "domains": 16
+    },
+    {
+      "code": "instagram",
+      "domains": 74
+    },
+    {
+      "code": "intel",
+      "domains": 287
+    },
+    {
+      "code": "intel-dev",
+      "domains": 17
+    },
+    {
+      "code": "intercom",
+      "domains": 4
+    },
+    {
+      "code": "internet-archive",
+      "domains": 3
+    },
+    {
+      "code": "intsig",
+      "domains": 5
+    },
+    {
+      "code": "intuit",
+      "domains": 35
+    },
+    {
+      "code": "ipip",
+      "domains": 2
+    },
+    {
+      "code": "iqiyi",
+      "domains": 20
+    },
+    {
+      "code": "isgd",
+      "domains": 2
+    },
+    {
+      "code": "ishumei",
+      "domains": 10
+    },
+    {
+      "code": "itchio",
+      "domains": 2
+    },
+    {
+      "code": "itiger",
+      "domains": 9
+    },
+    {
+      "code": "itunes",
+      "domains": 99
+    },
+    {
+      "code": "ixbt",
+      "domains": 9
+    },
+    {
+      "code": "ixsystems",
+      "domains": 2
+    },
+    {
+      "code": "iyf",
+      "domains": 2
+    },
+    {
+      "code": "jable",
+      "domains": 3
+    },
+    {
+      "code": "japonx",
+      "domains": 4
+    },
+    {
+      "code": "java",
+      "domains": 3
+    },
+    {
+      "code": "javbus",
+      "domains": 3
+    },
+    {
+      "code": "javcc",
+      "domains": 2
+    },
+    {
+      "code": "javdb",
+      "domains": 5
+    },
+    {
+      "code": "javwide",
+      "domains": 2
+    },
+    {
+      "code": "jd",
+      "domains": 255
+    },
+    {
+      "code": "jetbrains",
+      "domains": 24
+    },
+    {
+      "code": "jetbrains-ai",
+      "domains": 3
+    },
+    {
+      "code": "jfrog",
+      "domains": 4
+    },
+    {
+      "code": "jianshu",
+      "domains": 3
+    },
+    {
+      "code": "jibencaozuo",
+      "domains": 3
+    },
+    {
+      "code": "jiemian",
+      "domains": 8
+    },
+    {
+      "code": "jiguang",
+      "domains": 18
+    },
+    {
+      "code": "jinshuju",
+      "domains": 3
+    },
+    {
+      "code": "jiyukobo",
+      "domains": 1
+    },
+    {
+      "code": "jkf",
+      "domains": 5
+    },
+    {
+      "code": "jlc",
+      "domains": 43
+    },
+    {
+      "code": "johren",
+      "domains": 2
+    },
+    {
+      "code": "jquery",
+      "domains": 3
+    },
+    {
+      "code": "jsdelivr",
+      "domains": 3
+    },
+    {
+      "code": "jtexpress",
+      "domains": 22
+    },
+    {
+      "code": "juejin",
+      "domains": 12
+    },
+    {
+      "code": "jushuitan",
+      "domains": 24
+    },
+    {
+      "code": "justav",
+      "domains": 3
+    },
+    {
+      "code": "justmysocks",
+      "domains": 4
+    },
+    {
+      "code": "jutongbao",
+      "domains": 3
+    },
+    {
+      "code": "jwplayer",
+      "domains": 6
+    },
+    {
+      "code": "kaggle",
+      "domains": 4
+    },
+    {
+      "code": "kakao",
+      "domains": 57
+    },
+    {
+      "code": "kanzhongguo",
+      "domains": 16
+    },
+    {
+      "code": "kaspersky",
+      "domains": 132
+    },
+    {
+      "code": "kechuang",
+      "domains": 2
+    },
+    {
+      "code": "keep",
+      "domains": 5
+    },
+    {
+      "code": "kemono",
+      "domains": 3
+    },
+    {
+      "code": "kernel",
+      "domains": 1
+    },
+    {
+      "code": "keybase",
+      "domains": 2
+    },
+    {
+      "code": "khanacademy",
+      "domains": 2
+    },
+    {
+      "code": "kick",
+      "domains": 1
+    },
+    {
+      "code": "kindle",
+      "domains": 20
+    },
+    {
+      "code": "kindle4rss",
+      "domains": 1
+    },
+    {
+      "code": "kingkonglive",
+      "domains": 2
+    },
+    {
+      "code": "kingsoft",
+      "domains": 45
+    },
+    {
+      "code": "kinopoisk",
+      "domains": 5
+    },
+    {
+      "code": "kinopub",
+      "domains": 19
+    },
+    {
+      "code": "kkbox",
+      "domains": 5
+    },
+    {
+      "code": "kktv",
+      "domains": 3
+    },
+    {
+      "code": "kodi",
+      "domains": 2
+    },
+    {
+      "code": "kodik",
+      "domains": 5
+    },
+    {
+      "code": "konachan",
+      "domains": 2
+    },
+    {
+      "code": "konami",
+      "domains": 19
+    },
+    {
+      "code": "kontur",
+      "domains": 7
+    },
+    {
+      "code": "koolearn",
+      "domains": 3
+    },
+    {
+      "code": "kraken",
+      "domains": 2
+    },
+    {
+      "code": "ku6",
+      "domains": 3
+    },
+    {
+      "code": "kuaidi100",
+      "domains": 4
+    },
+    {
+      "code": "kuaikan",
+      "domains": 3
+    },
+    {
+      "code": "kuaishou",
+      "domains": 40
+    },
+    {
+      "code": "kuaiyikeji",
+      "domains": 3
+    },
+    {
+      "code": "kubakuba",
+      "domains": 2
+    },
+    {
+      "code": "kubernetes",
+      "domains": 2
+    },
+    {
+      "code": "kucoin",
+      "domains": 2
+    },
+    {
+      "code": "kugou",
+      "domains": 19
+    },
+    {
+      "code": "kurogames",
+      "domains": 13
+    },
+    {
+      "code": "kuwo",
+      "domains": 3
+    },
+    {
+      "code": "kyodonews",
+      "domains": 9
+    },
+    {
+      "code": "lagou",
+      "domains": 2
+    },
+    {
+      "code": "landian",
+      "domains": 7
+    },
+    {
+      "code": "lantern",
+      "domains": 2
+    },
+    {
+      "code": "lanzou",
+      "domains": 28
+    },
+    {
+      "code": "laracasts",
+      "domains": 1
+    },
+    {
+      "code": "lark",
+      "domains": 88
+    },
+    {
+      "code": "lark-global",
+      "domains": 31
+    },
+    {
+      "code": "lastfm",
+      "domains": 4
+    },
+    {
+      "code": "lastpass",
+      "domains": 3
+    },
+    {
+      "code": "launchpad",
+      "domains": 5
+    },
+    {
+      "code": "lavteam",
+      "domains": 1
+    },
+    {
+      "code": "le",
+      "domains": 13
+    },
+    {
+      "code": "lenovo",
+      "domains": 58
+    },
+    {
+      "code": "lethalhardcore",
+      "domains": 2
+    },
+    {
+      "code": "letsencrypt",
+      "domains": 3
+    },
+    {
+      "code": "lg",
+      "domains": 10
+    },
+    {
+      "code": "lianjia",
+      "domains": 5
+    },
+    {
+      "code": "liberapay",
+      "domains": 2
+    },
+    {
+      "code": "libgen",
+      "domains": 8
+    },
+    {
+      "code": "librewolf",
+      "domains": 2
+    },
+    {
+      "code": "liepin",
+      "domains": 3
+    },
+    {
+      "code": "lifewire",
+      "domains": 1
+    },
+    {
+      "code": "ligastavok",
+      "domains": 4
+    },
+    {
+      "code": "lighter",
+      "domains": 3
+    },
+    {
+      "code": "lihkg",
+      "domains": 2
+    },
+    {
+      "code": "likee",
+      "domains": 35
+    },
+    {
+      "code": "limelight",
+      "domains": 8
+    },
+    {
+      "code": "linakesi",
+      "domains": 4
+    },
+    {
+      "code": "line",
+      "domains": 20
+    },
+    {
+      "code": "linguee",
+      "domains": 2
+    },
+    {
+      "code": "linkedin",
+      "domains": 12
+    },
+    {
+      "code": "linotype",
+      "domains": 1
+    },
+    {
+      "code": "linux",
+      "domains": 1
+    },
+    {
+      "code": "linuxdo",
+      "domains": 2
+    },
+    {
+      "code": "lisiku",
+      "domains": 2
+    },
+    {
+      "code": "litv",
+      "domains": 11
+    },
+    {
+      "code": "livejournal",
+      "domains": 2
+    },
+    {
+      "code": "liveperson",
+      "domains": 2
+    },
+    {
+      "code": "lizhi",
+      "domains": 6
+    },
+    {
+      "code": "lkcoffee",
+      "domains": 3
+    },
+    {
+      "code": "localbitcoins",
+      "domains": 2
+    },
+    {
+      "code": "localizejs",
+      "domains": 3
+    },
+    {
+      "code": "logitech",
+      "domains": 13
+    },
+    {
+      "code": "londonreal",
+      "domains": 2
+    },
+    {
+      "code": "longbridge",
+      "domains": 12
+    },
+    {
+      "code": "louisvuitton",
+      "domains": 3
+    },
+    {
+      "code": "lowiro",
+      "domains": 1
+    },
+    {
+      "code": "ltn",
+      "domains": 2
+    },
+    {
+      "code": "lumion",
+      "domains": 6
+    },
+    {
+      "code": "lysol",
+      "domains": 9
+    },
+    {
+      "code": "madshi",
+      "domains": 4
+    },
+    {
+      "code": "mafengwo",
+      "domains": 3
+    },
+    {
+      "code": "magnit",
+      "domains": 4
+    },
+    {
+      "code": "mailcom",
+      "domains": 4
+    },
+    {
+      "code": "mailru",
+      "domains": 300
+    },
+    {
+      "code": "mailru-group",
+      "domains": 300
+    },
+    {
+      "code": "mainichi",
+      "domains": 10
+    },
+    {
+      "code": "manhuagui",
+      "domains": 2
+    },
+    {
+      "code": "manhuaren",
+      "domains": 10
+    },
+    {
+      "code": "manorama",
+      "domains": 12
+    },
+    {
+      "code": "manoto",
+      "domains": 2
+    },
+    {
+      "code": "manus",
+      "domains": 2
+    },
+    {
+      "code": "maocloud",
+      "domains": 3
+    },
+    {
+      "code": "mapbox",
+      "domains": 2
+    },
+    {
+      "code": "marvel",
+      "domains": 10
+    },
+    {
+      "code": "mastercard",
+      "domains": 184
+    },
+    {
+      "code": "masterclass",
+      "domains": 1
+    },
+    {
+      "code": "matrix",
+      "domains": 9
+    },
+    {
+      "code": "matters",
+      "domains": 4
+    },
+    {
+      "code": "mcdonalds",
+      "domains": 43
+    },
+    {
+      "code": "mdn",
+      "domains": 9
+    },
+    {
+      "code": "meadjohnson",
+      "domains": 6
+    },
+    {
+      "code": "mediachinesegroup",
+      "domains": 21
+    },
+    {
+      "code": "medium",
+      "domains": 2
+    },
+    {
+      "code": "meduza",
+      "domains": 2
+    },
+    {
+      "code": "mega",
+      "domains": 7
+    },
+    {
+      "code": "megafon",
+      "domains": 12
+    },
+    {
+      "code": "meipian",
+      "domains": 3
+    },
+    {
+      "code": "meitu",
+      "domains": 13
+    },
+    {
+      "code": "meituan",
+      "domains": 19
+    },
+    {
+      "code": "meizu",
+      "domains": 6
+    },
+    {
+      "code": "messenger",
+      "domains": 4
+    },
+    {
+      "code": "meta",
+      "domains": 556
+    },
+    {
+      "code": "metabrainz",
+      "domains": 8
+    },
+    {
+      "code": "metacritic",
+      "domains": 1
+    },
+    {
+      "code": "metart",
+      "domains": 5
+    },
+    {
+      "code": "miaomiaozhe",
+      "domains": 2
+    },
+    {
+      "code": "microsoft",
+      "domains": 759
+    },
+    {
+      "code": "microsoft-dev",
+      "domains": 76
+    },
+    {
+      "code": "microsoft-pki",
+      "domains": 6
+    },
+    {
+      "code": "midea",
+      "domains": 10
+    },
+    {
+      "code": "mihoyo",
+      "domains": 26
+    },
+    {
+      "code": "mihoyo-cn",
+      "domains": 17
+    },
+    {
+      "code": "mikrotik",
+      "domains": 4
+    },
+    {
+      "code": "mindbox",
+      "domains": 22
+    },
+    {
+      "code": "mindgeek",
+      "domains": 47
+    },
+    {
+      "code": "mindgeek-porn",
+      "domains": 46
+    },
+    {
+      "code": "mini",
+      "domains": 214
+    },
+    {
+      "code": "miniso",
+      "domains": 36
+    },
+    {
+      "code": "miraheze",
+      "domains": 1
+    },
+    {
+      "code": "missav",
+      "domains": 7
+    },
+    {
+      "code": "misskey",
+      "domains": 34
+    },
+    {
+      "code": "misskey-universe",
+      "domains": 32
+    },
+    {
+      "code": "mit",
+      "domains": 4
+    },
+    {
+      "code": "mixi",
+      "domains": 3
+    },
+    {
+      "code": "mobile01",
+      "domains": 2
+    },
+    {
+      "code": "mocha",
+      "domains": 1
+    },
+    {
+      "code": "modrinth",
+      "domains": 1
+    },
+    {
+      "code": "mogujie",
+      "domains": 3
+    },
+    {
+      "code": "mojang",
+      "domains": 6
+    },
+    {
+      "code": "moji",
+      "domains": 7
+    },
+    {
+      "code": "momo",
+      "domains": 4
+    },
+    {
+      "code": "mongodb",
+      "domains": 2
+    },
+    {
+      "code": "monotype",
+      "domains": 14
+    },
+    {
+      "code": "moonvy",
+      "domains": 2
+    },
+    {
+      "code": "morisawa",
+      "domains": 2
+    },
+    {
+      "code": "mortein",
+      "domains": 11
+    },
+    {
+      "code": "mosmetro",
+      "domains": 2
+    },
+    {
+      "code": "motorola",
+      "domains": 25
+    },
+    {
+      "code": "movefree",
+      "domains": 7
+    },
+    {
+      "code": "moxing",
+      "domains": 2
+    },
+    {
+      "code": "mozilla",
+      "domains": 72
+    },
+    {
+      "code": "msi",
+      "domains": 2
+    },
+    {
+      "code": "msn",
+      "domains": 21
+    },
+    {
+      "code": "mts-ru",
+      "domains": 13
+    },
+    {
+      "code": "mubi",
+      "domains": 2
+    },
+    {
+      "code": "mucinex",
+      "domains": 8
+    },
+    {
+      "code": "mudvod",
+      "domains": 10
+    },
+    {
+      "code": "muji",
+      "domains": 8
+    },
+    {
+      "code": "musixmatch",
+      "domains": 2
+    },
+    {
+      "code": "mvideo",
+      "domains": 3
+    },
+    {
+      "code": "mxroute",
+      "domains": 5
+    },
+    {
+      "code": "mydirtyhobby",
+      "domains": 2
+    },
+    {
+      "code": "myfonts",
+      "domains": 2
+    },
+    {
+      "code": "myoffice-ru",
+      "domains": 2
+    },
+    {
+      "code": "myradio",
+      "domains": 2
+    },
+    {
+      "code": "mytvsuper",
+      "domains": 1
+    },
+    {
+      "code": "mzed",
+      "domains": 1
+    },
+    {
+      "code": "n26",
+      "domains": 3
+    },
+    {
+      "code": "n3ro",
+      "domains": 3
+    },
+    {
+      "code": "narwal",
+      "domains": 2
+    },
+    {
+      "code": "nationalgeographic",
+      "domains": 4
+    },
+    {
+      "code": "naver",
+      "domains": 49
+    },
+    {
+      "code": "nbcuniversal",
+      "domains": 17
+    },
+    {
+      "code": "neowin",
+      "domains": 2
+    },
+    {
+      "code": "netcraze",
+      "domains": 5
+    },
+    {
+      "code": "netcup",
+      "domains": 24
+    },
+    {
+      "code": "netease",
+      "domains": 55
+    },
+    {
+      "code": "netflav",
+      "domains": 3
+    },
+    {
+      "code": "netflix",
+      "domains": 28
+    },
+    {
+      "code": "netlify",
+      "domains": 10
+    },
+    {
+      "code": "neuralink",
+      "domains": 1
+    },
+    {
+      "code": "newegg",
+      "domains": 2
+    },
+    {
+      "code": "newgrounds",
+      "domains": 2
+    },
+    {
+      "code": "newscorp",
+      "domains": 152
+    },
+    {
+      "code": "newsmax",
+      "domains": 4
+    },
+    {
+      "code": "nexitally",
+      "domains": 3
+    },
+    {
+      "code": "nexo",
+      "domains": 2
+    },
+    {
+      "code": "nexon",
+      "domains": 6
+    },
+    {
+      "code": "nexusmods",
+      "domains": 2
+    },
+    {
+      "code": "nga",
+      "domains": 4
+    },
+    {
+      "code": "nginx",
+      "domains": 2
+    },
+    {
+      "code": "ngrok",
+      "domains": 11
+    },
+    {
+      "code": "nhk",
+      "domains": 4
+    },
+    {
+      "code": "nic-ru",
+      "domains": 4
+    },
+    {
+      "code": "nicegram",
+      "domains": 3
+    },
+    {
+      "code": "niconico",
+      "domains": 10
+    },
+    {
+      "code": "nike",
+      "domains": 196
+    },
+    {
+      "code": "nikkan-gendai",
+      "domains": 2
+    },
+    {
+      "code": "nikke",
+      "domains": 6
+    },
+    {
+      "code": "nikkei",
+      "domains": 6
+    },
+    {
+      "code": "nintendo",
+      "domains": 124
+    },
+    {
+      "code": "nist",
+      "domains": 2
+    },
+    {
+      "code": "nixos",
+      "domains": 12
+    },
+    {
+      "code": "nodejs",
+      "domains": 1
+    },
+    {
+      "code": "nodeseek",
+      "domains": 7
+    },
+    {
+      "code": "noip",
+      "domains": 83
+    },
+    {
+      "code": "nordstrom",
+      "domains": 2
+    },
+    {
+      "code": "nordvpn",
+      "domains": 2
+    },
+    {
+      "code": "notion",
+      "domains": 7
+    },
+    {
+      "code": "now",
+      "domains": 6
+    },
+    {
+      "code": "nowcoder",
+      "domains": 4
+    },
+    {
+      "code": "npmjs",
+      "domains": 3
+    },
+    {
+      "code": "nudevista",
+      "domains": 4
+    },
+    {
+      "code": "nurofen",
+      "domains": 28
+    },
+    {
+      "code": "nutaku",
+      "domains": 2
+    },
+    {
+      "code": "nvidia",
+      "domains": 66
+    },
+    {
+      "code": "nyaa",
+      "domains": 2
+    },
+    {
+      "code": "nypost",
+      "domains": 3
+    },
+    {
+      "code": "nytimes",
+      "domains": 9
+    },
+    {
+      "code": "oan",
+      "domains": 5
+    },
+    {
+      "code": "oculus",
+      "domains": 17
+    },
+    {
+      "code": "ogury",
+      "domains": 3
+    },
+    {
+      "code": "ok",
+      "domains": 19
+    },
+    {
+      "code": "okaapps",
+      "domains": 2
+    },
+    {
+      "code": "okjike",
+      "domains": 5
+    },
+    {
+      "code": "okko",
+      "domains": 4
+    },
+    {
+      "code": "okx",
+      "domains": 10
+    },
+    {
+      "code": "olevod",
+      "domains": 9
+    },
+    {
+      "code": "onedrive",
+      "domains": 19
+    },
+    {
+      "code": "onekey",
+      "domains": 4
+    },
+    {
+      "code": "oneplus",
+      "domains": 8
+    },
+    {
+      "code": "ookla-speedtest",
+      "domains": 21
+    },
+    {
+      "code": "op",
+      "domains": 2
+    },
+    {
+      "code": "openai",
+      "domains": 25
+    },
+    {
+      "code": "opencollective",
+      "domains": 1
+    },
+    {
+      "code": "openjsfoundation",
+      "domains": 13
+    },
+    {
+      "code": "openrec",
+      "domains": 2
+    },
+    {
+      "code": "opensourceinsights",
+      "domains": 4
+    },
+    {
+      "code": "openspeedtest",
+      "domains": 4
+    },
+    {
+      "code": "openstreetmap",
+      "domains": 9
+    },
+    {
+      "code": "openweather",
+      "domains": 2
+    },
+    {
+      "code": "openwrt",
+      "domains": 2
+    },
+    {
+      "code": "openx",
+      "domains": 5
+    },
+    {
+      "code": "oppo",
+      "domains": 46
+    },
+    {
+      "code": "oracle",
+      "domains": 19
+    },
+    {
+      "code": "oreilly",
+      "domains": 6
+    },
+    {
+      "code": "organicmaps",
+      "domains": 2
+    },
+    {
+      "code": "origin",
+      "domains": 9
+    },
+    {
+      "code": "oschina",
+      "domains": 3
+    },
+    {
+      "code": "oskelly",
+      "domains": 2
+    },
+    {
+      "code": "osu",
+      "domains": 9
+    },
+    {
+      "code": "otpbank",
+      "domains": 12
+    },
+    {
+      "code": "oup",
+      "domains": 29
+    },
+    {
+      "code": "overclockers-ru",
+      "domains": 12
+    },
+    {
+      "code": "ozon",
+      "domains": 63
+    },
+    {
+      "code": "pagecdn",
+      "domains": 2
+    },
+    {
+      "code": "panasonic",
+      "domains": 5
+    },
+    {
+      "code": "pandanet",
+      "domains": 2
+    },
+    {
+      "code": "paofuyun",
+      "domains": 2
+    },
+    {
+      "code": "paskoocheh",
+      "domains": 1
+    },
+    {
+      "code": "pastebin",
+      "domains": 1
+    },
+    {
+      "code": "patreon",
+      "domains": 4
+    },
+    {
+      "code": "pawchive",
+      "domains": 2
+    },
+    {
+      "code": "paypal",
+      "domains": 245
+    },
+    {
+      "code": "pbs",
+      "domains": 1
+    },
+    {
+      "code": "pccw",
+      "domains": 29
+    },
+    {
+      "code": "pchome",
+      "domains": 13
+    },
+    {
+      "code": "pearson",
+      "domains": 93
+    },
+    {
+      "code": "peppy",
+      "domains": 10
+    },
+    {
+      "code": "perl",
+      "domains": 5
+    },
+    {
+      "code": "perplexity",
+      "domains": 5
+    },
+    {
+      "code": "petrochina",
+      "domains": 4
+    },
+    {
+      "code": "pgyer",
+      "domains": 3
+    },
+    {
+      "code": "phoenix",
+      "domains": 6
+    },
+    {
+      "code": "picacg",
+      "domains": 13
+    },
+    {
+      "code": "picsee",
+      "domains": 6
+    },
+    {
+      "code": "pikpak",
+      "domains": 7
+    },
+    {
+      "code": "pinduoduo",
+      "domains": 7
+    },
+    {
+      "code": "pingan",
+      "domains": 4
+    },
+    {
+      "code": "pingcap",
+      "domains": 7
+    },
+    {
+      "code": "pinggy",
+      "domains": 2
+    },
+    {
+      "code": "pingpe",
+      "domains": 1
+    },
+    {
+      "code": "pingsx",
+      "domains": 2
+    },
+    {
+      "code": "pinkcore",
+      "domains": 2
+    },
+    {
+      "code": "pinterest",
+      "domains": 52
+    },
+    {
+      "code": "piratebay",
+      "domains": 4
+    },
+    {
+      "code": "pixhost",
+      "domains": 1
+    },
+    {
+      "code": "pixiv",
+      "domains": 11
+    },
+    {
+      "code": "pixnet",
+      "domains": 9
+    },
+    {
+      "code": "playboy",
+      "domains": 2
+    },
+    {
+      "code": "playcover",
+      "domains": 2
+    },
+    {
+      "code": "playstation",
+      "domains": 5
+    },
+    {
+      "code": "plex",
+      "domains": 4
+    },
+    {
+      "code": "plutotv",
+      "domains": 2
+    },
+    {
+      "code": "pocketcasts",
+      "domains": 2
+    },
+    {
+      "code": "poe",
+      "domains": 2
+    },
+    {
+      "code": "polocloud",
+      "domains": 2
+    },
+    {
+      "code": "polymer",
+      "domains": 2
+    },
+    {
+      "code": "polyu",
+      "domains": 5
+    },
+    {
+      "code": "polyv",
+      "domains": 2
+    },
+    {
+      "code": "pornhub",
+      "domains": 9
+    },
+    {
+      "code": "pornpros",
+      "domains": 2
+    },
+    {
+      "code": "positive-technologies",
+      "domains": 3
+    },
+    {
+      "code": "postimages",
+      "domains": 2
+    },
+    {
+      "code": "pptv",
+      "domains": 3
+    },
+    {
+      "code": "primevideo",
+      "domains": 24
+    },
+    {
+      "code": "private",
+      "domains": 133
+    },
+    {
+      "code": "progress",
+      "domains": 6
+    },
+    {
+      "code": "projectmoon",
+      "domains": 4
+    },
+    {
+      "code": "projectpoi",
+      "domains": 4
+    },
+    {
+      "code": "projectsekai",
+      "domains": 2
+    },
+    {
+      "code": "proquest",
+      "domains": 2
+    },
+    {
+      "code": "protonmail",
+      "domains": 9
+    },
+    {
+      "code": "pstorage",
+      "domains": 1
+    },
+    {
+      "code": "ptt",
+      "domains": 3
+    },
+    {
+      "code": "pubg",
+      "domains": 4
+    },
+    {
+      "code": "pubmatic",
+      "domains": 2
+    },
+    {
+      "code": "pugpig",
+      "domains": 3
+    },
+    {
+      "code": "purikonejp",
+      "domains": 4
+    },
+    {
+      "code": "python",
+      "domains": 6
+    },
+    {
+      "code": "qcc",
+      "domains": 2
+    },
+    {
+      "code": "qcloud",
+      "domains": 347
+    },
+    {
+      "code": "qianxin",
+      "domains": 7
+    },
+    {
+      "code": "qihoo360",
+      "domains": 112
+    },
+    {
+      "code": "qimao",
+      "domains": 6
+    },
+    {
+      "code": "qingcloud",
+      "domains": 6
+    },
+    {
+      "code": "qingtingfm",
+      "domains": 2
+    },
+    {
+      "code": "qiniu",
+      "domains": 10
+    },
+    {
+      "code": "qixin",
+      "domains": 1
+    },
+    {
+      "code": "qnap",
+      "domains": 8
+    },
+    {
+      "code": "qt",
+      "domains": 2
+    },
+    {
+      "code": "qualcomm",
+      "domains": 49
+    },
+    {
+      "code": "quantil",
+      "domains": 1
+    },
+    {
+      "code": "quip",
+      "domains": 3
+    },
+    {
+      "code": "quora",
+      "domains": 6
+    },
+    {
+      "code": "qwant",
+      "domains": 4
+    },
+    {
+      "code": "qweather",
+      "domains": 5
+    },
+    {
+      "code": "radiko",
+      "domains": 3
+    },
+    {
+      "code": "raiffeisenbank",
+      "domains": 16
+    },
+    {
+      "code": "rakuten",
+      "domains": 30
+    },
+    {
+      "code": "rarbg",
+      "domains": 18
+    },
+    {
+      "code": "razer",
+      "domains": 9
+    },
+    {
+      "code": "rb",
+      "domains": 457
+    },
+    {
+      "code": "reabble",
+      "domains": 2
+    },
+    {
+      "code": "readthedocs",
+      "domains": 4
+    },
+    {
+      "code": "reagroup",
+      "domains": 32
+    },
+    {
+      "code": "realclear",
+      "domains": 17
+    },
+    {
+      "code": "realitykings",
+      "domains": 2
+    },
+    {
+      "code": "realtype",
+      "domains": 2
+    },
+    {
+      "code": "rebrandly",
+      "domains": 2
+    },
+    {
+      "code": "reddit",
+      "domains": 12
+    },
+    {
+      "code": "redhat",
+      "domains": 2
+    },
+    {
+      "code": "redis",
+      "domains": 2
+    },
+    {
+      "code": "redotpay",
+      "domains": 5
+    },
+    {
+      "code": "redtube",
+      "domains": 5
+    },
+    {
+      "code": "regru",
+      "domains": 3
+    },
+    {
+      "code": "remnawave",
+      "domains": 4
+    },
+    {
+      "code": "renren",
+      "domains": 2
+    },
+    {
+      "code": "reurl",
+      "domains": 1
+    },
+    {
+      "code": "reuters",
+      "domains": 4
+    },
+    {
+      "code": "rferl",
+      "domains": 30
+    },
+    {
+      "code": "riot",
+      "domains": 54
+    },
+    {
+      "code": "roblox",
+      "domains": 51
+    },
+    {
+      "code": "rockstar",
+      "domains": 7
+    },
+    {
+      "code": "roku",
+      "domains": 6
+    },
+    {
+      "code": "rossiyasegodnya",
+      "domains": 17
+    },
+    {
+      "code": "rostelecom",
+      "domains": 9
+    },
+    {
+      "code": "rsshub",
+      "domains": 1
+    },
+    {
+      "code": "rsshub-3rd",
+      "domains": 19
+    },
+    {
+      "code": "rt",
+      "domains": 112
+    },
+    {
+      "code": "rthk",
+      "domains": 2
+    },
+    {
+      "code": "ruanmei",
+      "domains": 9
+    },
+    {
+      "code": "ruby",
+      "domains": 2
+    },
+    {
+      "code": "rubychina",
+      "domains": 2
+    },
+    {
+      "code": "ruleoflaw",
+      "domains": 2
+    },
+    {
+      "code": "rumble",
+      "domains": 2
+    },
+    {
+      "code": "rust",
+      "domains": 4
+    },
+    {
+      "code": "ruten",
+      "domains": 2
+    },
+    {
+      "code": "rutracker",
+      "domains": 9
+    },
+    {
+      "code": "rutube",
+      "domains": 4
+    },
+    {
+      "code": "safepal",
+      "domains": 2
+    },
+    {
+      "code": "sakurafrp",
+      "domains": 58
+    },
+    {
+      "code": "salesforce",
+      "domains": 41
+    },
+    {
+      "code": "samsung",
+      "domains": 27
+    },
+    {
+      "code": "sankei",
+      "domains": 30
+    },
+    {
+      "code": "sb",
+      "domains": 8
+    },
+    {
+      "code": "sber",
+      "domains": 100
+    },
+    {
+      "code": "sberbank",
+      "domains": 18
+    },
+    {
+      "code": "scala",
+      "domains": 2
+    },
+    {
+      "code": "scaleflex",
+      "domains": 3
+    },
+    {
+      "code": "scenesource",
+      "domains": 3
+    },
+    {
+      "code": "schoopia",
+      "domains": 2
+    },
+    {
+      "code": "schwab",
+      "domains": 9
+    },
+    {
+      "code": "sci",
+      "domains": 2
+    },
+    {
+      "code": "sci-hub",
+      "domains": 6
+    },
+    {
+      "code": "sciencedirect",
+      "domains": 2
+    },
+    {
+      "code": "scmp",
+      "domains": 2
+    },
+    {
+      "code": "scp",
+      "domains": 3
+    },
+    {
+      "code": "seasun",
+      "domains": 8
+    },
+    {
+      "code": "secom",
+      "domains": 3
+    },
+    {
+      "code": "sectigo",
+      "domains": 21
+    },
+    {
+      "code": "segment",
+      "domains": 4
+    },
+    {
+      "code": "segmentfault",
+      "domains": 2
+    },
+    {
+      "code": "sehuatang",
+      "domains": 2
+    },
+    {
+      "code": "selectel",
+      "domains": 24
+    },
+    {
+      "code": "sentry",
+      "domains": 4
+    },
+    {
+      "code": "servicepipe",
+      "domains": 2
+    },
+    {
+      "code": "setapp",
+      "domains": 1
+    },
+    {
+      "code": "setn",
+      "domains": 2
+    },
+    {
+      "code": "sf-express",
+      "domains": 15
+    },
+    {
+      "code": "shadowsockscom",
+      "domains": 2
+    },
+    {
+      "code": "shanbay",
+      "domains": 2
+    },
+    {
+      "code": "sharepoint",
+      "domains": 3
+    },
+    {
+      "code": "sharethis",
+      "domains": 1
+    },
+    {
+      "code": "shireyishunjian",
+      "domains": 2
+    },
+    {
+      "code": "shopee",
+      "domains": 21
+    },
+    {
+      "code": "shopify",
+      "domains": 8
+    },
+    {
+      "code": "shorturl",
+      "domains": 1
+    },
+    {
+      "code": "showtimeanytime",
+      "domains": 2
+    },
+    {
+      "code": "shuqi",
+      "domains": 11
+    },
+    {
+      "code": "signal",
+      "domains": 8
+    },
+    {
+      "code": "sina",
+      "domains": 58
+    },
+    {
+      "code": "singtaonewscorp",
+      "domains": 18
+    },
+    {
+      "code": "sinopec",
+      "domains": 5
+    },
+    {
+      "code": "sitepoint",
+      "domains": 1
+    },
+    {
+      "code": "skillshare",
+      "domains": 1
+    },
+    {
+      "code": "sky",
+      "domains": 13
+    },
+    {
+      "code": "skyeng",
+      "domains": 2
+    },
+    {
+      "code": "skyperfect",
+      "domains": 7
+    },
+    {
+      "code": "slack",
+      "domains": 11
+    },
+    {
+      "code": "slideshare",
+      "domains": 3
+    },
+    {
+      "code": "sling",
+      "domains": 5
+    },
+    {
+      "code": "smartone",
+      "domains": 15
+    },
+    {
+      "code": "smena",
+      "domains": 1
+    },
+    {
+      "code": "smtiaojiaoshi",
+      "domains": 2
+    },
+    {
+      "code": "smzdm",
+      "domains": 4
+    },
+    {
+      "code": "snap",
+      "domains": 9
+    },
+    {
+      "code": "snapcraft",
+      "domains": 2
+    },
+    {
+      "code": "snapp",
+      "domains": 18
+    },
+    {
+      "code": "snk",
+      "domains": 3
+    },
+    {
+      "code": "snodehome",
+      "domains": 3
+    },
+    {
+      "code": "softbank",
+      "domains": 20
+    },
+    {
+      "code": "softether",
+      "domains": 2
+    },
+    {
+      "code": "sogou",
+      "domains": 40
+    },
+    {
+      "code": "sohu",
+      "domains": 32
+    },
+    {
+      "code": "sokolov",
+      "domains": 2
+    },
+    {
+      "code": "sonemic",
+      "domains": 6
+    },
+    {
+      "code": "sony",
+      "domains": 120
+    },
+    {
+      "code": "sonypictures",
+      "domains": 14
+    },
+    {
+      "code": "soundcloud",
+      "domains": 3
+    },
+    {
+      "code": "soundofhope",
+      "domains": 8
+    },
+    {
+      "code": "sourceforge",
+      "domains": 4
+    },
+    {
+      "code": "sourcehut",
+      "domains": 2
+    },
+    {
+      "code": "soyjakparty",
+      "domains": 2
+    },
+    {
+      "code": "spacemail",
+      "domains": 1
+    },
+    {
+      "code": "spaceship",
+      "domains": 2
+    },
+    {
+      "code": "spacex",
+      "domains": 2
+    },
+    {
+      "code": "spankbang",
+      "domains": 3
+    },
+    {
+      "code": "speedtest",
+      "domains": 21
+    },
+    {
+      "code": "spiceworks",
+      "domains": 2
+    },
+    {
+      "code": "spotify",
+      "domains": 28
+    },
+    {
+      "code": "springer",
+      "domains": 5
+    },
+    {
+      "code": "squareup",
+      "domains": 12
+    },
+    {
+      "code": "squirrelvpn",
+      "domains": 2
+    },
+    {
+      "code": "sslcom",
+      "domains": 2
+    },
+    {
+      "code": "ssrcloud",
+      "domains": 3
+    },
+    {
+      "code": "st",
+      "domains": 2
+    },
+    {
+      "code": "stackexchange",
+      "domains": 25
+    },
+    {
+      "code": "stackpath",
+      "domains": 2
+    },
+    {
+      "code": "stage1st",
+      "domains": 2
+    },
+    {
+      "code": "standardchartered",
+      "domains": 4
+    },
+    {
+      "code": "starbucks",
+      "domains": 67
+    },
+    {
+      "code": "starfieldtech",
+      "domains": 1
+    },
+    {
+      "code": "starplus",
+      "domains": 6
+    },
+    {
+      "code": "startpage",
+      "domains": 2
+    },
+    {
+      "code": "starworld",
+      "domains": 25
+    },
+    {
+      "code": "staticfile",
+      "domains": 2
+    },
+    {
+      "code": "steam",
+      "domains": 61
+    },
+    {
+      "code": "steaminventoryhelper",
+      "domains": 3
+    },
+    {
+      "code": "steamunlocked",
+      "domains": 1
+    },
+    {
+      "code": "steemit",
+      "domains": 1
+    },
+    {
+      "code": "sto-express",
+      "domains": 6
+    },
+    {
+      "code": "straitsx",
+      "domains": 3
+    },
+    {
+      "code": "streamable",
+      "domains": 2
+    },
+    {
+      "code": "strepsils",
+      "domains": 33
+    },
+    {
+      "code": "strikingly",
+      "domains": 3
+    },
+    {
+      "code": "stripe",
+      "domains": 8
+    },
+    {
+      "code": "subscene",
+      "domains": 2
+    },
+    {
+      "code": "suishouji",
+      "domains": 5
+    },
+    {
+      "code": "sumkoo",
+      "domains": 10
+    },
+    {
+      "code": "suning",
+      "domains": 6
+    },
+    {
+      "code": "supercell",
+      "domains": 23
+    },
+    {
+      "code": "supersonic",
+      "domains": 4
+    },
+    {
+      "code": "surflite",
+      "domains": 2
+    },
+    {
+      "code": "suruga-ya",
+      "domains": 2
+    },
+    {
+      "code": "svp",
+      "domains": 1
+    },
+    {
+      "code": "swag",
+      "domains": 3
+    },
+    {
+      "code": "swift",
+      "domains": 4
+    },
+    {
+      "code": "swisssign",
+      "domains": 31
+    },
+    {
+      "code": "sxl",
+      "domains": 4
+    },
+    {
+      "code": "symantec",
+      "domains": 2
+    },
+    {
+      "code": "symantec-pki",
+      "domains": 5
+    },
+    {
+      "code": "synology",
+      "domains": 20
+    },
+    {
+      "code": "t2-ru",
+      "domains": 3
+    },
+    {
+      "code": "taboola",
+      "domains": 1
+    },
+    {
+      "code": "taihe",
+      "domains": 6
+    },
+    {
+      "code": "taikang",
+      "domains": 4
+    },
+    {
+      "code": "tailscale",
+      "domains": 3
+    },
+    {
+      "code": "take-two",
+      "domains": 17
+    },
+    {
+      "code": "talkatone",
+      "domains": 9
+    },
+    {
+      "code": "taomee",
+      "domains": 2
+    },
+    {
+      "code": "taptap",
+      "domains": 7
+    },
+    {
+      "code": "target",
+      "domains": 3
+    },
+    {
+      "code": "taylorfrancis",
+      "domains": 4
+    },
+    {
+      "code": "tbank-ru",
+      "domains": 112
+    },
+    {
+      "code": "tcl",
+      "domains": 25
+    },
+    {
+      "code": "teambition",
+      "domains": 3
+    },
+    {
+      "code": "teamspeak",
+      "domains": 3
+    },
+    {
+      "code": "teamviewer",
+      "domains": 5
+    },
+    {
+      "code": "technogym",
+      "domains": 8
+    },
+    {
+      "code": "techpowerup",
+      "domains": 2
+    },
+    {
+      "code": "techtimes",
+      "domains": 1
+    },
+    {
+      "code": "ted",
+      "domains": 2
+    },
+    {
+      "code": "telegram",
+      "domains": 21
+    },
+    {
+      "code": "telekom",
+      "domains": 3
+    },
+    {
+      "code": "temp-mail",
+      "domains": 1
+    },
+    {
+      "code": "tencent",
+      "domains": 688
+    },
+    {
+      "code": "tencent-dev",
+      "domains": 16
+    },
+    {
+      "code": "tencent-games",
+      "domains": 87
+    },
+    {
+      "code": "tencent-tme",
+      "domains": 45
+    },
+    {
+      "code": "tendcloud",
+      "domains": 5
+    },
+    {
+      "code": "terabox",
+      "domains": 7
+    },
+    {
+      "code": "termux",
+      "domains": 3
+    },
+    {
+      "code": "tesla",
+      "domains": 11
+    },
+    {
+      "code": "test",
+      "domains": 1
+    },
+    {
+      "code": "test-ipv6",
+      "domains": 36
+    },
+    {
+      "code": "tex",
+      "domains": 4
+    },
+    {
+      "code": "tgbus",
+      "domains": 1
+    },
+    {
+      "code": "theboringcompany",
+      "domains": 1
+    },
+    {
+      "code": "theguardian",
+      "domains": 9
+    },
+    {
+      "code": "theinitium",
+      "domains": 2
+    },
+    {
+      "code": "thelinuxfoundation",
+      "domains": 17
+    },
+    {
+      "code": "theporndude",
+      "domains": 7
+    },
+    {
+      "code": "thescoregroup",
+      "domains": 111
+    },
+    {
+      "code": "thesun",
+      "domains": 7
+    },
+    {
+      "code": "thetimes",
+      "domains": 9
+    },
+    {
+      "code": "thetype",
+      "domains": 3
+    },
+    {
+      "code": "thomsonreuters",
+      "domains": 32
+    },
+    {
+      "code": "threads",
+      "domains": 2
+    },
+    {
+      "code": "tiancity",
+      "domains": 2
+    },
+    {
+      "code": "tianyancha",
+      "domains": 2
+    },
+    {
+      "code": "tidal",
+      "domains": 3
+    },
+    {
+      "code": "tidelift",
+      "domains": 1
+    },
+    {
+      "code": "tiktok",
+      "domains": 40
+    },
+    {
+      "code": "tilda",
+      "domains": 6
+    },
+    {
+      "code": "timeweb",
+      "domains": 5
+    },
+    {
+      "code": "tinyurl",
+      "domains": 1
+    },
+    {
+      "code": "tld-!cn",
+      "domains": 829
+    },
+    {
+      "code": "tld-cn",
+      "domains": 49
+    },
+    {
+      "code": "tld-opennic",
+      "domains": 28
+    },
+    {
+      "code": "tld-ru",
+      "domains": 11
+    },
+    {
+      "code": "tmdb",
+      "domains": 4
+    },
+    {
+      "code": "tmtpost",
+      "domains": 8
+    },
+    {
+      "code": "tokyo-sports",
+      "domains": 2
+    },
+    {
+      "code": "tokyo-toshokan",
+      "domains": 3
+    },
+    {
+      "code": "tonec",
+      "domains": 3
+    },
+    {
+      "code": "tongcheng",
+      "domains": 8
+    },
+    {
+      "code": "tongfang",
+      "domains": 3
+    },
+    {
+      "code": "tor",
+      "domains": 3
+    },
+    {
+      "code": "torproject",
+      "domains": 1
+    },
+    {
+      "code": "tracker",
+      "domains": 245
+    },
+    {
+      "code": "trackernetwork",
+      "domains": 3
+    },
+    {
+      "code": "trae",
+      "domains": 12
+    },
+    {
+      "code": "translatewiki",
+      "domains": 2
+    },
+    {
+      "code": "trello",
+      "domains": 2
+    },
+    {
+      "code": "trustasia",
+      "domains": 11
+    },
+    {
+      "code": "trustwallet",
+      "domains": 1
+    },
+    {
+      "code": "trustwave",
+      "domains": 1
+    },
+    {
+      "code": "truyen-hentai",
+      "domains": 3
+    },
+    {
+      "code": "tsquare",
+      "domains": 1
+    },
+    {
+      "code": "tube8",
+      "domains": 2
+    },
+    {
+      "code": "tubi",
+      "domains": 4
+    },
+    {
+      "code": "tumblr",
+      "domains": 1
+    },
+    {
+      "code": "tutanota",
+      "domains": 6
+    },
+    {
+      "code": "tvb",
+      "domains": 14
+    },
+    {
+      "code": "tvdb",
+      "domains": 1
+    },
+    {
+      "code": "tver",
+      "domains": 5
+    },
+    {
+      "code": "twca",
+      "domains": 1
+    },
+    {
+      "code": "twilio",
+      "domains": 3
+    },
+    {
+      "code": "twitch",
+      "domains": 35
+    },
+    {
+      "code": "twitter",
+      "domains": 24
+    },
+    {
+      "code": "typekit",
+      "domains": 2
+    },
+    {
+      "code": "typenetwork",
+      "domains": 1
+    },
+    {
+      "code": "typography",
+      "domains": 1
+    },
+    {
+      "code": "uber",
+      "domains": 3
+    },
+    {
+      "code": "ubiquiti",
+      "domains": 13
+    },
+    {
+      "code": "ubisoft",
+      "domains": 31
+    },
+    {
+      "code": "ubuntu",
+      "domains": 4
+    },
+    {
+      "code": "ubuntukylin",
+      "domains": 2
+    },
+    {
+      "code": "uc",
+      "domains": 9
+    },
+    {
+      "code": "ucloud",
+      "domains": 54
+    },
+    {
+      "code": "ucoz",
+      "domains": 37
+    },
+    {
+      "code": "udacity",
+      "domains": 1
+    },
+    {
+      "code": "udemy",
+      "domains": 2
+    },
+    {
+      "code": "udn",
+      "domains": 4
+    },
+    {
+      "code": "umeng",
+      "domains": 32
+    },
+    {
+      "code": "unext",
+      "domains": 4
+    },
+    {
+      "code": "unionpay",
+      "domains": 14
+    },
+    {
+      "code": "unity",
+      "domains": 10
+    },
+    {
+      "code": "unitychina",
+      "domains": 9
+    },
+    {
+      "code": "uoliv",
+      "domains": 4
+    },
+    {
+      "code": "upai",
+      "domains": 6
+    },
+    {
+      "code": "usersdrive",
+      "domains": 2
+    },
+    {
+      "code": "uu-chat",
+      "domains": 22
+    },
+    {
+      "code": "v2ray",
+      "domains": 3
+    },
+    {
+      "code": "v8",
+      "domains": 2
+    },
+    {
+      "code": "vancl",
+      "domains": 3
+    },
+    {
+      "code": "vanish",
+      "domains": 47
+    },
+    {
+      "code": "vaptcha",
+      "domains": 2
+    },
+    {
+      "code": "vatsim",
+      "domains": 25
+    },
+    {
+      "code": "veet",
+      "domains": 45
+    },
+    {
+      "code": "vercel",
+      "domains": 27
+    },
+    {
+      "code": "verisign",
+      "domains": 33
+    },
+    {
+      "code": "verisign-pki",
+      "domains": 50
+    },
+    {
+      "code": "verizon",
+      "domains": 15
+    },
+    {
+      "code": "vgtime",
+      "domains": 1
+    },
+    {
+      "code": "viber",
+      "domains": 6
+    },
+    {
+      "code": "vilavpn",
+      "domains": 9
+    },
+    {
+      "code": "vimeo",
+      "domains": 17
+    },
+    {
+      "code": "visa",
+      "domains": 160
+    },
+    {
+      "code": "visualarts",
+      "domains": 14
+    },
+    {
+      "code": "viu",
+      "domains": 7
+    },
+    {
+      "code": "vivo",
+      "domains": 8
+    },
+    {
+      "code": "vixengroup",
+      "domains": 9
+    },
+    {
+      "code": "vk",
+      "domains": 52
+    },
+    {
+      "code": "vmware",
+      "domains": 104
+    },
+    {
+      "code": "voanews",
+      "domains": 48
+    },
+    {
+      "code": "vodafone",
+      "domains": 11
+    },
+    {
+      "code": "vokino",
+      "domains": 25
+    },
+    {
+      "code": "volcengine",
+      "domains": 279
+    },
+    {
+      "code": "volmoe",
+      "domains": 2
+    },
+    {
+      "code": "volvo",
+      "domains": 211
+    },
+    {
+      "code": "voxmedia",
+      "domains": 16
+    },
+    {
+      "code": "vpngate",
+      "domains": 3
+    },
+    {
+      "code": "vrcdn",
+      "domains": 3
+    },
+    {
+      "code": "vrchat",
+      "domains": 3
+    },
+    {
+      "code": "vrzwk",
+      "domains": 4
+    },
+    {
+      "code": "vultr",
+      "domains": 1
+    },
+    {
+      "code": "w3schools",
+      "domains": 1
+    },
+    {
+      "code": "wallhaven",
+      "domains": 2
+    },
+    {
+      "code": "walmart",
+      "domains": 10
+    },
+    {
+      "code": "wanfang",
+      "domains": 2
+    },
+    {
+      "code": "wangsu",
+      "domains": 29
+    },
+    {
+      "code": "wanmei",
+      "domains": 14
+    },
+    {
+      "code": "wantmedia",
+      "domains": 14
+    },
+    {
+      "code": "wargaming",
+      "domains": 12
+    },
+    {
+      "code": "wasu",
+      "domains": 6
+    },
+    {
+      "code": "watchout",
+      "domains": 2
+    },
+    {
+      "code": "wbgames",
+      "domains": 6
+    },
+    {
+      "code": "weathercn",
+      "domains": 5
+    },
+    {
+      "code": "webex",
+      "domains": 16
+    },
+    {
+      "code": "webflow",
+      "domains": 4
+    },
+    {
+      "code": "webnovel",
+      "domains": 1
+    },
+    {
+      "code": "webtype",
+      "domains": 1
+    },
+    {
+      "code": "weiphone",
+      "domains": 4
+    },
+    {
+      "code": "wenshushu",
+      "domains": 12
+    },
+    {
+      "code": "westerndigital",
+      "domains": 23
+    },
+    {
+      "code": "whatsapp",
+      "domains": 11
+    },
+    {
+      "code": "wholefoodsmarket",
+      "domains": 7
+    },
+    {
+      "code": "whoosh",
+      "domains": 2
+    },
+    {
+      "code": "wikidot",
+      "domains": 2
+    },
+    {
+      "code": "wikihow",
+      "domains": 1
+    },
+    {
+      "code": "wikimedia",
+      "domains": 18
+    },
+    {
+      "code": "wildberries",
+      "domains": 114
+    },
+    {
+      "code": "win-extra",
+      "domains": 355
+    },
+    {
+      "code": "win-spy",
+      "domains": 327
+    },
+    {
+      "code": "win-update",
+      "domains": 364
+    },
+    {
+      "code": "windsurf",
+      "domains": 4
+    },
+    {
+      "code": "windy",
+      "domains": 1
+    },
+    {
+      "code": "wink",
+      "domains": 5
+    },
+    {
+      "code": "winline",
+      "domains": 3
+    },
+    {
+      "code": "wise",
+      "domains": 2
+    },
+    {
+      "code": "wisekey",
+      "domains": 4
+    },
+    {
+      "code": "wish",
+      "domains": 1
+    },
+    {
+      "code": "wistia",
+      "domains": 3
+    },
+    {
+      "code": "wiwide",
+      "domains": 2
+    },
+    {
+      "code": "wix",
+      "domains": 9
+    },
+    {
+      "code": "wjx",
+      "domains": 4
+    },
+    {
+      "code": "wolai",
+      "domains": 3
+    },
+    {
+      "code": "woolite",
+      "domains": 7
+    },
+    {
+      "code": "wordpress",
+      "domains": 10
+    },
+    {
+      "code": "wps",
+      "domains": 13
+    },
+    {
+      "code": "wsj",
+      "domains": 13
+    },
+    {
+      "code": "wwe",
+      "domains": 2
+    },
+    {
+      "code": "wynd",
+      "domains": 2
+    },
+    {
+      "code": "x",
+      "domains": 28
+    },
+    {
+      "code": "x5",
+      "domains": 35
+    },
+    {
+      "code": "xai",
+      "domains": 5
+    },
+    {
+      "code": "xbox",
+      "domains": 42
+    },
+    {
+      "code": "xd",
+      "domains": 12
+    },
+    {
+      "code": "xda",
+      "domains": 4
+    },
+    {
+      "code": "xdty",
+      "domains": 1
+    },
+    {
+      "code": "xedge",
+      "domains": 4
+    },
+    {
+      "code": "xhamster",
+      "domains": 19
+    },
+    {
+      "code": "xiaoheihe",
+      "domains": 8
+    },
+    {
+      "code": "xiaohongshu",
+      "domains": 12
+    },
+    {
+      "code": "xiaomi",
+      "domains": 73
+    },
+    {
+      "code": "xiaomi-ai",
+      "domains": 3
+    },
+    {
+      "code": "xiaomi-iot",
+      "domains": 4
+    },
+    {
+      "code": "xiaoyuzhou",
+      "domains": 5
+    },
+    {
+      "code": "ximalaya",
+      "domains": 5
+    },
+    {
+      "code": "xingkongwuxianmedia",
+      "domains": 19
+    },
+    {
+      "code": "xingrz",
+      "domains": 1
+    },
+    {
+      "code": "xnxx",
+      "domains": 5
+    },
+    {
+      "code": "xtom",
+      "domains": 12
+    },
+    {
+      "code": "xueersi",
+      "domains": 12
+    },
+    {
+      "code": "xueqiu",
+      "domains": 5
+    },
+    {
+      "code": "xunlei",
+      "domains": 13
+    },
+    {
+      "code": "xvideos",
+      "domains": 5
+    },
+    {
+      "code": "yahoo",
+      "domains": 178
+    },
+    {
+      "code": "yandex",
+      "domains": 155
+    },
+    {
+      "code": "ycombinator",
+      "domains": 2
+    },
+    {
+      "code": "ymtc",
+      "domains": 3
+    },
+    {
+      "code": "ynet",
+      "domains": 3
+    },
+    {
+      "code": "ynoproject",
+      "domains": 1
+    },
+    {
+      "code": "yokaverse",
+      "domains": 7
+    },
+    {
+      "code": "yomiuri",
+      "domains": 13
+    },
+    {
+      "code": "yostar",
+      "domains": 9
+    },
+    {
+      "code": "youjizz",
+      "domains": 2
+    },
+    {
+      "code": "youku",
+      "domains": 31
+    },
+    {
+      "code": "youmind",
+      "domains": 3
+    },
+    {
+      "code": "youporn",
+      "domains": 8
+    },
+    {
+      "code": "youquan",
+      "domains": 10
+    },
+    {
+      "code": "youtube",
+      "domains": 178
+    },
+    {
+      "code": "youzan",
+      "domains": 7
+    },
+    {
+      "code": "yto-express",
+      "domains": 43
+    },
+    {
+      "code": "yuanbei",
+      "domains": 5
+    },
+    {
+      "code": "yuanfudao",
+      "domains": 12
+    },
+    {
+      "code": "yuewen",
+      "domains": 22
+    },
+    {
+      "code": "yuketang",
+      "domains": 2
+    },
+    {
+      "code": "yundaex",
+      "domains": 9
+    },
+    {
+      "code": "yunfanjiasu",
+      "domains": 8
+    },
+    {
+      "code": "yunlaopo",
+      "domains": 6
+    },
+    {
+      "code": "yy",
+      "domains": 5
+    },
+    {
+      "code": "z-library",
+      "domains": 48
+    },
+    {
+      "code": "z3x-team",
+      "domains": 2
+    },
+    {
+      "code": "zaobao",
+      "domains": 3
+    },
+    {
+      "code": "zb",
+      "domains": 4
+    },
+    {
+      "code": "zdns",
+      "domains": 12
+    },
+    {
+      "code": "zee",
+      "domains": 22
+    },
+    {
+      "code": "zeetv",
+      "domains": 9
+    },
+    {
+      "code": "zendesk",
+      "domains": 6
+    },
+    {
+      "code": "zeplin",
+      "domains": 2
+    },
+    {
+      "code": "zhangtao",
+      "domains": 8
+    },
+    {
+      "code": "zhihu",
+      "domains": 6
+    },
+    {
+      "code": "zhimeishe",
+      "domains": 5
+    },
+    {
+      "code": "zhubajie",
+      "domains": 5
+    },
+    {
+      "code": "ziroom",
+      "domains": 2
+    },
+    {
+      "code": "zoho",
+      "domains": 13
+    },
+    {
+      "code": "zoom",
+      "domains": 3
+    },
+    {
+      "code": "zotero",
+      "domains": 1
+    },
+    {
+      "code": "zscaler",
+      "domains": 17
+    },
+    {
+      "code": "zte",
+      "domains": 7
+    },
+    {
+      "code": "zto-express",
+      "domains": 13
+    },
+    {
+      "code": "zuoyebang",
+      "domains": 5
+    },
+    {
+      "code": "zynga",
+      "domains": 3
+    }
+  ]
+}

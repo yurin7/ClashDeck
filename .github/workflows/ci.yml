@@ -39,6 +39,10 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      # geosite.dat 换了但索引没重新生成时，这里会直接失败。
+      - name: Check geosite index
+        run: dart run tool/build_geosite_index.dart --check
+
       - name: Analyze
         run: flutter analyze
 

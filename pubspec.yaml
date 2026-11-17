@@ -15,6 +15,8 @@ dependencies:
   path_provider: ^2.1.5
 
 dev_dependencies:
+  # 只给 tool/build_geosite_index.dart 算 sha256 用，不进 App 包。
+  crypto: ^3.0.6
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
@@ -27,6 +29,8 @@ flutter:
     # 超时会直接让设置 GEOIP 规则的配置启动失败）。
     - assets/geo/geoip.metadb
     - assets/geo/geosite.dat
+    # 上面 dat 里有哪些名字，构建期扫成 JSON（tool/build_geosite_index.dart）。
+    - assets/geo/geosite_index.json
   fonts:
     # 显示字体：标题、大号数值、状态标签。变量字体，字重通过 fontVariations 指定。
     - family: SpaceGrotesk

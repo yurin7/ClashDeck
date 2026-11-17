@@ -307,6 +307,14 @@ class RuntimeController extends ChangeNotifier {
   /// 只在本次启动里生效：用户之后在运行页临时换节点，不该被反复覆盖。
   Future<void> _applySavedGlobalExit() async {
     if (_globalExitApplied) return;
+    // 先把每个组切到记住的节点，再把 GLOBAL 切过去：顺序对了，用户看到的
+    // 「GLOBAL → 组 → 组内节点」才和上次退出时一致。
+    final saved =
+        settingsProvider?.call().groupNodes ?? const <String, String>{};
+    for (final entry in saved.entries) {
+      if (_selected[entry.key] == entry.value) continue;
+      await selectNode(entry.key, entry.value);
+    }
     final node = settingsProvider?.call().globalNode;
     if (node == null || node.isEmpty) {
       _globalExitApplied = true;

@@ -64,6 +64,7 @@ class AppSettings {
     this.launchOnBoot = false,
     this.autoSave = false,
     this.globalNode,
+    this.groupNodes = const <String, String>{},
   });
 
   /// copyWith 里区分「没给这个参数」和「明确要设成 null」。
@@ -88,6 +89,12 @@ class AppSettings {
   /// 内核没起来时也能选、能存，等内核起来再应用（`GLOBAL` 组是内核内置的）。
   final String? globalNode;
 
+  /// 「组 → 组内节点」：用户在概览里把 GLOBAL 指向某个组时，顺手选好的组内节点。
+  ///
+  /// 内核的组选择是运行期状态（不落在 YAML 里），所以也存 sidecar：起内核后
+  /// 先把每个组切到记下的节点，再把 GLOBAL 切到 `globalNode`，顺序还原用户看到的画面。
+  final Map<String, String> groupNodes;
+
   static const AppSettings defaults = AppSettings();
 
   AppSettings copyWith({
@@ -98,6 +105,7 @@ class AppSettings {
     bool? launchOnBoot,
     bool? autoSave,
     Object? globalNode = _unset,
+    Map<String, String>? groupNodes,
   }) {
     return AppSettings(
       proxyMode: proxyMode ?? this.proxyMode,
@@ -109,6 +117,7 @@ class AppSettings {
       globalNode: identical(globalNode, _unset)
           ? this.globalNode
           : globalNode as String?,
+      groupNodes: groupNodes ?? this.groupNodes,
     );
   }
 
@@ -120,6 +129,7 @@ class AppSettings {
     'launchOnBoot': launchOnBoot,
     'autoSave': autoSave,
     'globalNode': globalNode,
+    'groupNodes': groupNodes,
   };
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
@@ -132,11 +142,19 @@ class AppSettings {
           : const <String>[],
       autoUpdateHours: (json['autoUpdateHours'] as num?)?.toInt() ?? 0,
       launchOnBoot: json['launchOnBoot'] == true,
-      // 缺省为 true：老版本存下来的 app 段没有这个键时，仍然按「自动保存」处理。
+      // 缺省为 false：老版本存下来的 app 段没有这个键时，按「不自动保存」处理。
       autoSave: json['autoSave'] as bool? ?? false,
       globalNode: switch (json['globalNode']) {
         final String name when name.isNotEmpty => name,
         _ => null,
+      },
+      groupNodes: switch (json['groupNodes']) {
+        final Map<Object?, Object?> map => {
+          for (final entry in map.entries)
+            if (entry.key is String && entry.value is String)
+              entry.key! as String: entry.value! as String,
+        },
+        _ => const <String, String>{},
       },
     );
   }

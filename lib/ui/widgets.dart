@@ -380,17 +380,23 @@ class _StatusDotState extends State<StatusDot>
     duration: const Duration(milliseconds: 1600),
   );
 
+  /// 呼吸用往返曲线：0 → 1 → 0，循环回起点时不会硬跳。
+  late final Animation<double> _breath = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
   @override
   void initState() {
     super.initState();
-    if (widget.pulsing) _controller.repeat();
+    if (widget.pulsing) _controller.repeat(reverse: true);
   }
 
   @override
   void didUpdateWidget(covariant StatusDot oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.pulsing && !_controller.isAnimating) {
-      _controller.repeat();
+      _controller.repeat(reverse: true);
     } else if (!widget.pulsing && _controller.isAnimating) {
       _controller.stop();
       _controller.value = 0;
@@ -412,22 +418,34 @@ class _StatusDotState extends State<StatusDot>
     );
     if (!widget.pulsing) return dot;
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _breath,
       builder: (context, child) {
-        final t = _controller.value;
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: widget.size + 10 * t,
-              height: widget.size + 10 * t,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.color.withValues(alpha: 0.22 * (1 - t)),
+        final t = _breath.value;
+        final glow = 10 * t;
+        // 光晕必须画在圆点尺寸之外、且不参与布局：否则 Stack 会随光晕长大变宽，
+        // 把右边那行「RUNNING · 运行中」一路往右推，循环回到 0 时又猛地弹回来。
+        return SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: -glow / 2,
+                top: -glow / 2,
+                child: Container(
+                  width: widget.size + glow,
+                  height: widget.size + glow,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color.withValues(alpha: 0.22 * (1 - t)),
+                  ),
+                ),
               ),
-            ),
-            child!,
-          ],
+              child!,
+            ],
+          ),
         );
       },
       child: dot,

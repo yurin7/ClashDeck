@@ -33,6 +33,10 @@ Thumbs.db
 # 本地备份
 *.bak
 
-# 发布签名：这两个文件要进仓库，CI 才能每次用同一个 key 签名（新包可直接覆盖安装升级）
-!android/key.properties
-!android/app/*.jks
+# 发布签名：keystore 与 key.properties 绝不进仓库！
+# CI 从 GitHub Actions Secrets 还原 keystore（KEYSTORE_BASE64 等 4 个），本地放仓库外
+# （默认 C:\Users\<你>\.clashdeck\），详见 README「签名与覆盖升级」。
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+tool/signing-secrets.txt

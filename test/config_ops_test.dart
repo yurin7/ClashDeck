@@ -417,4 +417,25 @@ proxy-groups:
       );
     });
   });
+
+  group('组成员', () {
+    test('系统策略可以写进组的 proxies（DIRECT / REJECT 不是未知节点）', () {
+      final doc = YamlDoc.parse(fixture);
+      final withGroup = ConfigOps.addGroup(doc, {
+        'name': 'EMPTY',
+        'type': 'select',
+      });
+      final next = ConfigOps.addGroupMember(withGroup, 'EMPTY', 'DIRECT');
+      final groups = next.plainAt(['proxy-groups']) as List;
+      final empty =
+          groups.firstWhere((g) => (g as Map)['name'] == 'EMPTY') as Map;
+      expect(empty['proxies'], ['DIRECT']);
+      // 再补一个 REJECT，顺序按加入顺序。
+      final after = ConfigOps.addGroupMember(next, 'EMPTY', 'REJECT');
+      final groupsAfter = after.plainAt(['proxy-groups']) as List;
+      final emptyAfter =
+          groupsAfter.firstWhere((g) => (g as Map)['name'] == 'EMPTY') as Map;
+      expect(emptyAfter['proxies'], ['DIRECT', 'REJECT']);
+    });
+  });
 }

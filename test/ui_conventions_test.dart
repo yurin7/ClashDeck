@@ -22,6 +22,31 @@ Widget build(BuildContext context) {
       expect(scanned.violations.length, 2);
     });
 
+    test('Checkbox 系的 .adaptive 变体也命中', () {
+      final scanned = scanSource('lib/ui/example.dart', '''
+Widget build(BuildContext context) {
+  return Column(
+    children: [
+      Checkbox.adaptive(value: true, onChanged: (_) {}),
+      CheckboxListTile.adaptive(value: false, onChanged: (_) {}),
+    ],
+  );
+}
+''');
+      expect(
+        scanned.violations.where((v) => v.rule == 'no-checkbox'),
+        hasLength(2),
+      );
+    });
+
+    test('应用选择页没有 Checkbox', () {
+      final scanned = scanSource(
+        'lib/ui/app_picker_page.dart',
+        File('lib/ui/app_picker_page.dart').readAsStringSync(),
+      );
+      expect(scanned.violations.where((v) => v.rule == 'no-checkbox'), isEmpty);
+    });
+
     test('showDialog 与 AlertDialog 分属两条规则', () {
       final scanned = scanSource('lib/ui/example.dart', '''
 Future<void> f(BuildContext context) async {

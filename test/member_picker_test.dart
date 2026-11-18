@@ -136,6 +136,32 @@ void main() {
       expect(candidates.any((c) => c.name == 'OTHER'), isFalse);
     });
 
+    test('0 个节点时候选里仍有系统策略（DIRECT / REJECT / REJECT-DROP）', () {
+      final doc = YamlDoc.parse(
+        'proxies: []\n'
+        'proxy-groups:\n'
+        '  - name: EMPTY\n'
+        '    type: select\n'
+        "    proxies: []\n"
+        'rules:\n'
+        '  - MATCH,EMPTY\n',
+      );
+      expect(doc.isValid, isTrue, reason: '${doc.error}');
+      final candidates = memberCandidates(
+        Profile.from(doc),
+        groupName: 'EMPTY',
+        members: const [],
+      );
+      expect(candidates.map((c) => c.name), [
+        'DIRECT',
+        'REJECT',
+        'REJECT-DROP',
+      ]);
+      expect(candidates.every((c) => c.isBuiltin), isTrue);
+      expect(candidates.every((c) => !c.inGroup), isTrue);
+      expect(candidates.firstWhere((c) => c.name == 'REJECT-DROP').note, '不常用');
+    });
+
     test('已在组内的内置出站置灰，REJECT-DROP 标「不常用」', () {
       final candidates = memberCandidates(
         profile(),

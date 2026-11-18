@@ -136,7 +136,12 @@ bool _looksLikeDeclaration(String source, int nameIndex) {
   final source = stripLineComment(raw);
   final violations = <Violation>[];
 
-  for (final pattern in <String>['Checkbox(', 'CheckboxListTile(']) {
+  for (final pattern in <String>[
+    'Checkbox(',
+    'Checkbox.adaptive(',
+    'CheckboxListTile(',
+    'CheckboxListTile.adaptive(',
+  ]) {
     var index = source.indexOf(pattern);
     while (index >= 0) {
       violations.add(

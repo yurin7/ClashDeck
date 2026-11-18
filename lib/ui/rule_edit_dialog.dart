@@ -4,6 +4,7 @@ import '../core/edit/config_ops.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
 import 'fields.dart';
+import 'widgets/edit_dialog.dart';
 import 'widgets/target_selector_field.dart';
 import 'toast.dart';
 
@@ -142,70 +143,53 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
       ...kRuleTypes,
       if (!kRuleTypes.contains(_type)) _type,
     };
-    return AlertDialog(
-      title: Text(widget.isNew ? '新建规则' : '编辑规则'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AppDropdown<String>(
-              label: '类型',
-              expand: true,
-              value: _type,
-              options: [for (final t in types) DropdownOption(t, t)],
-              onChanged: (v) => setState(() => _type = v),
-            ),
-            const SizedBox(height: 12),
-            if (_needsPayload)
-              AppTextField(
-                controller: _payloadCtrl,
-                label: '匹配内容',
-                hint: _payloadHint,
-              ),
-            if (_needsPayload) const SizedBox(height: 12),
-            TargetSelectorField(
-              label: '目标（策略 / 组）',
-              value: _target,
-              options: <String>{
-                ...widget.targets,
-                if (!widget.targets.contains(_target)) _target,
-              }.toList(),
-              otherOptions: widget.isNew
-                  ? const <String>[]
-                  : widget.otherBuiltins,
-              onChanged: (v) => setState(() => _target = v),
-            ),
-
-            if (kNoResolveTypes.contains(_type))
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('no-resolve'),
-                subtitle: const Text('不解析域名（仅 GEOIP / IP-CIDR 生效）'),
-                value: _noResolve,
-                onChanged: (v) => setState(() => _noResolve = v),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        if (!widget.isNew)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('delete'),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [Icon(Icons.delete_outline, size: 18), Text('删除')],
-            ),
+    return EditDialog(
+      title: widget.isNew ? '新建规则' : '编辑规则',
+      confirmLabel: '保存',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppDropdown<String>(
+            label: '类型',
+            expand: true,
+            value: _type,
+            options: [for (final t in types) DropdownOption(t, t)],
+            onChanged: (v) => setState(() => _type = v),
           ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('保存')),
-      ],
+          const SizedBox(height: 12),
+          if (_needsPayload)
+            AppTextField(
+              controller: _payloadCtrl,
+              label: '匹配内容',
+              hint: _payloadHint,
+            ),
+          if (_needsPayload) const SizedBox(height: 12),
+          TargetSelectorField(
+            label: '目标（策略 / 组）',
+            value: _target,
+            options: <String>{
+              ...widget.targets,
+              if (!widget.targets.contains(_target)) _target,
+            }.toList(),
+            otherOptions: widget.isNew
+                ? const <String>[]
+                : widget.otherBuiltins,
+            onChanged: (v) => setState(() => _target = v),
+          ),
+          if (kNoResolveTypes.contains(_type))
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('no-resolve'),
+              subtitle: const Text('不解析域名（仅 GEOIP / IP-CIDR 生效）'),
+              value: _noResolve,
+              onChanged: (v) => setState(() => _noResolve = v),
+            ),
+        ],
+      ),
+      onConfirm: _submit,
+      onCancel: () => Navigator.of(context).pop(),
+      onDelete: widget.isNew ? null : () => Navigator.of(context).pop('delete'),
     );
   }
 }

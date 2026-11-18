@@ -1,5 +1,5 @@
 import 'package:clashdeck/state/editor_state.dart';
-import 'package:clashdeck/ui/picker_sheet.dart';
+import 'package:clashdeck/ui/widgets/target_selector_field.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:clashdeck/ui/sheets.dart';
 import 'package:material_ui/material_ui.dart';
@@ -190,24 +190,18 @@ void main() {
     expect(height, lessThanOrEqualTo(_expectedMax(logicalHeight: 2400) + 1));
   });
 
-  testWidgets('GLOBAL 选择面板（picker_sheet）不超过屏高 72%', (tester) async {
+  testWidgets('GLOBAL 选择面板（showTargetPickerSheet）不超过屏高 72%', (tester) async {
     _sizeScreen(tester, logicalWidth: 540, logicalHeight: 2400);
     await _open(
       tester,
-      (context) => showPickerSheet<String>(
+      (context) => showTargetPickerSheet(
         context,
         title: 'GLOBAL 走哪个节点',
-        chipMode: true,
-        options: [
-          for (var i = 0; i < 40; i++)
-            PickerOption('n$i', '节点 $i', icon: Icons.dns_outlined),
-        ],
+        options: [for (var i = 0; i < 40; i++) 'n$i'],
       ),
     );
 
-    final height = tester
-        .getSize(find.byKey(const ValueKey('picker-sheet')))
-        .height;
+    final height = tester.getSize(find.byType(BottomSheet)).height;
     expect(height, lessThanOrEqualTo(_expectedMax(logicalHeight: 2400) + 1));
   });
 }

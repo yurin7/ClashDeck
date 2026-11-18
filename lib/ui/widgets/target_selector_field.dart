@@ -41,15 +41,13 @@ class TargetSelectorField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   Future<void> _open(BuildContext context) async {
-    final picked = await showSelectSheet<String>(
+    final picked = await showTargetPickerSheet(
       context,
       title: label,
-      body: (_) => _TargetPickerSheet(
-        options: options,
-        otherOptions: otherOptions,
-        current: value,
-        emptyLabel: emptyLabel,
-      ),
+      options: options,
+      otherOptions: otherOptions,
+      current: value,
+      emptyLabel: emptyLabel,
     );
     if (picked != null) onChanged?.call(picked);
   }
@@ -81,18 +79,50 @@ class TargetSelectorField extends StatelessWidget {
   }
 }
 
+/// 打开「选目标」面板，返回值：null = 取消，'' = 选了空选项，其它 = 选中的名字。
+///
+/// 全局出口、组内节点、规则改挂这些入口都复用它，保证和「编辑规则」里
+/// 选目标是同一套面板（分类 + 胶囊 + 高亮行 + 搜索）。
+Future<String?> showTargetPickerSheet(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  required List<String> options,
+  List<String> otherOptions = const <String>[],
+  String current = '',
+  String? emptyLabel,
+  Map<String, String?> subtitles = const <String, String?>{},
+}) {
+  return showSelectSheet<String>(
+    context,
+    title: title,
+    subtitle: subtitle,
+    body: (_) => _TargetPickerSheet(
+      options: options,
+      otherOptions: otherOptions,
+      current: current,
+      emptyLabel: emptyLabel,
+      subtitles: subtitles,
+    ),
+  );
+}
+
 class _TargetPickerSheet extends StatefulWidget {
   const _TargetPickerSheet({
     required this.options,
     required this.otherOptions,
     required this.current,
     this.emptyLabel,
+    this.subtitles = const <String, String?>{},
   });
 
   final List<String> options;
   final List<String> otherOptions;
   final String current;
   final String? emptyLabel;
+
+  /// 调用方额外补充的副标题（例如策略组的「组 · 3」）。
+  final Map<String, String?> subtitles;
 
   @override
   State<_TargetPickerSheet> createState() => _TargetPickerSheetState();
@@ -103,7 +133,9 @@ class _TargetPickerSheetState extends State<_TargetPickerSheet> {
 
   Widget _chip(String name) => NameChip(
     name: name,
-    subtitle: widget.otherOptions.contains(name)
+    subtitle: widget.subtitles.containsKey(name)
+        ? widget.subtitles[name]
+        : widget.otherOptions.contains(name)
         ? kAdvancedBuiltinNotes[name] ?? '高级内置'
         : Profile.builtinTargets.contains(name)
         ? '系统策略'

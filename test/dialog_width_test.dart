@@ -45,7 +45,7 @@ void main() {
     });
   });
 
-  testWidgets('同屏三个业务弹窗宽度一致', (tester) async {
+  testWidgets('业务弹窗宽度一致', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetPhysicalSize);
@@ -67,17 +67,10 @@ void main() {
     // 1) 编辑规则
     await tester.tap(find.byType(RuleRowCard).first);
     await tester.pumpAndSettle();
-    final ruleWidth = tester.getSize(find.byType(AlertDialog)).width;
+    final ruleWidth = tester
+        .getSize(find.byKey(const ValueKey('edit-dialog')))
+        .width;
     final ruleFieldHeight = tester.getSize(find.byType(TextField).first).height;
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-
-    // 2) 粘贴导入
-    await tester.tap(find.byTooltip('更多操作').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('粘贴导入…'));
-    await tester.pumpAndSettle();
-    final importWidth = tester.getSize(find.byType(AlertDialog)).width;
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
 
@@ -100,7 +93,9 @@ void main() {
     await tester.ensureVisible(find.text('新建组'));
     await tester.tap(find.text('新建组'));
     await tester.pumpAndSettle();
-    final groupWidth = tester.getSize(find.byType(AlertDialog)).width;
+    final groupWidth = tester
+        .getSize(find.byKey(const ValueKey('edit-dialog')))
+        .width;
     final groupFieldHeight = tester
         .getSize(find.byType(TextField).first)
         .height;
@@ -108,7 +103,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(ruleWidth, expected);
-    expect(importWidth, expected);
     expect(groupWidth, expected);
     expect(groupFieldHeight, closeTo(ruleFieldHeight, 1));
     expect(ruleFieldHeight, lessThan(60));

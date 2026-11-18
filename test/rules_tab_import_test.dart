@@ -129,28 +129,11 @@ void main() {
     await _drainDispose(tester);
   });
 
-  testWidgets('粘贴导入：多行规则仍然可用，落库后 MATCH 还在最后', (tester) async {
-    final state = await _pumpRulesTab(tester);
+  testWidgets('在线区头不再有 ⋮ 粘贴导入入口', (tester) async {
+    await _pumpRulesTab(tester);
 
-    await tester.tap(find.byTooltip('更多操作').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('粘贴导入…'));
-    await tester.pumpAndSettle();
-    expect(find.text('导入规则'), findsOneWidget);
-
-    await tester.enterText(
-      find.byType(TextField).first,
-      'DOMAIN-SUFFIX,a.com,DIRECT\nDOMAIN-SUFFIX,b.com,DIRECT',
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('导入'));
-    await tester.pumpAndSettle();
-
-    final raws = state.profile.rules.map((rule) => rule.raw).toList();
-    expect(raws, contains('DOMAIN-SUFFIX,a.com,DIRECT'));
-    expect(raws, contains('DOMAIN-SUFFIX,b.com,DIRECT'));
-    expect(state.profile.rules.last.isTerminal, isTrue);
-    expect(state.lastError, isNull);
+    expect(find.text('粘贴导入…'), findsNothing);
+    expect(find.text('导入规则'), findsNothing);
   });
 
   testWidgets('导入目标回落到 DEFAULT，不会落进别的 select 组', (tester) async {

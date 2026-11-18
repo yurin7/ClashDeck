@@ -15,6 +15,7 @@ import 'chips.dart';
 import 'sheets.dart';
 import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
+import 'widgets/edit_dialog.dart';
 import 'widgets/selectable_tile.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -324,6 +325,12 @@ class _ProxyBoardState extends State<ProxyBoard> {
       }, members: members),
     )) {
       _fail();
+      return;
+    }
+    // 新组默认把第一个成员当作当前出口：DIRECT 默认勾选，所以新建后就是高亮的。
+    if (members.isNotEmpty) {
+      await widget.onGroupSelection?.call(spec.name, members.first);
+      if (mounted) setState(() {});
     }
   }
 
@@ -496,7 +503,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
                 // 组头计数直接读 state，刷新一次就能看到新成员。
                 if (mounted) {
                   setState(() {});
-                  _toast('已加入 \$added 个');
+                  _toast('已加入 $added 个');
                 }
               },
               onDrop: (data) {
@@ -819,20 +826,6 @@ class _GroupCard extends StatelessWidget {
                               ' · ${group.members.length} 成员',
                               style: mono(10.5, color: scheme.onSurfaceVariant),
                             ),
-                            if (selectedName != null &&
-                                group.members.contains(selectedName))
-                              Flexible(
-                                child: Text(
-                                  ' · 当前 $selectedName',
-                                  style: mono(
-                                    10.5,
-                                    color: scheme.primary,
-                                    weight: 600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
                             if (group.computedMembers) ...[
                               const SizedBox(width: Insets.xs),
                               Pill(
@@ -843,6 +836,21 @@ class _GroupCard extends StatelessWidget {
                             ],
                           ],
                         ),
+                        if (selectedName != null &&
+                            group.members.contains(selectedName)) ...[
+                          const SizedBox(height: 3),
+                          // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
+                          Text(
+                            '当前 $selectedName',
+                            style: mono(
+                              10.5,
+                              color: scheme.primary,
+                              weight: 600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -916,6 +924,7 @@ class _GroupCard extends StatelessWidget {
                             name: name,
                             members: nested.members.length,
                             type: nested.type,
+                            selected: selectedName == name,
                             tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
                             onRemove: () => onRemove(name),
                           )
@@ -923,6 +932,7 @@ class _GroupCard extends StatelessWidget {
                           SystemPolicyChip(
                             name: name,
                             note: name == 'REJECT-DROP' ? '不常用' : null,
+                            selected: selectedName == name,
                             tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
                             onRemove: () => onRemove(name),
                           )
@@ -1065,8 +1075,9 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: const Text('新建策略组'),
+    return EditDialog(
+      title: '新建策略组',
+      confirmLabel: '创建',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1103,24 +1114,16 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+      onConfirm: () => Navigator.pop(
+        context,
+        _NewGroupSpec(
+          name: _ctrl.text.trim(),
+          type: _type,
+          withDirect: _withDirect,
+          withReject: _withReject,
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _NewGroupSpec(
-              name: _ctrl.text.trim(),
-              type: _type,
-              withDirect: _withDirect,
-              withReject: _withReject,
-            ),
-          ),
-          child: const Text('创建'),
-        ),
-      ],
+      ),
+      onCancel: () => Navigator.pop(context),
     );
   }
 }
@@ -1185,66 +1188,56 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('编辑策略组'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(
-              controller: _nameCtrl,
-              label: '组名',
-              helper: '改名会同步规则与其它组里的引用',
-            ),
-            const SizedBox(height: 12),
-            AppDropdown<String>(
-              label: '类型',
-              expand: true,
-              value: _type,
-              options: [
-                for (final t in kGroupTypes)
-                  DropdownOption(t, _ProxyBoardState._groupTypeLabel(t)),
-              ],
-              onChanged: (v) => setState(() => _type = v),
-            ),
-            if (_timed) ...[
-              const SizedBox(height: 12),
-              AppTextField(controller: _urlCtrl, label: '测速 URL'),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _intervalCtrl,
-                keyboardType: TextInputType.number,
-                label: '间隔（秒）',
-              ),
+    return EditDialog(
+      title: '编辑策略组',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppTextField(
+            controller: _nameCtrl,
+            label: '组名',
+            helper: '改名会同步规则与其它组里的引用',
+          ),
+          const SizedBox(height: 12),
+          AppDropdown<String>(
+            label: '类型',
+            expand: true,
+            value: _type,
+            options: [
+              for (final t in kGroupTypes)
+                DropdownOption(t, _ProxyBoardState._groupTypeLabel(t)),
             ],
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('在面板中隐藏'),
-              value: _hidden,
-              onChanged: (v) => setState(() => _hidden = v),
+            onChanged: (v) => setState(() => _type = v),
+          ),
+          if (_timed) ...[
+            const SizedBox(height: 12),
+            AppTextField(controller: _urlCtrl, label: '测速 URL'),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _intervalCtrl,
+              keyboardType: TextInputType.number,
+              label: '间隔（秒）',
             ),
           ],
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('在面板中隐藏'),
+            value: _hidden,
+            onChanged: (v) => setState(() => _hidden = v),
+          ),
+        ],
+      ),
+      onConfirm: () => Navigator.pop(
+        context,
+        _GroupEditResult(
+          name: _nameCtrl.text.trim(),
+          type: _type,
+          url: _urlCtrl.text,
+          interval: _intervalCtrl.text,
+          hidden: _hidden,
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _GroupEditResult(
-              name: _nameCtrl.text.trim(),
-              type: _type,
-              url: _urlCtrl.text,
-              interval: _intervalCtrl.text,
-              hidden: _hidden,
-            ),
-          ),
-          child: const Text('保存'),
-        ),
-      ],
+      onCancel: () => Navigator.pop(context),
     );
   }
 }

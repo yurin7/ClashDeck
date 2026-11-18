@@ -19,8 +19,7 @@ import '../data/app_prefs.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
-import 'import_dialogs.dart';
-import 'picker_sheet.dart';
+import 'widgets/target_selector_field.dart';
 import 'rule_edit_dialog.dart';
 import 'dropdown.dart';
 import 'rules/geo_import_sheet.dart';
@@ -199,23 +198,11 @@ class _RulesTabState extends State<RulesTab> {
   /// 把一条规则改挂到别的策略组：只替换目标，其余 token 原样保留。
   Future<void> _moveRuleToGroup(RuleEntry rule) async {
     final targets = ruleTargetsFor(s.profile, preferred: rule.target).primary;
-    final picked = await showPickerSheet<String>(
+    final picked = await showTargetPickerSheet(
       context,
       title: '改挂到组',
       subtitle: rule.raw,
-      options: [
-        for (final name in targets)
-          PickerOption(
-            name,
-            name,
-            subtitle: Profile.builtinTargets.contains(name)
-                ? '系统策略'
-                : s.profile.group(name)?.typeLabel,
-            icon: Profile.builtinTargets.contains(name)
-                ? Icons.bolt_outlined
-                : Icons.account_tree_outlined,
-          ),
-      ],
+      options: targets,
       current: rule.target,
     );
     if (picked == null || picked == rule.target || !mounted) return;
@@ -250,58 +237,6 @@ class _RulesTabState extends State<RulesTab> {
           groupName: kDefaultGroupName,
         );
     }
-  }
-
-  /// 在线区头 ⋮ 里的「粘贴导入…」：多行规则 / YAML 片段 / 规则集地址。
-  ///
-  /// 仍是原来那个对话框，只是入口挪进了菜单，主面板不再摆一个大粘贴框。
-  Future<void> _pasteImport() async {
-    final input = await showRuleImportDialog(
-      context,
-      groups: [for (final g in s.profile.groups) g.name],
-    );
-    if (input == null) return;
-    if (input.preset) {
-      // 让上一个对话框的退场动画先跑完，否则新路由的入场动画会停在 0。
-      await Future<void>.delayed(const Duration(milliseconds: 280));
-      await _openOnlineImport();
-      return;
-    }
-    final text = input.text.trim();
-    if (text.isEmpty) return;
-    if (_urlPattern.hasMatch(text)) {
-      await _importRuleProviderFromUrl(
-        text,
-        groupName: input.group.isEmpty
-            ? kDefaultGroupName
-            : _resolveTarget(input.group),
-      );
-      return;
-    }
-    final RuleImportOutcome outcome;
-    try {
-      outcome = importRules(s.doc, text);
-    } on ConfigEditException catch (e) {
-      if (!mounted) return;
-      showToast(context, e.message);
-      return;
-    }
-    if (outcome.isEmpty) {
-      if (!mounted) return;
-      showToast(
-        context,
-        outcome.warnings.isEmpty
-            ? '没有可导入的规则'
-            : '没有可导入的规则：${outcome.warnings.first}',
-      );
-      return;
-    }
-    if (!s.apply((_) => outcome.doc)) {
-      _fail();
-      return;
-    }
-    if (!mounted) return;
-    showToast(context, '已导入：${outcome.summary}');
   }
 
   /// 拉取勾选的规则集 → 预览 → 写入 provider + `RULE-SET,<id>,DEFAULT`。
@@ -410,8 +345,6 @@ class _RulesTabState extends State<RulesTab> {
             ),
     );
   }
-
-  static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
 
   /// 从规则集地址导入：拉下来 → 猜 behavior → 写 provider + RULE-SET。
   ///
@@ -833,14 +766,6 @@ class _RulesTabState extends State<RulesTab> {
               open: _onlineOpen,
               onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
               onAdd: _openOnlineImport,
-              menu: PopupMenuButton<String>(
-                tooltip: '更多操作',
-                icon: const Icon(Icons.more_vert, size: 18),
-                onSelected: (_) => _pasteImport(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'paste', child: Text('粘贴导入…')),
-                ],
-              ),
             ),
           ),
         ),
@@ -927,7 +852,6 @@ class _RulesTabState extends State<RulesTab> {
     required bool open,
     required VoidCallback onToggle,
     VoidCallback? onAdd,
-    Widget? menu,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final accent = switch (zone) {
@@ -969,7 +893,6 @@ class _RulesTabState extends State<RulesTab> {
               padding: const EdgeInsets.only(right: Insets.xs),
               child: Text(_onlineSummary, style: hintStyle(context)),
             ),
-          ?menu,
           if (onAdd != null)
             IconButton(
               onPressed: onAdd,

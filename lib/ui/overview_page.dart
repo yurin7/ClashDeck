@@ -5,8 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../core/model/app_settings.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
-import 'picker_sheet.dart';
 import 'theme.dart';
+import 'widgets/target_selector_field.dart';
 import 'chips.dart';
 import 'widgets.dart';
 
@@ -526,41 +526,37 @@ class _GlobalExitRow extends StatelessWidget {
 
   Future<void> _pick(BuildContext context) async {
     final candidates = _candidates();
-    final picked = await showPickerSheet<String>(
+    final picked = await showTargetPickerSheet(
       context,
       title: 'GLOBAL 走哪个节点',
-      // 一屏十几个名字，胶囊比整行列表更好扫。
-      chipMode: true,
-      options: [
+      options: candidates,
+      current: settings.globalNode ?? '',
+      emptyLabel: '跟随内核默认（DIRECT）',
+      subtitles: {
         for (final name in candidates)
-          PickerOption<String>(
-            name,
-            name,
-            icon: _iconOf(name),
-            subtitle: _membersOf(name).isEmpty
-                ? null
-                : '组 · ${_membersOf(name).length}',
-          ),
-      ],
-      current: settings.globalNode,
+          if (_membersOf(name).isNotEmpty)
+            name: '组 · ${_membersOf(name).length}',
+      },
     );
     if (picked == null || !context.mounted) return;
+
+    if (picked.isEmpty) {
+      await settings.setGlobalNode(null);
+      onChanged();
+      return;
+    }
 
     // 选中的是策略组时，再问一次「组里用哪个节点」，这样一次点选就把
     // GLOBAL → 组 → 节点 这条链走完，不用再去运行页翻两层。
     final members = _membersOf(picked);
     String? member;
     if (members.isNotEmpty) {
-      final choice = await showPickerSheet<String>(
+      final choice = await showTargetPickerSheet(
         context,
         title: '「$picked」里用哪个节点',
-        chipMode: true,
-        options: [
-          const PickerOption<String>('', '跟着组自己的选择走', icon: Icons.link),
-          for (final name in members)
-            PickerOption<String>(name, name, icon: _iconOf(name)),
-        ],
+        options: members,
         current: settings.groupNodes[picked] ?? '',
+        emptyLabel: '跟着组自己的选择走',
       );
       if (choice == null || !context.mounted) return;
       member = choice.isEmpty ? null : choice;

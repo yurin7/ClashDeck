@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../runtime/platform_apps.dart';
 import 'theme.dart';
+import 'widgets/selectable_tile.dart';
 import 'fields.dart';
 import 'widgets.dart';
 
@@ -109,32 +110,43 @@ class _AppPickerPageState extends State<AppPickerPage> {
                     itemBuilder: (context, index) {
                       final app = filtered[index];
                       final checked = _picked.contains(app.package);
-                      return CheckboxListTile.adaptive(
-                        value: checked,
-                        onChanged: (value) {
-                          setState(() {
-                            if (value == true) {
-                              _picked.add(app.package);
-                            } else {
-                              _picked.remove(app.package);
-                            }
-                          });
-                        },
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: Insets.lg,
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Insets.md,
+                          vertical: 1,
                         ),
-                        title: Text(
-                          app.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: display(14, weight: 500),
-                        ),
-                        subtitle: Text(
-                          app.package,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: mono(10.5, color: scheme.onSurfaceVariant),
+                        child: SelectableTile(
+                          selected: checked,
+                          onTap: () {
+                            setState(() {
+                              if (checked) {
+                                _picked.remove(app.package);
+                              } else {
+                                _picked.add(app.package);
+                              }
+                            });
+                          },
+                          leading: Icon(
+                            checked
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 18,
+                            color: checked
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                          title: Text(
+                            app.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: display(14, weight: 500),
+                          ),
+                          subtitle: Text(
+                            app.package,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: mono(10.5, color: scheme.onSurfaceVariant),
+                          ),
                         ),
                       );
                     },

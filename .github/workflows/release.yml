@@ -98,8 +98,34 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # 测试失败时把关键行写进 job summary：匿名访问 run 页面也能看到失败
+      # 用例名，不用登录下载日志。
       - name: Test
-        run: flutter test
+        run: |
+          set -o pipefail
+          set +e
+          flutter test --reporter expanded 2>&1 | tee "$RUNNER_TEMP/test.log"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            version="$(flutter --version 2>/dev/null | head -n 1 || true)"
+            matches="$(grep -nE '\[E\]|Expected:|Actual:|Some tests failed|Exception|overflowed|Timed out|Test failed' "$RUNNER_TEMP/test.log" | head -n 100 || true)"
+            if [ -z "$matches" ]; then
+              matches="$(tail -n 80 "$RUNNER_TEMP/test.log")"
+            fi
+            {
+              echo "## ❌ 测试失败"
+              echo
+              echo "- 提交：\`${GITHUB_SHA:0:7}\`"
+              echo "- Flutter：\`${version}\`"
+              echo "- 日志行数：\`$(wc -l < "$RUNNER_TEMP/test.log")\`"
+              echo
+              echo '```'
+              echo "$matches"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
 
       - name: Configure signing
         id: signing

@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 写死修改时间：`ProfileStore.list` 按 mtime 倒序，测试不依赖写入顺序。
+void _stamp(File file, DateTime when) => file.setLastModifiedSync(when);
+
 /// HomePage 的渲染回归测试：mock 掉 path_provider，在临时目录里放三分
 /// 配置（正常 / 非法 YAML / 订阅），验证品牌卡、摘要、校验状态与空态。
 void main() {
@@ -46,6 +49,18 @@ rules:
     File('${profiles.path}/订阅.yaml').writeAsStringSync('proxies: []\n');
     File('${profiles.path}/订阅.yaml.meta.json').writeAsStringSync(
       '{"subscriptionUrl":"https://sub.example.com/api?token=1"}',
+    );
+    // mtime 只有毫秒精度，几份文件连着写可能落在同一毫秒（CI 上很常见）；
+    // 显式写死时间戳，让「订阅 → 坏配置 → 正常」的顺序在任何平台都稳定。
+    final base = DateTime.now().subtract(const Duration(minutes: 10));
+    _stamp(File('${profiles.path}/正常.yaml'), base);
+    _stamp(
+      File('${profiles.path}/坏配置.yaml'),
+      base.add(const Duration(minutes: 1)),
+    );
+    _stamp(
+      File('${profiles.path}/订阅.yaml'),
+      base.add(const Duration(minutes: 2)),
     );
   });
 

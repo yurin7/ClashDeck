@@ -59,7 +59,12 @@ class ProfileStore {
         ),
       );
     }
-    out.sort((a, b) => b.modified.compareTo(a.modified));
+    // 最新的排在前面。mtime 只有毫秒精度，批量写入的几份配置可能是同一
+    // 毫秒，所以再按文件名兜底，保证列表顺序在所有平台上都一样。
+    out.sort((a, b) {
+      final byTime = b.modified.compareTo(a.modified);
+      return byTime != 0 ? byTime : a.fileName.compareTo(b.fileName);
+    });
     return out;
   }
 

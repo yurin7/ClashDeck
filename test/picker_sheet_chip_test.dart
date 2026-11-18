@@ -3,6 +3,13 @@ import 'package:clashdeck/ui/theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 面板进出场只有 240ms（chip 高亮 140ms）；用固定时长 pump，不依赖
+/// pumpAndSettle 的「等到没有动画」——CI 上万一有常驻动画也不会卡死。
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 /// 打开面板，把选中结果抓回来。
 Future<String? Function()> _open(
   WidgetTester tester, {
@@ -49,7 +56,7 @@ Future<String? Function()> _open(
     ),
   );
   await tester.tap(find.text('open'));
-  await tester.pumpAndSettle();
+  await _settle(tester);
   return () => result;
 }
 
@@ -68,7 +75,7 @@ void main() {
     expect(find.text('直连'), findsOneWidget);
 
     await tester.tap(find.text('PROXY'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(result(), 'PROXY');
     expect(find.text('GLOBAL 走哪个节点'), findsNothing);
   });
@@ -80,7 +87,7 @@ void main() {
     expect(find.byIcon(Icons.check), findsOneWidget);
 
     await tester.tap(find.text('DIRECT'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(result(), 'DIRECT');
   });
 }

@@ -213,7 +213,8 @@ class _RulesTabState extends State<RulesTab> {
 
   /// 在线面板：勾选整包规则集，或填一个自定义地址；目标一律 DEFAULT。
   Future<void> _openOnlineImport() async {
-    final request = await showOnlineImportSheet(context);
+    final existing = _onlinePresets().map((preset) => preset.id).toSet();
+    final request = await showOnlineImportSheet(context, existingIds: existing);
     if (request == null || !mounted) return;
     switch (request) {
       case OnlinePresetRequest():

@@ -30,14 +30,17 @@ class OnlineCustomUrlRequest extends OnlineImportRequest {
 /// 这里只负责「挑什么」，不碰配置：勾选结果、自定义地址都通过
 /// [OnlineImportRequest] 交回规则页，由 core 里的 `online_import.dart`
 /// 算出预览再落地，目标组一律 DEFAULT。
-Future<OnlineImportRequest?> showOnlineImportSheet(BuildContext context) {
+Future<OnlineImportRequest?> showOnlineImportSheet(
+  BuildContext context, {
+  Set<String> existingIds = const <String>{},
+}) {
   return showGeneralDialog<OnlineImportRequest>(
     context: context,
     barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 240),
-    pageBuilder: (_, _, _) => const _OnlineImportSheet(),
+    pageBuilder: (_, _, _) => _OnlineImportSheet(existingIds: existingIds),
     transitionBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(
         parent: animation,
@@ -59,7 +62,10 @@ Future<OnlineImportRequest?> showOnlineImportSheet(BuildContext context) {
 }
 
 class _OnlineImportSheet extends StatefulWidget {
-  const _OnlineImportSheet();
+  const _OnlineImportSheet({required this.existingIds});
+
+  /// 配置里已经有的规则集 id：默认勾选、显示「已添加」且不可切换。
+  final Set<String> existingIds;
 
   @override
   State<_OnlineImportSheet> createState() => _OnlineImportSheetState();
@@ -69,6 +75,21 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   static final RegExp _urlPattern = RegExp(r'^https?://\S+$');
 
   final Set<String> _picked = <String>{};
+  late final Set<String> _existing = widget.existingIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _picked
+      ..clear()
+      ..addAll(_existing);
+  }
+
+  /// 只统计本次新增，已添加的不计入按钮数量。
+  int get _newCount => _picked.where((id) => !_existing.contains(id)).length;
+
+  Iterable<RulePreset> _selectable(Iterable<RulePreset> presets) =>
+      presets.where((preset) => !_existing.contains(preset.id));
   final Set<String> _collapsed = <String>{};
   final TextEditingController _urlCtrl = TextEditingController(
     text: 'https://',
@@ -94,6 +115,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   List<RulePreset> get _all => [for (final group in _groups) ...group.presets];
 
   void _togglePreset(RulePreset preset, bool? value) {
+    if (_existing.contains(preset.id)) return;
     setState(() {
       if (value == true) {
         _picked.add(preset.id);
@@ -105,7 +127,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
 
   void _setGroup(List<RulePreset> presets, {required bool selected}) {
     setState(() {
-      for (final preset in presets) {
+      for (final preset in _selectable(presets)) {
         if (selected) {
           _picked.add(preset.id);
         } else {
@@ -118,7 +140,8 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   void _submitPresets() {
     final chosen = [
       for (final preset in _all)
-        if (_picked.contains(preset.id)) preset,
+        if (_picked.contains(preset.id) && !_existing.contains(preset.id))
+          preset,
     ];
     if (chosen.isEmpty) return;
     Navigator.of(context).pop(OnlinePresetRequest(chosen));
@@ -202,13 +225,21 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                       ),
                       importSheetAction(
                         label: '全部',
-                        onPressed: () => _setGroup(_all, selected: true),
+                        onPressed: _selectable(_all).isEmpty
+                            ? null
+                            : () => _setGroup(
+                                _selectable(_all).toList(),
+                                selected: true,
+                              ),
                       ),
                       importSheetAction(
                         label: '清空全部',
-                        onPressed: _picked.isEmpty
+                        onPressed: _newCount == 0
                             ? null
-                            : () => _setGroup(_all, selected: false),
+                            : () => _setGroup(
+                                _selectable(_all).toList(),
+                                selected: false,
+                              ),
                       ),
                     ],
                   ),
@@ -238,8 +269,8 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                   child: SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _picked.isEmpty ? null : _submitPresets,
-                      child: Text('导入 ${_picked.length} 个'),
+                      onPressed: _newCount == 0 ? null : _submitPresets,
+                      child: Text('导入 $_newCount 个'),
                     ),
                   ),
                 ),
@@ -257,7 +288,8 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   ) {
     final scheme = Theme.of(context).colorScheme;
     final open = !_collapsed.contains(group.title);
-    final pickedCount = group.presets
+    final selectable = _selectable(group.presets).toList();
+    final pickedCount = selectable
         .where((preset) => _picked.contains(preset.id))
         .length;
     return Padding(
@@ -300,7 +332,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                             child: Text(
                               pickedCount == 0
                                   ? group.hint
-                                  : '已选 $pickedCount / ${group.presets.length}',
+                                  : '已选 $pickedCount / ${selectable.length}',
                               style: hintStyle(context),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -316,7 +348,9 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: Insets.xs),
                   ),
-                  onPressed: () => _setGroup(group.presets, selected: true),
+                  onPressed: selectable.isEmpty
+                      ? null
+                      : () => _setGroup(selectable, selected: true),
                   child: const Text('全选'),
                 ),
                 TextButton(
@@ -326,7 +360,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                   ),
                   onPressed: pickedCount == 0
                       ? null
-                      : () => _setGroup(group.presets, selected: false),
+                      : () => _setGroup(selectable, selected: false),
                   child: const Text('清空'),
                 ),
                 const SizedBox(width: Insets.xs),
@@ -335,9 +369,21 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
             if (open)
               for (final preset in group.presets)
                 SelectableTile(
-                  selected: _picked.contains(preset.id),
-                  onTap: () =>
-                      _togglePreset(preset, !_picked.contains(preset.id)),
+                  selected:
+                      _existing.contains(preset.id) ||
+                      _picked.contains(preset.id),
+                  enabled: !_existing.contains(preset.id),
+                  trailing: _existing.contains(preset.id)
+                      ? Pill(
+                          label: '已添加',
+                          color: Theme.of(context).colorScheme.primary,
+                          dense: true,
+                        )
+                      : null,
+                  onTap: _existing.contains(preset.id)
+                      ? null
+                      : () =>
+                            _togglePreset(preset, !_picked.contains(preset.id)),
                   title: Text(
                     preset.label,
                     style: Theme.of(context).textTheme.labelLarge,

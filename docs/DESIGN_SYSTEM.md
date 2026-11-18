@@ -169,11 +169,12 @@
 | 新建组 | `showEditDialog` + `EditDialog` | 组名 + DIRECT/REJECT 高亮行 |
 | 单行输入 | `showTextInputDialog` | 宽 520；输入框撑满；helper 不截断 |
 | 导入（规则 / 规则集 / 订阅） | `showEditDialog` 或多行粘贴面板 | 目标统一 DEFAULT |
-| 导入配置（概览） | `_ImportDialog`（名称 + 多行文本域） | 底部操作行最左「从文件」按钮打开系统选择器，选中后回填名称与文本；文件只收 .yaml/.yml/.txt、≤2MB、UTF-8，文件名做配置名（重名自动 `-2`） |
+| 导入配置（概览） | `_ImportDialog`（名称 + 多行文本域） | 底部操作行最左「从文件导入」按钮打开系统选择器，选中后回填名称与文本；文件只收 .yaml/.yml/.txt、≤2MB、UTF-8，文件名做配置名（重名自动 `-2`） |
 | 订阅地址 | `showSubscriptionDialog` | 只收地址；取消 / 保存；保存后再问「是否立即同步此订阅？」 |
-| Pulse 负一屏 | `appRoute(PulsePage)` | 概览右边缘 48dp 起手左滑进入；右滑 / 返回键 / 系统返回退出；卡片顺序：信息 → 节点测速 → 检查更新 → 运行状态；不做常驻轮询 |
+| Pulse 负一屏 | `pulseRoute(PulsePage)` | 概览整页横向左扫（dx<-100 或 velocity<-300）打开；透明叠加层，主界面压暗可见；点遮罩 / 右滑 / 下滑 / 返回键退出；卡片顺序：信息 → 节点测速 → 检查更新 → 运行状态；不做常驻轮询 |
 | 节点测速（Pulse） | 测速卡（`lib/ui/pulse_page.dart`） | 组筛选 + 全选；并发 4、`timeout=5000`、`url=http://www.gstatic.com/generate_204`；结果按延迟升序、失败灰「超时」、阈值 <200 绿 / <500 黄 / 其它红；内核未运行提示先启动 |
-| 运行状态（Pulse） | 运行状态卡 | 内核状态、运行时长、连接数（仅 Pulse 可见时 3s 轮询）、当前配置、GLOBAL 出口 || 检查更新（设置页·其它） | _ActionRow + showUpdateDialog | 版本/发布日期/说明最多 6 行高滚动；「去下载」只跳浏览器 Release 页，不做应用内下载；自动检查默认关、24h 节流、失败静默 |
+| 运行状态（Pulse） | 运行状态卡 | 内核状态、运行时长、连接数（仅 Pulse 可见时 3s 轮询）、当前配置、GLOBAL 出口 |
+| 检查更新（设置页·其它） | `_ActionRow` + `showUpdateDialog` | 版本/发布日期/说明最多 6 行高滚动；「去下载」只跳浏览器 Release 页，不做应用内下载；自动检查默认关、24h 节流、失败静默 |
 | 多行文本（粘贴链接 / YAML） | `AppTextArea`（或 `showTextInputDialog(area: true)`） | 宽度撑满、高度 0.8×宽、框内滚动 |
 | 选择节点（加成员） | `showSelectSheet` + `NodePickerSheet` | 分区：系统策略 → 节点 → 策略组 |
 | 全局出口 | `showSelectSheet` + `SectionedPicker` | 分区：内核默认 → 系统策略 → 策略组 → 节点 |

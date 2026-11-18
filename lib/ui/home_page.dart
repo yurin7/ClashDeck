@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/import_links.dart';
+import '../core/edit/profile_switch.dart';
 import '../core/model/config_summary.dart';
 import '../core/parse/share_link.dart';
 import '../core/parse/subscription.dart';
@@ -16,6 +17,7 @@ class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     this.activeFileName,
+    this.switchingFileName,
     this.onSetActive,
     this.onProfilesChanged,
     this.onDeleteProfile,
@@ -26,6 +28,9 @@ class HomePage extends StatefulWidget {
 
   /// 当前“运行用的”配置（概览页启动内核时用它）。
   final String? activeFileName;
+
+  /// 正在切换到的配置；非空时那一行显示「切换中」。
+  final String? switchingFileName;
 
   /// 把某份配置设为运行配置。
   final Future<void> Function(String fileName)? onSetActive;
@@ -164,19 +169,6 @@ class _HomePageState extends State<HomePage> {
   String? _subscriptionOf(StoredProfile item) {
     final url = _subscriptions[item.fileName];
     return url == null || url.isEmpty ? null : url;
-  }
-
-  /// 运行中的配置排最前；其余保持存储层给的顺序（最近修改在前）。
-  List<StoredProfile> get _orderedItems {
-    final active = widget.activeFileName;
-    if (active == null || _items.length < 2) return _items;
-    final index = _items.indexWhere((item) => item.fileName == active);
-    if (index <= 0) return _items;
-    return <StoredProfile>[
-      _items[index],
-      for (var i = 0; i < _items.length; i++)
-        if (i != index) _items[i],
-    ];
   }
 
   /// 点整行 = 把这份配置设为运行配置（内核在跑时由上层停→切→重启）。
@@ -472,7 +464,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final items = _orderedItems;
+    // 列表顺序恒定（存储层给的顺序）：切换配置时不重排，避免整列跳动，
+    // 运行中/切换中只用行内高亮和状态胶囊表达。
+    final items = _items;
     return NotificationListener<ScrollStartNotification>(
       onNotification: (_) {
         _closeSwipe();
@@ -604,7 +598,11 @@ class _HomePageState extends State<HomePage> {
                             item: items[i],
                             summary: _summaries[items[i].fileName],
                             subscriptionUrl: _subscriptionOf(items[i]),
-                            active: items[i].fileName == widget.activeFileName,
+                            phase: profileRowPhase(
+                              items[i].fileName,
+                              activeFileName: widget.activeFileName,
+                              switchingFileName: widget.switchingFileName,
+                            ),
                             onTap: () => _activate(items[i]),
                             onLongPress: () => _showItemMenu(items[i]),
                             onSettings: () => _open(items[i]),
@@ -685,18 +683,18 @@ class _Hero extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: StatTile(label: '配置', value: '$profileCount'),
+              child: _AnimatedStat(label: '配置', value: '$profileCount'),
             ),
             const _VDivider(),
             Expanded(
-              child: StatTile(
+              child: _AnimatedStat(
                 label: '节点',
                 value: nodeCount == null ? '—' : '$nodeCount',
               ),
             ),
             const _VDivider(),
             Expanded(
-              child: StatTile(
+              child: _AnimatedStat(
                 label: '订阅',
                 value: subscriptionCount == null ? '—' : '$subscriptionCount',
               ),
@@ -720,6 +718,28 @@ class _VDivider extends StatelessWidget {
   );
 }
 
+/// 统计位：数字变化时淡入淡出，避免切换配置时整块闪。
+class _AnimatedStat extends StatelessWidget {
+  const _AnimatedStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: StatTile(
+        key: ValueKey<String>('$label:$value'),
+        label: label,
+        value: value,
+      ),
+    );
+  }
+}
+
 /// 单份配置：图标 + 名称 + 元信息 + 状态 + 设置入口（行式，面板内用细线分隔）。
 ///
 /// 点整行 = 设为运行配置；右上角图标直接进这份配置的编辑器。
@@ -728,7 +748,7 @@ class _ProfileRow extends StatelessWidget {
     required this.item,
     required this.summary,
     required this.subscriptionUrl,
-    required this.active,
+    required this.phase,
     required this.onTap,
     required this.onLongPress,
     required this.onSettings,
@@ -740,8 +760,8 @@ class _ProfileRow extends StatelessWidget {
   final ConfigSummary? summary;
   final String? subscriptionUrl;
 
-  /// 是否是当前运行配置（行首高亮 + 「运行中」标记）。
-  final bool active;
+  /// 这一行的状态：普通 / 切换中 / 运行中。
+  final ProfileRowPhase phase;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -757,6 +777,11 @@ class _ProfileRow extends StatelessWidget {
     final host = hasSubscription
         ? (Uri.tryParse(subscriptionUrl!)?.host ?? '')
         : '';
+    final switching = phase == ProfileRowPhase.switching;
+    final active = phase == ProfileRowPhase.active;
+    final iconColor = active || hasSubscription
+        ? scheme.primary
+        : scheme.onSurfaceVariant;
 
     final meta = <String>[
       s == null ? '— 节点' : '${s.proxies} 节点',
@@ -770,108 +795,160 @@ class _ProfileRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          Insets.lg,
-          Insets.md,
-          Insets.sm,
-          Insets.md,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: active
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(Radiuses.sm),
-                border: Border.all(
-                  color: active ? scheme.primary : scheme.outlineVariant,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        // 运行中的行铺一层很淡的主色底，切换完成时是渐变而不是闪一下。
+        color: active
+            ? scheme.primary.withValues(alpha: 0.06)
+            : Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.lg,
+            Insets.md,
+            Insets.sm,
+            Insets.md,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: active
+                      ? scheme.primaryContainer
+                      : scheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(Radiuses.sm),
+                  border: Border.all(
+                    color: active ? scheme.primary : scheme.outlineVariant,
+                  ),
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: Icon(
+                    switching
+                        ? Icons.sync
+                        : active
+                        ? Icons.play_circle_outline
+                        : hasSubscription
+                        ? Icons.rss_feed
+                        : Icons.description_outlined,
+                    key: ValueKey<String>(
+                      switching
+                          ? 'switching'
+                          : active
+                          ? 'active'
+                          : hasSubscription
+                          ? 'subscription'
+                          : 'plain',
+                    ),
+                    size: 17,
+                    color: iconColor,
+                  ),
                 ),
               ),
-              child: Icon(
-                active
-                    ? Icons.play_circle_outline
-                    : hasSubscription
-                    ? Icons.rss_feed
-                    : Icons.description_outlined,
-                size: 17,
-                color: active || hasSubscription
-                    ? scheme.primary
-                    : scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: Insets.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          item.name,
-                          style: display(
-                            15.5,
-                            weight: 600,
-                            color: scheme.onSurface,
-                            letterSpacing: -0.1,
+              const SizedBox(width: Insets.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.name,
+                            style: display(
+                              15.5,
+                              weight: 600,
+                              color: scheme.onSurface,
+                              letterSpacing: -0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ),
+                        const SizedBox(width: Insets.sm),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(opacity: animation, child: child),
+                          child: switching
+                              ? Pill(
+                                  key: const ValueKey<String>('switching'),
+                                  label: '切换中',
+                                  color: scheme.tertiary,
+                                  dense: true,
+                                )
+                              : active
+                              ? Pill(
+                                  key: const ValueKey<String>('active'),
+                                  label: '运行中',
+                                  color: scheme.primary,
+                                  dense: true,
+                                )
+                              : const SizedBox(
+                                  key: ValueKey<String>('idle'),
+                                  width: 0,
+                                ),
+                        ),
+                        if (s == null)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Pill(label: '读取中', dense: true),
+                          )
+                        else if (s.valid)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Pill(
+                              label: '校验通过',
+                              color: scheme.primary,
+                              dense: true,
+                            ),
+                          )
+                        else
+                          // 错误文案可能很长，而 Pill 内部 Row 不换行：缩到可用宽度内。
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Pill(
+                                label: _shortError(s.error),
+                                color: scheme.error,
+                                dense: true,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    MetaRow(items: meta),
+                    if (host.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          '↳ $host',
+                          style: mono(10.5, color: scheme.onSurfaceVariant),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: Insets.sm),
-                      if (active)
-                        Pill(label: '运行中', color: scheme.primary, dense: true),
-                      if (active) const SizedBox(width: 4),
-                      if (s == null)
-                        const Pill(label: '读取中', dense: true)
-                      else if (s.valid)
-                        Pill(label: '校验通过', color: scheme.primary, dense: true)
-                      else
-                        // 错误文案可能很长，而 Pill 内部 Row 不换行：缩到可用宽度内。
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Pill(
-                              label: _shortError(s.error),
-                              color: scheme.error,
-                              dense: true,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  MetaRow(items: meta),
-                  if (host.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        '↳ $host',
-                        style: mono(10.5, color: scheme.onSurfaceVariant),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: '编辑配置',
-              onPressed: onSettings,
-              icon: Icon(
-                Icons.tune,
-                size: 18,
-                color: active ? scheme.primary : scheme.onSurfaceVariant,
+              IconButton(
+                tooltip: '编辑配置',
+                onPressed: onSettings,
+                icon: Icon(
+                  Icons.tune,
+                  size: 18,
+                  color: active ? scheme.primary : scheme.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

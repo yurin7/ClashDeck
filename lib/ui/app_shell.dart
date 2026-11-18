@@ -50,6 +50,10 @@ class _AppShellState extends State<AppShell> {
   AppPrefs? _prefs;
   List<StoredProfile> _profiles = const [];
   String? _activeFileName;
+
+  /// 正在切过去的配置；非空时配置页把那一行标成「切换中」。
+  String? _switchingFileName;
+
   SettingsState? _settings;
   late final RuntimeController _runtime;
   bool _ready = false;
@@ -197,28 +201,37 @@ class _AppShellState extends State<AppShell> {
       showTopNotice(context, '已取消切换', ok: false);
       return;
     }
-    if (wasRunning) {
-      await _runtime.stop();
-    }
-    await _prefs?.setActiveProfile(fileName);
-    // 先改内存里的 active 再重载：`_reloadProfiles` 会把 `_activeFileName`
-    // 当第一候选，顺序反了它就会拿旧值把偏好写回去。
-    if (mounted) {
-      setState(() => _activeFileName = fileName);
-    }
-    await _reloadProfiles();
-    if (!mounted) return;
-    if (!wasRunning) {
-      showTopNotice(context, '✓ 已切换到「${_profileName(fileName)}」');
-      return;
-    }
+    final name = _profileName(fileName);
+    // 切换期间列表顺序不变，只把这一行标成「切换中」；顶部胶囊说明进度。
+    setState(() => _switchingFileName = fileName);
+    showTopNotice(context, '正在切换到「$name」…');
     try {
-      await _runtime.start();
-      if (mounted) {
-        showTopNotice(context, '✓ 已切换到「${_profileName(fileName)}」并重启内核');
+      if (wasRunning) {
+        await _runtime.stop();
       }
-    } catch (error) {
-      if (mounted) _toast('切换后启动内核失败：$error');
+      await _prefs?.setActiveProfile(fileName);
+      // 先改内存里的 active 再重载：`_reloadProfiles` 会把 `_activeFileName`
+      // 当第一候选，顺序反了它就会拿旧值把偏好写回去。
+      if (mounted) {
+        setState(() => _activeFileName = fileName);
+      }
+      await _reloadProfiles();
+      if (!mounted) return;
+      if (!wasRunning) {
+        showTopNotice(context, '✓ 已切换到「$name」');
+        return;
+      }
+      try {
+        await _runtime.start();
+        if (mounted) {
+          showTopNotice(context, '✓ 已切换到「$name」并重启内核');
+        }
+      } catch (error) {
+        if (mounted) _toast('切换后启动内核失败：$error');
+      }
+    } finally {
+      // 取消、异常、成功都要收干净，否则那一行会一直转圈。
+      if (mounted) setState(() => _switchingFileName = null);
     }
   }
 
@@ -571,6 +584,7 @@ class _AppShellState extends State<AppShell> {
                 _KeepAlivePage(
                   child: HomePage(
                     activeFileName: _activeFileName,
+                    switchingFileName: _switchingFileName,
                     onSetActive: _setActive,
                     onProfilesChanged: _reloadProfiles,
                     onDeleteProfile: _deleteProfile,

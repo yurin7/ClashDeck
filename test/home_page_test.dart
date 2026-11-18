@@ -106,7 +106,7 @@ rules:
     expect(find.text('还没有配置'), findsNothing);
   });
 
-  testWidgets('运行配置：标「运行中」并置顶，点行回调激活、点图标进编辑器', (tester) async {
+  testWidgets('运行配置：标「运行中」但列表顺序不变，点行回调激活、点图标进编辑器', (tester) async {
     final activated = <String>[];
     tester.view.physicalSize = const Size(1080, 2280);
     tester.view.devicePixelRatio = 3;
@@ -116,8 +116,8 @@ rules:
       MaterialApp(
         theme: ClashDeckTheme.dark(),
         home: HomePage(
-          // 运行的是列表最后一份（订阅），验证它会排到第一位。
-          activeFileName: '订阅.yaml',
+          // 运行的是列表靠后的「正常」；切换时不重排，它不会顶到最前面。
+          activeFileName: '正常.yaml',
           onSetActive: (fileName) async => activated.add(fileName),
         ),
       ),
@@ -130,20 +130,63 @@ rules:
     );
 
     expect(find.text('运行中'), findsOneWidget);
-    // 置顶：订阅那份的标题先于「正常」出现。
-    final subscriptionY = tester.getTopLeft(find.text('订阅').first).dy;
+    // 不置顶：「订阅」仍在「正常」之前（存储层给的顺序保持不变）。
+    final subscriptionY = tester.getTopLeft(find.text('订阅').last).dy;
     final normalY = tester.getTopLeft(find.text('正常').first).dy;
     expect(subscriptionY, lessThan(normalY));
 
     // 点非运行的那一行 → 激活它。
-    await tester.tap(find.text('正常').first);
+    await tester.tap(find.text('订阅').last);
     await tester.pump();
-    expect(activated, ['正常.yaml']);
+    expect(activated, ['订阅.yaml']);
 
     // 点运行中那一行 → 不重复激活。
-    await tester.tap(find.text('订阅').first);
+    await tester.tap(find.text('正常').first);
     await tester.pump();
-    expect(activated, ['正常.yaml']);
+    expect(activated, ['订阅.yaml']);
+  });
+
+  testWidgets('切换配置：那一行标「切换中」，列表顺序依然不变', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        home: const HomePage(
+          activeFileName: '正常.yaml',
+          switchingFileName: '订阅.yaml',
+        ),
+      ),
+    );
+    await pumpUntil(
+      tester,
+      () =>
+          find.byType(CircularProgressIndicator).evaluate().isEmpty &&
+          find.text('读取中').evaluate().isEmpty,
+    );
+
+    expect(find.text('切换中'), findsOneWidget);
+    // 旧配置还是运行中，直到切换完成。
+    expect(find.text('运行中'), findsOneWidget);
+    final subscriptionY = tester.getTopLeft(find.text('订阅').last).dy;
+    final normalY = tester.getTopLeft(find.text('正常').first).dy;
+    expect(subscriptionY, lessThan(normalY));
+
+    // 切换结束后回到「运行中」。
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        home: const HomePage(
+          activeFileName: '正常.yaml',
+          switchingFileName: null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('切换中'), findsNothing);
+    expect(find.text('运行中'), findsOneWidget);
   });
 
   testWidgets('深色：同样可渲染', (tester) async {

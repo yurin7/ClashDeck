@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/edit/config_ops.dart';
+import '../../core/edit/rule_targets.dart';
 import '../../core/model/profile.dart';
 import '../../core/model/rule_types.dart';
 import '../../state/editor_state.dart';
@@ -83,12 +84,10 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
   }
 
   Future<void> _edit({RuleEntry? initial}) async {
-    final profile = widget.state.profile;
-    final targets = <String>{
-      ...profile.allTargets,
-      widget.target,
-      if (initial != null) initial.target,
-    }.toList();
+    final targets = ruleTargetsFor(
+      widget.state.profile,
+      preferred: initial?.target ?? widget.target,
+    );
 
     final result = await showAppDialog<Object>(
       context,
@@ -97,7 +96,8 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
         initialPayload: initial?.payload,
         initialTarget: initial?.target ?? widget.target,
         initialNoResolve: initial?.noResolve ?? false,
-        targets: targets,
+        targets: targets.primary,
+        otherBuiltins: targets.otherBuiltins,
         isNew: initial == null,
       ),
     );

@@ -223,6 +223,13 @@ proxy-groups:
     proxies:
       - DIRECT
       - REJECT
+  # 自动选择：url-test 按延迟挑最快的节点；新节点会插到 DIRECT 之前。
+  - name: 自动选择
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    proxies:
+      - DIRECT
 
 rules:
   - GEOIP,CN,DIRECT

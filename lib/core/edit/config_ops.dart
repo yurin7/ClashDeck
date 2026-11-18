@@ -7,6 +7,13 @@ const String kDefaultGroupName = 'DEFAULT';
 /// 上一批自动建的旧名，只用于迁移识别。
 const String kLegacyDefaultGroupName = '默认';
 
+/// 「自动选择」组：url-test 按延迟挑最快的节点，排在 DEFAULT 之后。
+const String kAutoGroupName = '自动选择';
+
+/// 「自动选择」的测速地址与间隔（秒）。
+const String kAutoGroupTestUrl = 'http://www.gstatic.com/generate_204';
+const int kAutoGroupInterval = 300;
+
 /// 所有编辑操作：`旧文档 -> 新文档` 的纯函数，失败抛 [ConfigEditException]。
 ///
 /// 设计原则：
@@ -31,7 +38,9 @@ class ConfigOps {
     }
     // 新节点一律进默认组：它带着全部节点 + DIRECT + REJECT，是规则的默认出口。
     next = addGroupMember(next, kDefaultGroupName, name, missingGroupOk: true);
-    return ensureDefaultGroup(next);
+    next = ensureDefaultGroup(next);
+    // 有「自动选择」组时把新节点插到 DIRECT 之前，别排在系统策略后面。
+    return _insertIntoAutoGroup(next, name);
   }
 
   /// 默认组的名字。规则默认指向它，新节点也会自动加入。
@@ -66,6 +75,48 @@ class ConfigOps {
       );
     }
     return next;
+  }
+
+  /// 保证配置里有「自动选择」组（url-test），排在 DEFAULT 之后。
+  ///
+  /// 新模板自带；老配置打开编辑器时也走这里补建。只补建、不改已有组，返回的
+  /// 文档与原文相同的话调用方不会标脏。
+  static YamlDoc ensureAutoGroup(YamlDoc doc) {
+    final profile = Profile.from(doc);
+    if (profile.group(kAutoGroupName) != null) return doc;
+    final group = <String, Object?>{
+      'name': kAutoGroupName,
+      'type': 'url-test',
+      'url': kAutoGroupTestUrl,
+      'interval': kAutoGroupInterval,
+      'proxies': <Object?>[
+        for (final proxy in profile.proxies) proxy.name,
+        'DIRECT',
+      ],
+    };
+    final current = doc.plainAt(['proxy-groups']);
+    if (current is! List || current.isEmpty) {
+      return doc.apply((e) => e.update(['proxy-groups'], <Object?>[group]));
+    }
+    final at =
+        (profile.group(kDefaultGroupName)?.index ?? current.length - 1) + 1;
+    if (at >= current.length) {
+      return doc.apply((e) => e.appendToList(['proxy-groups'], group));
+    }
+    return doc.apply((e) => e.insertIntoList(['proxy-groups'], at, group));
+  }
+
+  /// 把节点插进「自动选择」组的 DIRECT 之前；没有这个组就原样返回。
+  static YamlDoc _insertIntoAutoGroup(YamlDoc doc, String name) {
+    final auto = Profile.from(doc).group(kAutoGroupName);
+    if (auto == null || auto.members.contains(name)) return doc;
+    final direct = auto.members.indexOf('DIRECT');
+    return addGroupMember(
+      doc,
+      kAutoGroupName,
+      name,
+      at: direct < 0 ? auto.members.length : direct,
+    );
   }
 
   /// 加载旧配置时的迁移：把上一批自动建的「默认」组并入 `DEFAULT`，或者补建。

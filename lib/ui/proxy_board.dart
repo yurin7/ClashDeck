@@ -477,6 +477,16 @@ class _ProxyBoardState extends State<ProxyBoard> {
               },
             ),
           ),
+        // 系统策略：不进 YAML 建同名组，只在这里只读展示，但可以挂规则。
+        const SizedBox(height: Insets.md),
+        MicroLabel('系统策略'),
+        for (final (name, subtitle) in const [
+          ('DIRECT', '直连：不经过代理，直接访问目标'),
+          ('REJECT', '拒绝：直接断开，不发出请求'),
+        ]) ...[
+          const SizedBox(height: Insets.sm),
+          _SystemPolicyCard(state: s, target: name, subtitle: subtitle),
+        ],
         const SizedBox(height: Insets.xl),
         // 「添加节点」已经移到节点列表区头，这里只留「新建组」。
         SizedBox(
@@ -888,6 +898,77 @@ class _GroupCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 系统策略（DIRECT / REJECT）只读卡。
+///
+/// 不能改名、不能删组、不能加节点，但可以挂规则：卡内就是共用规则区块。
+class _SystemPolicyCard extends StatelessWidget {
+  const _SystemPolicyCard({
+    required this.state,
+    required this.target,
+    required this.subtitle,
+  });
+
+  final EditorState state;
+  final String target;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(
+        Insets.lg,
+        Insets.md,
+        Insets.lg,
+        Insets.lg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: scheme.tertiary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(Radiuses.xs),
+                  border: Border.all(
+                    color: scheme.tertiary.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Icon(
+                  _builtinIcon(target),
+                  size: 17,
+                  color: scheme.tertiary,
+                ),
+              ),
+              const SizedBox(width: Insets.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      target,
+                      style: display(16, weight: 700, letterSpacing: -0.2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: hintStyle(context)),
+                  ],
+                ),
+              ),
+              Pill(label: '系统策略', color: scheme.tertiary, dense: true),
+            ],
+          ),
+          GroupRulesBlock(state: state, target: target, newRuleLabel: '添加规则'),
+        ],
+      ),
     );
   }
 }
@@ -1312,21 +1393,12 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
     super.dispose();
   }
 
-  /// 全部候选（含已在组内的，置灰显示）。
-  List<MemberCandidate> get _all => <MemberCandidate>[
-    for (final proxy in widget.profile.proxies)
-      MemberCandidate(
-        name: proxy.name,
-        inGroup: widget.members.contains(proxy.name),
-      ),
-    for (final group in widget.profile.groups)
-      if (group.name != widget.groupName)
-        MemberCandidate(
-          name: group.name,
-          isGroup: true,
-          inGroup: widget.members.contains(group.name),
-        ),
-  ];
+  /// 全部候选（含已在组内的，置灰显示）；DIRECT / REJECT 作为系统策略可选。
+  List<MemberCandidate> get _all => memberCandidates(
+    widget.profile,
+    groupName: widget.groupName,
+    members: widget.members,
+  );
 
   List<MemberCandidate> get _visible => filterMemberCandidates(_all, _query);
 
@@ -1453,7 +1525,21 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                         shrinkWrap: true,
                         children: [
                           for (final candidate in visible)
-                            if (!candidate.isGroup)
+                            if (!candidate.isGroup && !candidate.isBuiltin)
+                              _row(context, scheme, candidate),
+                          if (visible.any((c) => c.isBuiltin))
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: Insets.sm,
+                                bottom: 2,
+                              ),
+                              child: MicroLabel(
+                                '系统策略',
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          for (final candidate in visible)
+                            if (candidate.isBuiltin)
                               _row(context, scheme, candidate),
                           if (visible.any((c) => c.isGroup))
                             Padding(
@@ -1526,11 +1612,19 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
         )?.copyWith(color: inside ? scheme.onSurfaceVariant : scheme.onSurface),
       ),
       secondary: Icon(
-        candidate.isGroup ? Icons.account_tree_outlined : Icons.dns_outlined,
+        candidate.isBuiltin
+            ? _builtinIcon(candidate.name)
+            : candidate.isGroup
+            ? Icons.account_tree_outlined
+            : Icons.dns_outlined,
         size: 18,
-        color: scheme.onSurfaceVariant,
+        color: candidate.isBuiltin ? scheme.tertiary : scheme.onSurfaceVariant,
       ),
-      subtitle: inside ? Text('已在组内', style: hintStyle(context)) : null,
+      subtitle: inside
+          ? Text('已在组内', style: hintStyle(context))
+          : candidate.isBuiltin
+          ? Text('系统策略', style: hintStyle(context))
+          : null,
     );
   }
 

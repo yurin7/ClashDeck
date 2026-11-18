@@ -3,12 +3,15 @@
 /// 放在 core 里是为了能直接单测——面板本身只负责渲染和回调。
 library;
 
-/// 候选成员：节点或策略组。
+import '../model/profile.dart';
+
+/// 候选成员：节点、策略组，或系统策略（DIRECT / REJECT）。
 class MemberCandidate {
   const MemberCandidate({
     required this.name,
     this.isGroup = false,
     this.inGroup = false,
+    this.isBuiltin = false,
   });
 
   /// 显示名，同时也是 YAML 里引用的名字。
@@ -20,8 +23,38 @@ class MemberCandidate {
   /// 已经在组里了：面板里置灰、不参与选择。
   final bool inGroup;
 
+  /// true = 系统策略（DIRECT / REJECT），由内核直接处理，不是节点也不是组。
+  final bool isBuiltin;
+
   @override
-  String toString() => 'MemberCandidate($name, group=$isGroup, in=$inGroup)';
+  String toString() =>
+      'MemberCandidate($name, group=$isGroup, builtin=$isBuiltin, in=$inGroup)';
+}
+
+/// 生成组成员候选：节点 → 系统策略 → 其它策略组。
+List<MemberCandidate> memberCandidates(
+  Profile profile, {
+  required String groupName,
+  required Iterable<String> members,
+}) {
+  final inside = <String>{...members};
+  return <MemberCandidate>[
+    for (final proxy in profile.proxies)
+      MemberCandidate(name: proxy.name, inGroup: inside.contains(proxy.name)),
+    for (final name in Profile.systemPolicyTargets)
+      MemberCandidate(
+        name: name,
+        isBuiltin: true,
+        inGroup: inside.contains(name),
+      ),
+    for (final group in profile.groups)
+      if (group.name != groupName)
+        MemberCandidate(
+          name: group.name,
+          isGroup: true,
+          inGroup: inside.contains(group.name),
+        ),
+  ];
 }
 
 /// 按关键字筛选候选成员。

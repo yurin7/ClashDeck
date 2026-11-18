@@ -9,6 +9,7 @@ import '../core/edit/import_rules.dart';
 import '../core/edit/online_import.dart';
 import '../core/edit/rule_layout.dart';
 import '../core/edit/rule_presets.dart';
+import '../core/edit/rule_targets.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_zone.dart';
 import '../core/model/rule_types.dart';
@@ -124,11 +125,7 @@ class _RulesTabState extends State<RulesTab> {
   }
 
   Future<void> _editRule({RuleEntry? initial, int? index}) async {
-    final profile = s.profile;
-    final targets = <String>{
-      ...profile.allTargets,
-      if (initial != null) initial.target,
-    }.toList();
+    final targets = ruleTargetsFor(s.profile, preferred: initial?.target);
 
     final result = await showAppDialog<Object>(
       context,
@@ -137,7 +134,8 @@ class _RulesTabState extends State<RulesTab> {
         initialPayload: initial?.payload,
         initialTarget: initial?.target,
         initialNoResolve: initial?.noResolve ?? false,
-        targets: targets,
+        targets: targets.primary,
+        otherBuiltins: targets.otherBuiltins,
         isNew: initial == null,
       ),
     );
@@ -199,8 +197,7 @@ class _RulesTabState extends State<RulesTab> {
 
   /// 把一条规则改挂到别的策略组：只替换目标，其余 token 原样保留。
   Future<void> _moveRuleToGroup(RuleEntry rule) async {
-    final targets = s.profile.allTargets.toList();
-    if (targets.isEmpty) return;
+    final targets = ruleTargetsFor(s.profile, preferred: rule.target).primary;
     final picked = await showPickerSheet<String>(
       context,
       title: '改挂到组',
@@ -210,8 +207,12 @@ class _RulesTabState extends State<RulesTab> {
           PickerOption(
             name,
             name,
-            subtitle: s.profile.group(name)?.typeLabel,
-            icon: Icons.account_tree_outlined,
+            subtitle: Profile.builtinTargets.contains(name)
+                ? '系统策略'
+                : s.profile.group(name)?.typeLabel,
+            icon: Profile.builtinTargets.contains(name)
+                ? Icons.bolt_outlined
+                : Icons.account_tree_outlined,
           ),
       ],
       current: rule.target,

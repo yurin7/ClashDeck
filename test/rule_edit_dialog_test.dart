@@ -1,3 +1,4 @@
+import 'package:clashdeck/ui/dropdown.dart';
 import 'package:clashdeck/ui/rule_edit_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -9,6 +10,7 @@ Future<Object? Function()> _open(
   String? type,
   String? payload,
   String? target,
+  List<String> otherBuiltins = const [],
 }) async {
   Object? captured;
   var done = false;
@@ -27,6 +29,7 @@ Future<Object? Function()> _open(
                     initialPayload: payload,
                     initialTarget: target,
                     targets: const ['DIRECT', 'PROXY'],
+                    otherBuiltins: otherBuiltins,
                   ),
                 );
                 done = true;
@@ -115,5 +118,29 @@ void main() {
     final draft = result() as RuleDraft;
     expect(draft.type, 'MATCH');
     expect(draft.payload, isEmpty);
+  });
+
+  testWidgets('其它内置出站默认折叠，展开后进目标下拉', (tester) async {
+    await _open(tester, otherBuiltins: const ['PASS', 'GLOBAL']);
+    expect(find.text('其它内置出站（2）'), findsOneWidget);
+    expect(find.text('PASS'), findsNothing);
+
+    await tester.tap(find.text('其它内置出站（2）'));
+    await tester.pumpAndSettle();
+    expect(find.text('收起其它内置出站'), findsOneWidget);
+
+    await tester.tap(find.byType(AppDropdown<String>).last);
+    await tester.pumpAndSettle();
+    expect(find.text('PASS'), findsOneWidget);
+    expect(find.text('GLOBAL'), findsOneWidget);
+    // 系统策略标出来源。
+    expect(find.text('系统策略'), findsWidgets);
+  });
+
+  testWidgets('系统策略的目标显示为「系统策略」', (tester) async {
+    await _open(tester, target: 'DIRECT');
+    await tester.tap(find.byType(AppDropdown<String>).last);
+    await tester.pumpAndSettle();
+    expect(find.text('系统策略'), findsOneWidget);
   });
 }

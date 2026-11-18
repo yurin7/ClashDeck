@@ -1,5 +1,33 @@
 import 'package:clashdeck/core/edit/member_picker.dart';
+import 'package:clashdeck/core/model/profile.dart';
+import 'package:clashdeck/core/yaml/yaml_doc.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _profileYaml = r'''mixed-port: 7890
+proxies:
+  - name: n1
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+  - name: n2
+    type: vless
+    server: b.example.com
+    port: 443
+    uuid: 66666666-7777-8888-9999-000000000000
+proxy-groups:
+  - name: DEFAULT
+    type: select
+    proxies:
+      - DIRECT
+      - REJECT
+  - name: OTHER
+    type: select
+    proxies:
+      - DIRECT
+rules:
+  - MATCH,DEFAULT
+''';
 
 void main() {
   const all = <MemberCandidate>[
@@ -74,5 +102,49 @@ void main() {
   test('prunePicked 去掉已不可加入的名字', () {
     final pruned = prunePicked(all, {'日本 REALITY', '美国 gRPC', '不存在'});
     expect(pruned, {'日本 REALITY'});
+  });
+
+  group('memberCandidates', () {
+    Profile profile() {
+      final doc = YamlDoc.parse(_profileYaml);
+      expect(doc.isValid, isTrue, reason: '${doc.error}');
+      return Profile.from(doc);
+    }
+
+    test('节点之后是系统策略，再是其它策略组', () {
+      final candidates = memberCandidates(
+        profile(),
+        groupName: 'OTHER',
+        members: ['n1', 'DIRECT'],
+      );
+      expect(candidates.map((c) => c.name), [
+        'n1',
+        'n2',
+        'DIRECT',
+        'REJECT',
+        'DEFAULT',
+      ]);
+      expect(candidates.first.inGroup, isTrue);
+      expect(
+        candidates.firstWhere((c) => c.name == 'DIRECT').isBuiltin,
+        isTrue,
+      );
+      expect(candidates.firstWhere((c) => c.name == 'REJECT').inGroup, isFalse);
+      expect(candidates.last.isGroup, isTrue);
+      // 自己不出现在候选里。
+      expect(candidates.any((c) => c.name == 'OTHER'), isFalse);
+    });
+
+    test('系统策略已在组内时置灰', () {
+      final candidates = memberCandidates(
+        profile(),
+        groupName: 'DEFAULT',
+        members: ['DIRECT', 'REJECT'],
+      );
+      expect(
+        candidates.where((c) => c.isBuiltin).every((c) => c.inGroup),
+        isTrue,
+      );
+    });
   });
 }

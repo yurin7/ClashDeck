@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/edit/config_ops.dart';
 import '../core/validate/validator.dart';
 import '../data/profile_store.dart';
 import '../runtime/runtime_controller.dart';
@@ -53,14 +54,23 @@ class _EditorPageState extends State<EditorPage> {
     super.initState();
     final text = widget.initialText;
     if (text != null) {
-      _state = EditorState.fromText(
-        text,
-        fileName: widget.fileName,
-        savedText: text,
-      );
+      _state = _prepareState(text, savedText: text);
     } else {
       _load();
     }
+  }
+
+  /// 建好编辑状态后，给老配置补建「自动选择」组。
+  ///
+  /// 只改内存、标 dirty，不自动落盘；配置本身有结构问题时原样返回。
+  EditorState _prepareState(String text, {String? savedText}) {
+    final state = EditorState.fromText(
+      text,
+      fileName: widget.fileName,
+      savedText: savedText,
+    );
+    state.apply(ConfigOps.ensureAutoGroup);
+    return state;
   }
 
   Future<void> _load() async {
@@ -68,7 +78,7 @@ class _EditorPageState extends State<EditorPage> {
       final text = await widget.store.read(widget.fileName);
       if (!mounted) return;
       setState(() {
-        _state = EditorState.fromText(text, fileName: widget.fileName);
+        _state = _prepareState(text);
       });
     } catch (e) {
       if (!mounted) return;

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
+import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
 import 'toast.dart';
@@ -34,6 +35,7 @@ class RuleEditDialog extends StatefulWidget {
     this.initialTarget,
     this.initialNoResolve = false,
     required this.targets,
+    this.otherBuiltins = const <String>[],
     required this.isNew,
   });
 
@@ -42,6 +44,9 @@ class RuleEditDialog extends StatefulWidget {
   final String? initialTarget;
   final bool initialNoResolve;
   final List<String> targets;
+
+  /// REJECT-DROP / PASS / COMPATIBLE / GLOBAL 这类冷门内置：折叠在「其它内置」里。
+  final List<String> otherBuiltins;
   final bool isNew;
 
   @override
@@ -52,6 +57,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
   late String _type;
   late String _target;
   late bool _noResolve;
+  bool _showOther = false;
   late final TextEditingController _payloadCtrl;
 
   @override
@@ -169,11 +175,34 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
                 for (final t in <String>{
                   ...widget.targets,
                   if (!widget.targets.contains(_target)) _target,
+                  if (_showOther) ...widget.otherBuiltins,
                 })
-                  DropdownOption(t, t),
+                  DropdownOption(
+                    t,
+                    t,
+                    subtitle: Profile.builtinTargets.contains(t)
+                        ? '系统策略'
+                        : null,
+                  ),
               ],
               onChanged: (v) => setState(() => _target = v),
             ),
+            if (widget.otherBuiltins.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showOther = !_showOther),
+                  icon: Icon(
+                    _showOther ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _showOther
+                        ? '收起其它内置出站'
+                        : '其它内置出站（${widget.otherBuiltins.length}）',
+                  ),
+                ),
+              ),
 
             if (kNoResolveTypes.contains(_type))
               SwitchListTile(

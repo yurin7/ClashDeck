@@ -73,11 +73,26 @@ rules:
     );
     await tester.pumpAndSettle();
 
-    // 迁移会自动补一个 DEFAULT 组（成员含 DIRECT/REJECT），所以内置芯片各出现两次。
+    // 迁移会自动补一个 DEFAULT 组（成员含 DIRECT/REJECT），所以内置芯片各出现两次；
+    // 系统策略卡卡头还各有一个同图标（size 17），所以总数是 3。
     expect(find.byTooltip('内置出站「DIRECT」：由内核直接处理，不是配置里的节点'), findsNWidgets(2));
     expect(find.byTooltip('内置出站「REJECT」：由内核直接处理，不是配置里的节点'), findsNWidgets(2));
     expect(find.byIcon(Icons.help_outline), findsNothing);
-    expect(find.byIcon(Icons.arrow_outward), findsNWidgets(2));
-    expect(find.byIcon(Icons.block), findsNWidgets(2));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Icon &&
+            widget.icon == Icons.arrow_outward &&
+            widget.size == 15,
+      ),
+      findsNWidgets(2),
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Icon && widget.icon == Icons.block && widget.size == 15,
+      ),
+      findsNWidgets(2),
+    );
   });
 }

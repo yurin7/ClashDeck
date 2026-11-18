@@ -254,6 +254,9 @@ class Profile {
     'GLOBAL',
   };
 
+  /// 代理页固定展示的两张系统策略卡：不进 YAML 建同名组，只读展示。
+  static const systemPolicyTargets = <String>['DIRECT', 'REJECT'];
+
   Map<String, ProxyEntry> get proxyByName => {
     for (final p in proxies) p.name: p,
   };

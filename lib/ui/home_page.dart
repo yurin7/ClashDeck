@@ -11,6 +11,7 @@ import '../data/profile_store.dart';
 import '../runtime/runtime_controller.dart';
 import 'editor_page.dart';
 import 'theme.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 class HomePage extends StatefulWidget {
@@ -201,16 +202,14 @@ class _HomePageState extends State<HomePage> {
     final ctrl = TextEditingController(text: initial);
     final name = await showAppDialog<String>(
       context,
+      width: dialogWidthOf(context),
       builder: (ctx) => AlertDialog(
         title: const Text('配置名称'),
-        content: TextField(
+        content: AppTextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '名称',
-            helperText: '会作为文件名保存，可直接被 mihomo 读取',
-            border: OutlineInputBorder(),
-          ),
+          label: '名称',
+          helper: '会作为文件名保存，可直接被 mihomo 读取',
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
@@ -249,6 +248,7 @@ class _HomePageState extends State<HomePage> {
     if (store == null) return;
     final input = await showAppDialog<_ImportInput>(
       context,
+      width: dialogWidthOf(context),
       builder: (_) => const _ImportDialog(),
     );
     if (input == null || !mounted) return;
@@ -1087,25 +1087,16 @@ class _ImportDialogState extends State<_ImportDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: '配置名称',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            AppTextField(controller: _name, label: '配置名称'),
             const SizedBox(height: Insets.md),
-            TextField(
+            AppTextField(
               controller: _text,
               minLines: 6,
               maxLines: 12,
               style: monoStyle(context, size: 12),
-              decoration: const InputDecoration(
-                labelText: 'YAML 配置 / 分享链接 / 订阅地址',
-                hintText: '整份 YAML，或 vless://…（可多行），或 https://… 订阅地址',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
-              ),
+              label: 'YAML 配置 / 分享链接 / 订阅地址',
+              hint: '整份 YAML，或 vless://…（可多行），或 https://… 订阅地址',
+              alignLabelWithHint: true,
             ),
           ],
         ),

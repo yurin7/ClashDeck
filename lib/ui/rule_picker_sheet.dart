@@ -4,6 +4,7 @@ import '../core/edit/config_ops.dart';
 import '../core/model/profile.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'theme.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 /// 把一条规则改写成指向另一个目标组，其余字段原样保留。
@@ -175,14 +176,11 @@ class _RulePickerSheetState extends State<_RulePickerSheet> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Insets.xl),
-                  child: TextField(
+                  child: AppTextField(
                     controller: _search,
+                    hint: '搜索规则',
+                    prefixIcon: const Icon(Icons.search, size: 18),
                     onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      prefixIcon: Icon(Icons.search, size: 18),
-                      hintText: '搜索规则',
-                    ),
                   ),
                 ),
                 Padding(

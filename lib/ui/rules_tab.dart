@@ -129,6 +129,7 @@ class _RulesTabState extends State<RulesTab> {
 
     final result = await showAppDialog<Object>(
       context,
+      width: dialogWidthOf(context),
       builder: (_) => RuleEditDialog(
         initialType: initial?.type,
         initialPayload: initial?.payload,
@@ -464,6 +465,7 @@ class _RulesTabState extends State<RulesTab> {
     if (plan.isEmpty && plan.similarLines.isEmpty) return true;
     final ok = await showAppDialog<bool>(
       context,
+      width: dialogWidthOf(context),
       builder: (ctx) => AlertDialog(
         title: const Text('导入预览'),
         content: SingleChildScrollView(

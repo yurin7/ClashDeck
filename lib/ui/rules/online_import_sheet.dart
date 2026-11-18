@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../fields.dart';
 import 'import_sheet_style.dart';
 
 /// 在线面板的返回值：要么勾选了一组预置规则集，要么填了一个自定义地址。
@@ -384,16 +385,11 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
               style: hintStyle(context),
             ),
             const SizedBox(height: Insets.sm),
-            TextField(
+            AppTextField(
               controller: _urlCtrl,
               keyboardType: TextInputType.url,
-              autocorrect: false,
-              style: mono(12.5),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'https://example.com/rules.txt',
-                errorText: _urlError,
-              ),
+              hint: 'https://example.com/rules.txt',
+              error: _urlError,
               onChanged: (_) {
                 if (_urlError != null) setState(() => _urlError = null);
               },

@@ -17,6 +17,7 @@ import 'import_dialogs.dart';
 import 'overview_page.dart';
 import 'settings_page.dart';
 import 'theme.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 /// 三页壳：概览 / 配置 / 设置，底部悬浮岛切换。
@@ -420,20 +421,16 @@ class _AppShellState extends State<AppShell> {
     final controller = TextEditingController();
     return showAppDialog<String>(
       context,
+      width: dialogWidthOf(context),
       builder: (ctx) => AlertDialog(
         title: const Text('粘贴导入'),
-        content: SizedBox(
-          width: 520,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            minLines: 6,
-            maxLines: 12,
-            style: mono(12),
-            decoration: const InputDecoration(
-              hintText: 'YAML 配置，或一行/多行 vless、vmess、hy2 链接',
-            ),
-          ),
+        content: AppTextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 6,
+          maxLines: 12,
+          style: mono(12),
+          hint: 'YAML 配置，或一行/多行 vless、vmess、hy2 链接',
         ),
         actions: [
           TextButton(

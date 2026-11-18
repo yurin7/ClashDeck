@@ -5,6 +5,7 @@ import '../core/edit/rule_targets.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
+import 'fields.dart';
 import 'toast.dart';
 
 /// 规则编辑对话框的输入结果。
@@ -159,14 +160,10 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
             ),
             const SizedBox(height: 12),
             if (_needsPayload)
-              TextField(
+              AppTextField(
                 controller: _payloadCtrl,
-                autofocus: false,
-                decoration: InputDecoration(
-                  labelText: '匹配内容',
-                  hintText: _payloadHint,
-                  border: const OutlineInputBorder(),
-                ),
+                label: '匹配内容',
+                hint: _payloadHint,
               ),
             if (_needsPayload) const SizedBox(height: 12),
             AppDropdown<String>(

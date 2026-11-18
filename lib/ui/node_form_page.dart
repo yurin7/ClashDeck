@@ -5,6 +5,7 @@ import '../core/schema/field_spec.dart';
 import '../core/schema/proxy_schema.dart';
 import '../core/schema/schema_prune.dart';
 import 'dropdown.dart';
+import 'fields.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -470,14 +471,12 @@ class _NodeFormPageState extends State<NodeFormPage> {
               _ => TextInputType.text,
             },
             obscureText: spec.secret,
-            decoration: InputDecoration(
-              labelText: spec.labelZh,
-              helperText: spec.help,
-              hintText: spec.defaultValue == null
+            decoration: fieldDecoration(
+              label: spec.labelZh,
+              helper: spec.help,
+              hint: spec.defaultValue == null
                   ? null
                   : '默认 ${displayText(spec.defaultValue)}',
-              border: const OutlineInputBorder(),
-              isDense: true,
             ),
             onChanged: onChanged,
           ),
@@ -586,25 +585,17 @@ class _NodeFormPageState extends State<NodeFormPage> {
     final valueCtrl = TextEditingController();
     final result = await showAppDialog<MapEntry<String, Object?>?>(
       context,
+      width: dialogWidthOf(context),
       builder: (ctx) => AlertDialog(
         title: const Text('添加字段'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: keyCtrl,
-              decoration: const InputDecoration(
-                labelText: '键（YAML 名）',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            AppTextField(controller: keyCtrl, label: '键（YAML 名）'),
             const SizedBox(height: 12),
-            TextField(
+            AppTextField(
               controller: valueCtrl,
-              decoration: const InputDecoration(
-                labelText: '值（按 YAML 解析：true / 123 / [a, b] / {}）',
-                border: OutlineInputBorder(),
-              ),
+              label: '值（按 YAML 解析：true / 123 / [a, b] / {}）',
             ),
           ],
         ),

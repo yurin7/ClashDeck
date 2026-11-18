@@ -11,6 +11,7 @@ import 'raw_yaml_tab.dart';
 import 'rules_tab.dart';
 import 'runtime_page.dart';
 import 'theme.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 /// 单个配置的编辑器外壳：撤销/重做/保存 + 代理/规则/源码三个页签。
@@ -187,6 +188,7 @@ class _EditorPageState extends State<EditorPage> {
     if (state == null) return;
     final name = await showAppDialog<String>(
       context,
+      width: dialogWidthOf(context),
       builder: (_) => _NameDialog(initial: '$_title 副本'),
     );
     if (name == null || name.isEmpty) return;
@@ -571,13 +573,10 @@ class _NameDialogState extends State<_NameDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('另存为'),
-      content: TextField(
+      content: AppTextField(
         controller: _ctrl,
         autofocus: true,
-        decoration: const InputDecoration(
-          labelText: '配置名称',
-          border: OutlineInputBorder(),
-        ),
+        label: '配置名称',
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
       ),
       actions: [

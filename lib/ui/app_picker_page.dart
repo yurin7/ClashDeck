@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../runtime/platform_apps.dart';
 import 'theme.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 /// 分应用代理的应用选择页：返回选中的包名列表（null 表示取消）。
@@ -69,11 +70,9 @@ class _AppPickerPageState extends State<AppPickerPage> {
               Insets.lg,
               Insets.sm,
             ),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: '搜索应用名或包名',
-                prefixIcon: Icon(Icons.search, size: 20),
-              ),
+            child: AppTextField(
+              hint: '搜索应用名或包名',
+              prefixIcon: const Icon(Icons.search, size: 20),
               onChanged: (value) => setState(() => _query = value.trim()),
             ),
           ),

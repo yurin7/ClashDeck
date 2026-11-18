@@ -5,6 +5,7 @@ import '../../core/edit/import_plan.dart';
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../fields.dart';
 import 'import_sheet_style.dart';
 
 /// 一个可勾选的 GEO 词库。
@@ -270,15 +271,10 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                     Insets.lg,
                     Insets.xs,
                   ),
-                  child: TextField(
+                  child: AppTextField(
                     controller: _searchCtrl,
-                    autocorrect: false,
-                    style: mono(12.5),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      prefixIcon: Icon(Icons.search, size: 18),
-                      hintText: '搜索代码或中文名',
-                    ),
+                    hint: '搜索代码或中文名',
+                    prefixIcon: const Icon(Icons.search, size: 18),
                     onChanged: (value) => setState(() => _query = value),
                   ),
                 ),

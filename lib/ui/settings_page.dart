@@ -7,6 +7,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'app_picker_page.dart';
 import 'dropdown.dart';
+import 'fields.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -489,12 +490,13 @@ class _SettingsPageState extends State<SettingsPage> {
     final controller = TextEditingController(text: initial);
     final result = await showAppDialog<String>(
       context,
+      width: dialogWidthOf(context),
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: TextField(
+        content: AppTextField(
           controller: controller,
           autofocus: true,
-          decoration: InputDecoration(hintText: hint),
+          hint: hint,
         ),
         actions: [
           TextButton(

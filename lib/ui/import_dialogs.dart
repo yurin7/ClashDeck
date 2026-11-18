@@ -5,6 +5,7 @@ import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'theme.dart';
 import 'dropdown.dart';
+import 'fields.dart';
 import 'widgets.dart';
 
 /// 「粘贴分享链接」对话框：多行输入，返回原文；取消返回 null。
@@ -16,6 +17,7 @@ Future<String?> showPasteLinksDialog(
   final ctrl = TextEditingController(text: initial ?? '');
   return showAppDialog<String>(
     context,
+    width: dialogWidthOf(context),
     builder: (ctx) => AlertDialog(
       title: Text(title),
       content: SingleChildScrollView(
@@ -23,18 +25,15 @@ Future<String?> showPasteLinksDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
+            AppTextField(
               controller: ctrl,
               minLines: 6,
               maxLines: 12,
               autofocus: true,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              decoration: const InputDecoration(
-                labelText: '一行一个链接，可以混着来',
-                hintText: 'vless://…\nvmess://…\nhysteria2://…',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
-              ),
+              label: '一行一个链接，可以混着来',
+              hint: 'vless://…\nvmess://…\nhysteria2://…',
+              alignLabelWithHint: true,
             ),
             const SizedBox(height: 8),
             Text(
@@ -89,6 +88,7 @@ Future<RuleImportInput?> showRuleImportDialog(
 }) {
   return showAppDialog<RuleImportInput>(
     context,
+    width: dialogWidthOf(context),
     builder: (ctx) => _RuleImportDialog(initial: initial, groups: groups),
   );
 }
@@ -149,20 +149,15 @@ class _RuleImportDialogState extends State<_RuleImportDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
+              AppTextField(
                 controller: _ctrl,
                 minLines: 5,
                 maxLines: 8,
-                autofocus: false,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                decoration: const InputDecoration(
-                  labelText: '规则行、配置片段，或规则集地址',
-                  hintText:
-                      'DOMAIN-SUFFIX,google.com,PROXY\nhttps://…/direct.txt',
-                  helperText: '支持规则行、YAML 片段、规则集 URL',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
-                ),
+                label: '规则行、配置片段，或规则集地址',
+                hint: 'DOMAIN-SUFFIX,google.com,PROXY\nhttps://…/direct.txt',
+                helper: '支持规则行、YAML 片段、规则集 URL',
+                alignLabelWithHint: true,
               ),
               const SizedBox(height: 12),
               AppDropdown<String>(
@@ -179,15 +174,12 @@ class _RuleImportDialogState extends State<_RuleImportDialog> {
               ),
               if (_isCustom) ...[
                 const SizedBox(height: 8),
-                TextField(
+                AppTextField(
                   controller: _customCtrl,
                   autofocus: true,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                  label: '自定义组名',
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: '自定义组名',
-                    border: OutlineInputBorder(),
-                  ),
                 ),
               ],
               const SizedBox(height: 4),
@@ -247,6 +239,7 @@ Future<SubscriptionInput?> showSubscriptionDialog(
 }) {
   return showAppDialog<SubscriptionInput>(
     context,
+    width: dialogWidthOf(context),
     builder: (_) => _SubscriptionDialog(
       initialUrl: initialUrl,
       allowSaveOnly: allowSaveOnly,
@@ -324,17 +317,13 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
+            AppTextField(
               controller: _url,
               keyboardType: TextInputType.url,
-              autocorrect: false,
               enabled: !_busy,
-              decoration: const InputDecoration(
-                labelText: '订阅地址',
-                hintText: 'https://example.com/api/v1/client/subscribe?token=…',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
-              ),
+              label: '订阅地址',
+              hint: 'https://example.com/api/v1/client/subscribe?token=…',
+              alignLabelWithHint: true,
             ),
             const SizedBox(height: Insets.md),
             if (_busy)

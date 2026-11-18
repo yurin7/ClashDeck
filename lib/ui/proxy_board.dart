@@ -9,6 +9,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'dropdown.dart';
+import 'fields.dart';
 import 'rules/group_rules_block.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -308,6 +309,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _addGroup() async {
     final spec = await showAppDialog<_NewGroupSpec>(
       context,
+      width: dialogWidthOf(context),
       builder: (_) => const _NewGroupDialog(),
     );
     if (spec == null || spec.name.isEmpty) return;
@@ -326,6 +328,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _editGroup(GroupEntry group) async {
     final result = await showAppDialog<_GroupEditResult>(
       context,
+      width: dialogWidthOf(context),
       builder: (_) => _EditGroupDialog(group: group),
     );
     if (result == null) return;
@@ -1185,14 +1188,7 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(
-            controller: _ctrl,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '组名',
-              border: OutlineInputBorder(),
-            ),
-          ),
+          AppTextField(controller: _ctrl, autofocus: true, label: '组名'),
           const SizedBox(height: 12),
           AppDropdown<String>(
             label: '类型',
@@ -1289,13 +1285,10 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
+            AppTextField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: '组名',
-                helperText: '改名会同步规则与其它组里的引用',
-                border: OutlineInputBorder(),
-              ),
+              label: '组名',
+              helper: '改名会同步规则与其它组里的引用',
             ),
             const SizedBox(height: 12),
             AppDropdown<String>(
@@ -1310,21 +1303,12 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
             ),
             if (_timed) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: _urlCtrl,
-                decoration: const InputDecoration(
-                  labelText: '测速 URL',
-                  border: OutlineInputBorder(),
-                ),
-              ),
+              AppTextField(controller: _urlCtrl, label: '测速 URL'),
               const SizedBox(height: 12),
-              TextField(
+              AppTextField(
                 controller: _intervalCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '间隔（秒）',
-                  border: OutlineInputBorder(),
-                ),
+                label: '间隔（秒）',
               ),
             ],
             SwitchListTile(
@@ -1471,25 +1455,20 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                 ),
               ],
               const SizedBox(height: Insets.sm),
-              TextField(
+              AppTextField(
                 controller: _searchCtrl,
-                style: mono(13),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: '搜索节点或策略组',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: '清空搜索',
-                          icon: const Icon(Icons.close, size: 16),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
-                  border: const OutlineInputBorder(),
-                ),
+                hint: '搜索节点或策略组',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清空搜索',
+                        icon: const Icon(Icons.close, size: 16),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
                 onChanged: (value) => setState(() => _query = value),
               ),
               const SizedBox(height: Insets.xs),

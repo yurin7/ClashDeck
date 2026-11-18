@@ -62,4 +62,16 @@ void main() {
 
     expect(await listedNames(), ['a.yaml']);
   });
+
+  test('重名导入自动加 -2，返回的展示名同步带上后缀', () async {
+    final store = ProfileStore(tmp);
+    const yaml = 'proxies: []\n';
+    final first = await store.create('demo', yaml);
+    final second = await store.create('demo', yaml);
+
+    expect(first.fileName, 'demo.yaml');
+    expect(second.fileName, 'demo-2.yaml');
+    expect(second.name, 'demo-2');
+    expect(await listedNames(), ['demo-2.yaml', 'demo.yaml']);
+  });
 }

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/edit/config_ops.dart';
 import '../core/edit/import_links.dart';
 import '../core/edit/profile_switch.dart';
+import '../core/io/yaml_file.dart';
 import '../core/model/config_summary.dart';
 import '../core/parse/share_link.dart';
 import '../core/parse/subscription.dart';
@@ -18,6 +19,8 @@ import './widgets/app_ink.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'widgets/delete_confirm.dart';
+import 'widgets/file_pick.dart';
+import 'import_source_sheet.dart';
 import 'widgets/edit_dialog.dart';
 import 'motion.dart';
 
@@ -32,6 +35,7 @@ class HomePage extends StatefulWidget {
     this.runtime,
     this.autoSave = false,
     this.bottomInset = 0,
+    this.pickYamlFile = pickYamlFileFromDevice,
   });
 
   /// 当前“运行用的”配置（概览页启动内核时用它）。
@@ -58,6 +62,9 @@ class HomePage extends StatefulWidget {
 
   /// 给底部悬浮岛留出的空白。
   final double bottomInset;
+
+  /// 从设备选一份 YAML / 订阅文件；测试里可替换成假实现。
+  final YamlFilePicker pickYamlFile;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -235,6 +242,17 @@ class _HomePageState extends State<HomePage> {
   Future<void> _import() async {
     final store = _store;
     if (store == null) return;
+    final source = await showImportSourceSheet(context);
+    if (source == null || !mounted) return;
+    switch (source) {
+      case ImportSource.paste:
+        await _importPasted(store);
+      case ImportSource.file:
+        await _importFile(store);
+    }
+  }
+
+  Future<void> _importPasted(ProfileStore store) async {
     final input = await showAppDialog<_ImportInput>(
       context,
       width: dialogWidthOf(context),
@@ -258,6 +276,47 @@ class _HomePageState extends State<HomePage> {
       await _open(stored);
     } on ConfigEditException catch (e) {
       _toast(e.message);
+    } catch (e) {
+      _toast('导入失败：$e');
+    }
+  }
+
+  /// 从系统文件选择器导入：先做字节层校验，再走与粘贴相同的 YAML 校验。
+  Future<void> _importFile(ProfileStore store) async {
+    final PickedYamlFile? file;
+    try {
+      file = await widget.pickYamlFile();
+    } on YamlFileException catch (e) {
+      _toast(e.message);
+      return;
+    } catch (e) {
+      _toast('读取文件失败：$e');
+      return;
+    }
+    if (file == null || !mounted) return; // 用户取消：静默返回
+
+    final String text;
+    try {
+      text = decodeYamlFile(file);
+    } on YamlFileException catch (e) {
+      _toast(e.message);
+      return;
+    }
+
+    final name = configNameFromFileName(file.name);
+    try {
+      final yaml = buildConfigFromText(text, name: name);
+      final stored = await store.create(name, yaml);
+      await _refresh();
+      if (!mounted) return;
+      if (stored.name == name) {
+        _toast('已导入「${stored.name}」');
+      } else {
+        _toast('已导入「${stored.name}」（「$name」已存在，已自动改名）');
+      }
+      await _open(stored);
+    } on ConfigEditException catch (e) {
+      _toast('解析失败：${e.message}');
     } catch (e) {
       _toast('导入失败：$e');
     }

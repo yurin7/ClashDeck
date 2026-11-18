@@ -169,6 +169,7 @@
 | 新建组 | `showEditDialog` + `EditDialog` | 组名 + DIRECT/REJECT 高亮行 |
 | 单行输入 | `showTextInputDialog` | 宽 520；输入框撑满；helper 不截断 |
 | 导入（规则 / 规则集 / 订阅） | `showEditDialog` 或多行粘贴面板 | 目标统一 DEFAULT |
+| 导入配置（概览） | `showImportSourceSheet` → `_ImportDialog` / 系统文件选择器 | 顶部「导入」先选「粘贴文本 / 从文件选择」；文件只收 .yaml/.yml/.txt、≤2MB、UTF-8，文件名做配置名（重名自动 `-2`） |
 | 订阅地址 | `showSubscriptionDialog` | 只收地址；取消 / 保存；保存后再问「是否立即同步此订阅？」 |
 | 多行文本（粘贴链接 / YAML） | `AppTextArea`（或 `showTextInputDialog(area: true)`） | 宽度撑满、高度 0.8×宽、框内滚动 |
 | 选择节点（加成员） | `showSelectSheet` + `NodePickerSheet` | 分区：系统策略 → 节点 → 策略组 |

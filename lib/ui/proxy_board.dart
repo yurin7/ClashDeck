@@ -326,13 +326,16 @@ class _ProxyBoardState extends State<ProxyBoard> {
       builder: (_) => const _NewGroupDialog(),
     );
     if (spec == null || spec.name.isEmpty) return;
+    // 成员完全由对话框里的两个勾选决定，不再按组类型隐式塞 DIRECT。
+    final members = <String>[
+      if (spec.withDirect) 'DIRECT',
+      if (spec.withReject) 'REJECT',
+    ];
     if (!s.apply(
-      (d) => ConfigOps.addGroup(
-        d,
-        {'name': spec.name, 'type': spec.type},
-        // 手动选择组默认带 DIRECT，刚建好就能选；测速/故障转移组不塞，免得污染测速结果。
-        members: spec.type == 'select' ? const ['DIRECT'] : const [],
-      ),
+      (d) => ConfigOps.addGroup(d, {
+        'name': spec.name,
+        'type': spec.type,
+      }, members: members),
     )) {
       _fail();
     }
@@ -470,6 +473,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
             if (!ok) _fail();
           },
         ),
+        const SizedBox(height: Insets.md),
+        _GroupsToolRow(onCreate: _addGroup),
         for (final group in groups)
           Padding(
             padding: const EdgeInsets.only(top: Insets.md),
@@ -505,7 +510,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
                 // 组头计数直接读 state，刷新一次就能看到新成员。
                 if (mounted) {
                   setState(() {});
-                  _toast('已加入  个');
+                  _toast('已加入 \$added 个');
                 }
               },
               onDrop: (data) {
@@ -530,15 +535,6 @@ class _ProxyBoardState extends State<ProxyBoard> {
           _SystemPolicyCard(state: s, target: name, subtitle: subtitle),
         ],
         const SizedBox(height: Insets.xl),
-        // 「添加节点」已经移到节点列表区头，这里只留「新建组」。
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _addGroup,
-            icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-            label: const Text('新建组'),
-          ),
-        ),
       ],
     );
   }
@@ -716,6 +712,39 @@ class _NodeListCardState extends State<_NodeListCard> {
           ),
         );
       },
+    );
+  }
+}
+
+/// 策略组区顶部的工具行：标题 + 「新建组」入口。
+///
+/// 放在节点列表之后、组卡之前，空列表时也能直接看到入口。
+class _GroupsToolRow extends StatelessWidget {
+  const _GroupsToolRow({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('策略组', style: display(14, weight: 700)),
+              const SizedBox(height: 2),
+              Text('把节点分组，规则按组切走', style: hintStyle(context)),
+            ],
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: onCreate,
+          icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+          label: const Text('新建组'),
+          style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+        ),
+      ],
     );
   }
 }
@@ -1233,10 +1262,19 @@ class NodeChip extends StatelessWidget {
 
 /// 新建策略组的结果。
 class _NewGroupSpec {
-  const _NewGroupSpec({required this.name, required this.type});
+  const _NewGroupSpec({
+    required this.name,
+    required this.type,
+    this.withDirect = true,
+    this.withReject = false,
+  });
 
   final String name;
   final String type;
+
+  /// 新组初始成员：DIRECT 默认勾上，REJECT 默认不勾。
+  final bool withDirect;
+  final bool withReject;
 }
 
 /// 新建策略组对话框。
@@ -1253,6 +1291,8 @@ class _NewGroupDialog extends StatefulWidget {
 class _NewGroupDialogState extends State<_NewGroupDialog> {
   final TextEditingController _ctrl = TextEditingController();
   String _type = 'select';
+  bool _withDirect = true;
+  bool _withReject = false;
 
   @override
   void dispose() {
@@ -1279,6 +1319,25 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
             ],
             onChanged: (v) => setState(() => _type = v),
           ),
+          const SizedBox(height: 4),
+          CheckboxListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _withDirect,
+            onChanged: (v) => setState(() => _withDirect = v ?? false),
+            title: const Text('添加 DIRECT'),
+            subtitle: Text('直连：不经过代理，作为兜底出口', style: hintStyle(context)),
+          ),
+          CheckboxListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _withReject,
+            onChanged: (v) => setState(() => _withReject = v ?? false),
+            title: const Text('添加 REJECT'),
+            subtitle: Text('拒绝：命中即断开，不发请求', style: hintStyle(context)),
+          ),
         ],
       ),
       actions: [
@@ -1289,7 +1348,12 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
         FilledButton(
           onPressed: () => Navigator.pop(
             context,
-            _NewGroupSpec(name: _ctrl.text.trim(), type: _type),
+            _NewGroupSpec(
+              name: _ctrl.text.trim(),
+              type: _type,
+              withDirect: _withDirect,
+              withReject: _withReject,
+            ),
           ),
           child: const Text('创建'),
         ),

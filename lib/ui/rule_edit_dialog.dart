@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
+import '../core/edit/rule_targets.dart';
 import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
@@ -45,7 +46,8 @@ class RuleEditDialog extends StatefulWidget {
   final bool initialNoResolve;
   final List<String> targets;
 
-  /// REJECT-DROP / PASS / COMPATIBLE / GLOBAL 这类冷门内置：折叠在「其它内置」里。
+  /// REJECT-DROP / PASS / COMPATIBLE / GLOBAL 这类高级内置：只在编辑规则时折叠成
+  /// 「高级内置（不常用）」展示。
   final List<String> otherBuiltins;
   final bool isNew;
 
@@ -180,14 +182,16 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
                   DropdownOption(
                     t,
                     t,
-                    subtitle: Profile.builtinTargets.contains(t)
+                    subtitle: widget.otherBuiltins.contains(t)
+                        ? kAdvancedBuiltinNotes[t] ?? '高级内置'
+                        : Profile.builtinTargets.contains(t)
                         ? '系统策略'
                         : null,
                   ),
               ],
               onChanged: (v) => setState(() => _target = v),
             ),
-            if (widget.otherBuiltins.isNotEmpty)
+            if (!widget.isNew && widget.otherBuiltins.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
@@ -196,11 +200,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
                     _showOther ? Icons.expand_less : Icons.expand_more,
                     size: 18,
                   ),
-                  label: Text(
-                    _showOther
-                        ? '收起其它内置出站'
-                        : '其它内置出站（${widget.otherBuiltins.length}）',
-                  ),
+                  label: Text(_showOther ? '收起高级内置' : '高级内置（不常用）'),
                 ),
               ),
 

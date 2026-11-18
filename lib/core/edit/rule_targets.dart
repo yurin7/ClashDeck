@@ -5,7 +5,8 @@ import 'config_ops.dart';
 ///
 /// 主列表顺序固定：自定义组（YAML 顺序，排除 DEFAULT / 自动选择）→ DEFAULT →
 /// 自动选择 → DIRECT → REJECT。其余内置出站（REJECT-DROP / PASS / COMPATIBLE /
-/// GLOBAL）单独放 [otherBuiltins]，由 UI 折叠展示，别混进主列表。
+/// GLOBAL）单独放 [otherBuiltins]，由 UI 折叠成「高级内置（不常用）」展示，
+/// 别混进主列表。
 class RuleTargets {
   const RuleTargets({
     required this.primary,
@@ -17,6 +18,14 @@ class RuleTargets {
 
   List<String> get all => <String>[...primary, ...otherBuiltins];
 }
+
+/// 高级内置出站的一句话说明（编辑规则时随折叠区展示）。
+const Map<String, String> kAdvancedBuiltinNotes = <String, String>{
+  'REJECT-DROP': '静默丢包，不回 RST',
+  'PASS': '跳过本条，继续匹配下一条',
+  'COMPATIBLE': '兼容模式出站',
+  'GLOBAL': '全局出口组',
+};
 
 /// 生成规则目标候选；[preferred] 是当前值（编辑旧规则时可能已不在配置里）。
 RuleTargets ruleTargetsFor(Profile profile, {String? preferred}) {

@@ -120,21 +120,35 @@ void main() {
     expect(draft.payload, isEmpty);
   });
 
-  testWidgets('其它内置出站默认折叠，展开后进目标下拉', (tester) async {
-    await _open(tester, otherBuiltins: const ['PASS', 'GLOBAL']);
-    expect(find.text('其它内置出站（2）'), findsOneWidget);
+  testWidgets('编辑规则：高级内置默认折叠，展开后带说明并进目标下拉', (tester) async {
+    await _open(
+      tester,
+      isNew: false,
+      type: 'DOMAIN-SUFFIX',
+      payload: 'a.com',
+      target: 'DIRECT',
+      otherBuiltins: const ['PASS', 'GLOBAL'],
+    );
+    expect(find.text('高级内置（不常用）'), findsOneWidget);
     expect(find.text('PASS'), findsNothing);
 
-    await tester.tap(find.text('其它内置出站（2）'));
+    await tester.tap(find.text('高级内置（不常用）'));
     await tester.pumpAndSettle();
-    expect(find.text('收起其它内置出站'), findsOneWidget);
+    expect(find.text('收起高级内置'), findsOneWidget);
 
     await tester.tap(find.byType(AppDropdown<String>).last);
     await tester.pumpAndSettle();
     expect(find.text('PASS'), findsOneWidget);
     expect(find.text('GLOBAL'), findsOneWidget);
+    expect(find.text('跳过本条，继续匹配下一条'), findsOneWidget);
+    expect(find.text('全局出口组'), findsOneWidget);
     // 系统策略标出来源。
     expect(find.text('系统策略'), findsWidgets);
+  });
+
+  testWidgets('新增规则：不渲染高级内置折叠区', (tester) async {
+    await _open(tester, otherBuiltins: const ['PASS', 'GLOBAL']);
+    expect(find.text('高级内置（不常用）'), findsNothing);
   });
 
   testWidgets('系统策略的目标显示为「系统策略」', (tester) async {

@@ -40,3 +40,6 @@ android/key.properties
 android/app/*.jks
 android/app/*.keystore
 tool/signing-secrets.txt
+
+# 本地设计参考图 / 临时素材，不提交
+.tmp_refs/

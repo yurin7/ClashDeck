@@ -171,8 +171,8 @@
 | 导入（规则 / 规则集 / 订阅） | `showEditDialog` 或多行粘贴面板 | 目标统一 DEFAULT |
 | 导入配置（概览） | `_ImportDialog`（名称 + 多行文本域） | 底部操作行最左「从文件导入」按钮打开系统选择器，选中后回填名称与文本；文件只收 .yaml/.yml/.txt、≤2MB、UTF-8，文件名做配置名（重名自动 `-2`） |
 | 订阅地址 | `showSubscriptionDialog` | 只收地址；取消 / 保存；保存后再问「是否立即同步此订阅？」 |
-| Pulse 负一屏 | `pulseRoute(PulsePage)` | 概览整页横向左扫（dx<-100 或 velocity<-300）打开；透明叠加层，主界面压暗可见；点遮罩 / 右滑 / 下滑 / 返回键退出；卡片顺序：信息 → 节点测速 → 检查更新 → 运行状态；不做常驻轮询 |
-| 节点测速（Pulse） | 测速卡（`lib/ui/pulse_page.dart`） | 组筛选 + 全选；并发 4、`timeout=5000`、`url=http://www.gstatic.com/generate_204`；结果按延迟升序、失败灰「超时」、阈值 <200 绿 / <500 黄 / 其它红；内核未运行提示先启动 |
+| Pulse 负一屏 | `pulseRoute(PulsePage)` | 概览整页横向左扫（dx<-100 或 velocity<-300）打开；不透明叠加层铺满整屏（含系统导航栏区域），下层 UI 与底栏一律不可见；右滑 / 下滑 / 系统返回退出；卡片顺序：信息 → 节点测速 → 检查更新 → 运行状态；不做常驻轮询 |
+| 节点测速（Pulse） | 测速卡（`lib/ui/pulse_page.dart`） | 内核未运行且无缓存时只显示说明 +「启动内核」；有缓存显示「上次结果 · MM-DD HH:mm」+ 组筛选 / 全选 / 结果行；测速中才显示雷达进度；并发 4、`timeout=5000`、`url=http://www.gstatic.com/generate_204`；结果按延迟升序、失败灰「超时」、阈值 <200 绿 / <500 黄 / 其它红 |
 | 运行状态（Pulse） | 运行状态卡 | 内核状态、运行时长、连接数（仅 Pulse 可见时 3s 轮询）、当前配置、GLOBAL 出口 |
 | 检查更新（设置页·其它） | `_ActionRow` + `showUpdateDialog` | 版本/发布日期/说明最多 6 行高滚动；「去下载」只跳浏览器 Release 页，不做应用内下载；自动检查默认关、24h 节流、失败静默 |
 | 多行文本（粘贴链接 / YAML） | `AppTextArea`（或 `showTextInputDialog(area: true)`） | 宽度撑满、高度 0.8×宽、框内滚动 |

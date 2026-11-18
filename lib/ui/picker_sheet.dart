@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'sheets.dart';
 import 'theme.dart';
 
 /// 底部上滑选择面板里的一个选项。
@@ -86,7 +87,7 @@ class _PickerSheet<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
+    final maxHeight = sheetMaxHeight(context);
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -96,6 +97,7 @@ class _PickerSheet<T> extends StatelessWidget {
           bottom: Insets.sm,
         ),
         child: Material(
+          key: const ValueKey('picker-sheet'),
           color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(Insets.xl),
           clipBehavior: Clip.antiAlias,
@@ -122,17 +124,30 @@ class _PickerSheet<T> extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(
                     Insets.xl,
                     Insets.md,
-                    Insets.xl,
+                    Insets.lg,
                     Insets.xs,
                   ),
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: display(17, weight: 700)),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(subtitle!, style: hintStyle(context)),
-                      ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: display(17, weight: 700)),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(subtitle!, style: hintStyle(context)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, size: 20),
+                      ),
                     ],
                   ),
                 ),

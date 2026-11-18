@@ -12,6 +12,7 @@ import '../runtime/runtime_controller.dart';
 import 'editor_page.dart';
 import 'theme.dart';
 import 'fields.dart';
+import 'sheets.dart';
 import 'widgets.dart';
 
 class HomePage extends StatefulWidget {
@@ -382,59 +383,40 @@ class _HomePageState extends State<HomePage> {
 
   /// 长按卡片时的操作面板（与右上角菜单同一套动作）。
   Future<void> _showItemMenu(StoredProfile item) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) {
+    final action = await showAppSheet<String>(
+      context,
+      title: item.name,
+      body: (ctx) {
         final scheme = Theme.of(ctx).colorScheme;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  Insets.xl,
-                  0,
-                  Insets.xl,
-                  Insets.sm,
-                ),
-                child: Text(
-                  item.name,
-                  style: Theme.of(ctx).textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (widget.onSetActive != null)
-                ListTile(
-                  leading: Icon(
-                    item.fileName == widget.activeFileName
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                    color: item.fileName == widget.activeFileName
-                        ? scheme.primary
-                        : null,
-                  ),
-                  title: Text(
-                    item.fileName == widget.activeFileName
-                        ? '当前运行配置'
-                        : '设为运行配置',
-                  ),
-                  onTap: () => Navigator.pop(ctx, 'activate'),
-                ),
+        return ListView(
+          shrinkWrap: true,
+          children: [
+            if (widget.onSetActive != null)
               ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline),
-                title: const Text('重命名'),
-                onTap: () => Navigator.pop(ctx, 'rename'),
+                leading: Icon(
+                  item.fileName == widget.activeFileName
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: item.fileName == widget.activeFileName
+                      ? scheme.primary
+                      : null,
+                ),
+                title: Text(
+                  item.fileName == widget.activeFileName ? '当前运行配置' : '设为运行配置',
+                ),
+                onTap: () => Navigator.pop(ctx, 'activate'),
               ),
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: scheme.error),
-                title: Text('删除', style: TextStyle(color: scheme.error)),
-                onTap: () => Navigator.pop(ctx, 'delete'),
-              ),
-              const SizedBox(height: Insets.sm),
-            ],
-          ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: const Text('重命名'),
+              onTap: () => Navigator.pop(ctx, 'rename'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: scheme.error),
+              title: Text('删除', style: TextStyle(color: scheme.error)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+          ],
         );
       },
     );

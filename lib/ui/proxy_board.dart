@@ -12,6 +12,7 @@ import 'import_dialogs.dart';
 import 'dropdown.dart';
 import 'fields.dart';
 import 'rules/group_rules_block.dart';
+import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -69,35 +70,30 @@ class _ProxyBoardState extends State<ProxyBoard> {
   // ---------------------------------------------------------------- 操作
 
   Future<void> _addNode() async {
-    final mode = await showModalBottomSheet<_AddMode>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('手动填写'),
-              subtitle: const Text('按协议 schema 一项项填，字段跟着协议变'),
-              onTap: () => Navigator.pop(ctx, _AddMode.manual),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('粘贴分享链接'),
-              subtitle: const Text(
-                'vless / vmess / trojan / ss / hy2 …，可以一次粘多条',
-              ),
-              onTap: () => Navigator.pop(ctx, _AddMode.links),
-            ),
-            ListTile(
-              leading: const Icon(Icons.cloud_download_outlined),
-              title: const Text('从订阅链接导入'),
-              subtitle: const Text('填机场订阅地址，一次把节点全拉进来'),
-              onTap: () => Navigator.pop(ctx, _AddMode.subscription),
-            ),
-          ],
-        ),
+    final mode = await showAppSheet<_AddMode>(
+      context,
+      body: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('手动填写'),
+            subtitle: const Text('按协议 schema 一项项填，字段跟着协议变'),
+            onTap: () => Navigator.pop(ctx, _AddMode.manual),
+          ),
+          ListTile(
+            leading: const Icon(Icons.link),
+            title: const Text('粘贴分享链接'),
+            subtitle: const Text('vless / vmess / trojan / ss / hy2 …，可以一次粘多条'),
+            onTap: () => Navigator.pop(ctx, _AddMode.links),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_download_outlined),
+            title: const Text('从订阅链接导入'),
+            subtitle: const Text('填机场订阅地址，一次把节点全拉进来'),
+            onTap: () => Navigator.pop(ctx, _AddMode.subscription),
+          ),
+        ],
       ),
     );
     if (!mounted) return;
@@ -227,38 +223,35 @@ class _ProxyBoardState extends State<ProxyBoard> {
   /// 芯片上的 ⋮：手机上唯一稳定可达的「编辑 / 移动 / 删除」入口。
   Future<void> _showNodeActions(ProxyEntry node, {String? fromGroup}) async {
     final scheme = Theme.of(context).colorScheme;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    final action = await showAppSheet<String>(
+      context,
+      body: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('编辑节点'),
+            onTap: () => Navigator.pop(ctx, 'edit'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.drive_file_move_outline),
+            title: const Text('移动到…'),
+            subtitle: const Text('也可以长按芯片直接拖到目标组'),
+            onTap: () => Navigator.pop(ctx, 'move'),
+          ),
+          if (fromGroup != null)
             ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('编辑节点'),
-              onTap: () => Navigator.pop(ctx, 'edit'),
+              leading: const Icon(Icons.remove_circle_outline),
+              title: Text('从「$fromGroup」移除'),
+              onTap: () => Navigator.pop(ctx, 'remove'),
             ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_move_outline),
-              title: const Text('移动到…'),
-              subtitle: const Text('也可以长按芯片直接拖到目标组'),
-              onTap: () => Navigator.pop(ctx, 'move'),
-            ),
-            if (fromGroup != null)
-              ListTile(
-                leading: const Icon(Icons.remove_circle_outline),
-                title: Text('从「$fromGroup」移除'),
-                onTap: () => Navigator.pop(ctx, 'remove'),
-              ),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: scheme.error),
-              title: Text('删除节点', style: TextStyle(color: scheme.error)),
-              subtitle: const Text('会同时从所有策略组里移除'),
-              onTap: () => Navigator.pop(ctx, 'delete'),
-            ),
-          ],
-        ),
+          ListTile(
+            leading: Icon(Icons.delete_outline, color: scheme.error),
+            title: Text('删除节点', style: TextStyle(color: scheme.error)),
+            subtitle: const Text('会同时从所有策略组里移除'),
+            onTap: () => Navigator.pop(ctx, 'delete'),
+          ),
+        ],
       ),
     );
     if (!mounted || action == null) return;
@@ -544,11 +537,11 @@ class _ProxyBoardState extends State<ProxyBoard> {
   /// 返回要加进这个组的成员；返回 `null` 表示放弃。三种情况都要能走下去：
   /// 有候选就多选、全局没节点就引导去新建、全在组里也要给新建入口。
   Future<List<String>?> _pickMembers(Profile profile, GroupEntry group) {
-    return showModalBottomSheet<List<String>>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) => _AddMemberSheet(
+    return showAppSheet<List<String>>(
+      context,
+      title: '选择要加入的节点',
+      subtitle: '向「${group.name}」批量添加成员',
+      body: (ctx) => _AddMemberSheet(
         profile: profile,
         groupName: group.name,
         members: group.members,
@@ -1570,145 +1563,122 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
     final everythingInside = !noNodes && all.every((c) => c.inGroup);
     final selectable = all.where((c) => !c.inGroup).length;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          Insets.xl,
-          Insets.md,
-          Insets.xl,
-          Insets.xl + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (everythingInside) ...[
+          const SizedBox(height: Insets.sm),
+          Pill(
+            label: '全部节点已在组内',
+            icon: Icons.check_circle_outline,
+            color: scheme.primary,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('选择要加入的节点', style: display(17, weight: 700)),
-              const SizedBox(height: 2),
-              Text('向「${widget.groupName}」批量添加成员', style: hintStyle(context)),
-              if (everythingInside) ...[
-                const SizedBox(height: Insets.sm),
-                Pill(
-                  label: '全部节点已在组内',
-                  icon: Icons.check_circle_outline,
-                  color: scheme.primary,
+        ],
+        const SizedBox(height: Insets.sm),
+        AppTextField(
+          controller: _searchCtrl,
+          hint: '搜索节点或策略组',
+          prefixIcon: const Icon(Icons.search, size: 18),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清空搜索',
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _query = '');
+                  },
                 ),
-              ],
-              const SizedBox(height: Insets.sm),
-              AppTextField(
-                controller: _searchCtrl,
-                hint: '搜索节点或策略组',
-                prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清空搜索',
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                onChanged: (value) => setState(() => _query = value),
-              ),
-              const SizedBox(height: Insets.xs),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: selectable == 0 ? null : _selectAll,
-                    child: const Text('全选'),
-                  ),
-                  TextButton(
-                    onPressed: selectable == 0 ? null : _invert,
-                    child: const Text('反选'),
-                  ),
-                  TextButton(
-                    onPressed: _picked.isEmpty ? null : _clear,
-                    child: const Text('清空'),
-                  ),
-                  const Spacer(),
-                  Pill(
-                    label: '已选 ${_picked.length}',
-                    dense: true,
-                    color: _picked.isEmpty ? null : scheme.primary,
-                  ),
-                ],
-              ),
-              const SizedBox(height: Insets.xs),
-              Flexible(
-                child: noNodes
-                    ? _emptyState(context)
-                    : visible.isEmpty
-                    ? _noMatchState(context)
-                    : ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final candidate in visible)
-                            if (!candidate.isGroup && !candidate.isBuiltin)
-                              _row(context, scheme, candidate),
-                          if (visible.any((c) => c.isBuiltin))
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: Insets.sm,
-                                bottom: 2,
-                              ),
-                              child: MicroLabel(
-                                '内置',
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          for (final candidate in visible)
-                            if (candidate.isBuiltin)
-                              _row(context, scheme, candidate),
-                          if (visible.any((c) => c.isGroup))
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: Insets.sm,
-                                bottom: 2,
-                              ),
-                              child: MicroLabel(
-                                '策略组',
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          for (final candidate in visible)
-                            if (candidate.isGroup)
-                              _row(context, scheme, candidate),
-                        ],
-                      ),
-              ),
-              const SizedBox(height: Insets.sm),
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: widget.onCreateNode,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('新建节点'),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
-                  ),
-                  const SizedBox(width: Insets.sm),
-                  FilledButton(
-                    onPressed: _picked.isEmpty
-                        ? null
-                        : () => Navigator.pop(
-                            context,
-                            prunePicked(all, _picked).toList(),
-                          ),
-                    child: Text('加入 ${_picked.length} 个'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          onChanged: (value) => setState(() => _query = value),
         ),
-      ),
+        const SizedBox(height: Insets.xs),
+        Row(
+          children: [
+            TextButton(
+              onPressed: selectable == 0 ? null : _selectAll,
+              child: const Text('全选'),
+            ),
+            TextButton(
+              onPressed: selectable == 0 ? null : _invert,
+              child: const Text('反选'),
+            ),
+            TextButton(
+              onPressed: _picked.isEmpty ? null : _clear,
+              child: const Text('清空'),
+            ),
+            const Spacer(),
+            Pill(
+              label: '已选 ${_picked.length}',
+              dense: true,
+              color: _picked.isEmpty ? null : scheme.primary,
+            ),
+          ],
+        ),
+        const SizedBox(height: Insets.xs),
+        Flexible(
+          child: noNodes
+              ? _emptyState(context)
+              : visible.isEmpty
+              ? _noMatchState(context)
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final candidate in visible)
+                      if (!candidate.isGroup && !candidate.isBuiltin)
+                        _row(context, scheme, candidate),
+                    if (visible.any((c) => c.isBuiltin))
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: Insets.sm,
+                          bottom: 2,
+                        ),
+                        child: MicroLabel('内置', color: scheme.onSurfaceVariant),
+                      ),
+                    for (final candidate in visible)
+                      if (candidate.isBuiltin) _row(context, scheme, candidate),
+                    if (visible.any((c) => c.isGroup))
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          top: Insets.sm,
+                          bottom: 2,
+                        ),
+                        child: MicroLabel(
+                          '策略组',
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    for (final candidate in visible)
+                      if (candidate.isGroup) _row(context, scheme, candidate),
+                  ],
+                ),
+        ),
+        const SizedBox(height: Insets.sm),
+        Row(
+          children: [
+            TextButton.icon(
+              onPressed: widget.onCreateNode,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('新建节点'),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: Insets.sm),
+            FilledButton(
+              onPressed: _picked.isEmpty
+                  ? null
+                  : () => Navigator.pop(
+                      context,
+                      prunePicked(all, _picked).toList(),
+                    ),
+              child: Text('加入 ${_picked.length} 个'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

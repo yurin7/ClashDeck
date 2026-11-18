@@ -16,6 +16,7 @@ import '../core/edit/config_ops.dart';
 import 'import_dialogs.dart';
 import 'overview_page.dart';
 import 'settings_page.dart';
+import 'sheets.dart';
 import 'theme.dart';
 import 'fields.dart';
 import 'widgets.dart';
@@ -295,39 +296,27 @@ class _AppShellState extends State<AppShell> {
       _toast('还没有配置，先去「配置」页新建一份');
       return;
     }
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Insets.xl,
-                0,
-                Insets.xl,
-                Insets.sm,
+    final picked = await showAppSheet<String>(
+      context,
+      title: '运行哪份配置',
+      body: (ctx) => ListView(
+        shrinkWrap: true,
+        children: [
+          for (final item in _profiles)
+            ListTile(
+              leading: Icon(
+                item.fileName == _activeFileName
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: item.fileName == _activeFileName
+                    ? Theme.of(ctx).colorScheme.primary
+                    : null,
               ),
-              child: Text('运行哪份配置', style: display(16, weight: 600)),
+              title: Text(item.name),
+              subtitle: Text(item.subtitle, style: hintStyle(ctx)),
+              onTap: () => Navigator.pop(ctx, item.fileName),
             ),
-            for (final item in _profiles)
-              ListTile(
-                leading: Icon(
-                  item.fileName == _activeFileName
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                  color: item.fileName == _activeFileName
-                      ? Theme.of(ctx).colorScheme.primary
-                      : null,
-                ),
-                title: Text(item.name),
-                subtitle: Text(item.subtitle, style: hintStyle(ctx)),
-                onTap: () => Navigator.pop(ctx, item.fileName),
-              ),
-            const SizedBox(height: Insets.sm),
-          ],
-        ),
+        ],
       ),
     );
     if (picked != null) await _setActive(picked);

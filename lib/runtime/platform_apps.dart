@@ -48,9 +48,9 @@ class PlatformApps {
 
   static const MethodChannel _channel = MethodChannel('dev.clashdeck/runtime');
 
-  /// 图标缓存上限：分应用选择页一次最多几百个应用，32×32 的 PNG 很小，
-  /// 缓存整页图标避免来回滚动重复过通道。
-  static const int iconCacheLimit = 600;
+  /// 图标缓存上限（LRU）：分应用选择页一次最多几百个应用，32×32 的 PNG
+  /// 很小，但也不能随应用数量无限涨；200 条足够覆盖一屏多来回。
+  static const int iconCacheLimit = 200;
 
   static final Map<String, Uint8List> _iconCache = <String, Uint8List>{};
 
@@ -78,6 +78,9 @@ class PlatformApps {
     for (final pkg in packages) {
       final cached = _iconCache[pkg];
       if (cached != null) {
+        // 命中即刷新到队尾：淘汰时先丢最久没用的。
+        _iconCache.remove(pkg);
+        _iconCache[pkg] = cached;
         out[pkg] = cached;
       } else {
         missing.add(pkg);
@@ -105,6 +108,7 @@ class PlatformApps {
   }
 
   static void _putIcon(String package, Uint8List bytes) {
+    _iconCache.remove(package);
     _iconCache[package] = bytes;
     while (_iconCache.length > iconCacheLimit) {
       _iconCache.remove(_iconCache.keys.first);
@@ -118,4 +122,8 @@ class PlatformApps {
   /// 测试用：当前缓存条目数。
   @visibleForTesting
   static int get iconCacheLength => _iconCache.length;
+
+  /// 测试用：某个包名当前是否有缓存。
+  @visibleForTesting
+  static bool iconCached(String package) => _iconCache.containsKey(package);
 }

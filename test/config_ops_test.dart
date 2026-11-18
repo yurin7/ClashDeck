@@ -287,6 +287,17 @@ proxy-groups:
       );
     });
 
+    test('连续加入多个节点仍按 proxies 顺序，内置沉底', () {
+      var next = ConfigOps.setGroupMembers(load(), 'PROXY', <String>['DIRECT']);
+      next = ConfigOps.addGroupMember(next, 'PROXY', 'JP-01');
+      next = ConfigOps.addGroupMember(next, 'PROXY', 'HK-01');
+      expect(Profile.from(next).group('PROXY')!.members, <String>[
+        'HK-01',
+        'JP-01',
+        'DIRECT',
+      ]);
+    });
+
     test('组内顺序固定：节点 → 策略组 → DIRECT → REJECT', () {
       final next = ConfigOps.setGroupMembers(load(), 'PROXY', [
         'REJECT',

@@ -47,6 +47,28 @@ void main() {
     expect(PlatformApps.iconCacheLength, 2);
   });
 
+  test('图标缓存 LRU 200：命中刷新，超限淘汰最久未用', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method != 'listAppIcons') return null;
+          final packages = (call.arguments as List).cast<String>();
+          return <String, Uint8List>{
+            for (final pkg in packages) pkg: Uint8List.fromList(<int>[1]),
+          };
+        });
+
+    await PlatformApps.icons(<String>[for (var i = 0; i < 200; i++) 'p$i']);
+    expect(PlatformApps.iconCacheLength, 200);
+
+    // 命中 p0 后它变成最近使用，淘汰时应保住。
+    await PlatformApps.icons(<String>['p0']);
+    await PlatformApps.icons(<String>['p200']);
+    expect(PlatformApps.iconCacheLength, 200);
+    expect(PlatformApps.iconCached('p0'), isTrue);
+    expect(PlatformApps.iconCached('p1'), isFalse);
+    expect(PlatformApps.iconCached('p200'), isTrue);
+  });
+
   test('icons 在没有通道时返回空表而不是抛异常', () async {
     final icons = await PlatformApps.icons(<String>['com.a']);
     expect(icons, isEmpty);

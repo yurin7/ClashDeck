@@ -648,7 +648,7 @@ class _NodeListCardState extends State<_NodeListCard> {
                 children: [
                   Icon(
                     active ? Icons.move_to_inbox : Icons.list_alt_outlined,
-                    size: 17,
+                    size: 20,
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: Insets.sm),
@@ -678,7 +678,7 @@ class _NodeListCardState extends State<_NodeListCard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               Text(
                 active
                     ? '松手就从当前组移除'
@@ -873,7 +873,7 @@ class _GroupCard extends StatelessWidget {
                       ),
                       child: Icon(
                         groupIcon(group.type),
-                        size: 17,
+                        size: 20,
                         color: scheme.primary,
                       ),
                     ),
@@ -892,7 +892,7 @@ class _GroupCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               if (isAuto)
@@ -929,7 +929,7 @@ class _GroupCard extends StatelessWidget {
                           ),
                           if (selectedName != null &&
                               group.members.contains(selectedName)) ...[
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 4),
                             // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
                             Text(
                               '当前 $selectedName',
@@ -1046,7 +1046,7 @@ class _GroupCard extends StatelessWidget {
                                 label: Text(name),
                                 avatar: Icon(
                                   Icons.help_outline,
-                                  size: 15,
+                                  size: 16,
                                   color: scheme.error,
                                 ),
                                 onDeleted: () => onRemove(name),
@@ -1110,7 +1110,7 @@ class _SystemPolicyCard extends StatelessWidget {
                 ),
                 child: Icon(
                   builtinIcon(target),
-                  size: 17,
+                  size: 20,
                   color: scheme.tertiary,
                 ),
               ),
@@ -1125,7 +1125,7 @@ class _SystemPolicyCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(subtitle, style: hintStyle(context)),
                   ],
                 ),

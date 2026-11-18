@@ -486,7 +486,7 @@ class _NodeFormPageState extends State<NodeFormPage> {
         title: Text(map.labelZh),
         subtitle: Text(
           enabled ? '已启用' : '未启用',
-          style: const TextStyle(fontSize: 12),
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         trailing: Switch(
           value: enabled,
@@ -504,10 +504,13 @@ class _NodeFormPageState extends State<NodeFormPage> {
                       cacheKey: '${map.key}.${spec.key}',
                     ),
               ]
-            : const [
+            : [
                 ListTile(
                   dense: true,
-                  title: Text('打开开关后填写该传输的参数', style: TextStyle(fontSize: 12)),
+                  title: Text(
+                    '打开开关后填写该传输的参数',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
       ),
@@ -559,11 +562,11 @@ class _NodeFormPageState extends State<NodeFormPage> {
     });
     if (rows.isEmpty) {
       rows.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
             '没有额外字段；需要时手动添加（值按 YAML 解析）',
-            style: TextStyle(fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
       );
@@ -649,7 +652,7 @@ class _SectionTitle extends StatelessWidget {
         children: [
           Container(width: 2, height: 12, color: scheme.primary),
           const SizedBox(width: Insets.sm),
-          Icon(_iconFor(title), size: 14, color: scheme.primary),
+          Icon(_iconFor(title), size: 16, color: scheme.primary),
           const SizedBox(width: 6),
           Text(
             title,

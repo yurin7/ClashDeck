@@ -684,11 +684,11 @@ class _FloatingIsland extends StatelessWidget {
   ) {
     final color = Color.lerp(scheme.onSurfaceVariant, Colors.white, t)!;
     return Padding(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(item.icon, size: 19, color: color),
+          Icon(item.icon, size: 20, color: color),
           const SizedBox(height: 2),
           Text(
             item.label,

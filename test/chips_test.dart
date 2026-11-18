@@ -143,7 +143,7 @@ void main() {
     expect(labelColor('REJECT-DROP'), scheme.onSurfaceVariant);
   });
 
-  testWidgets('名称胶囊：选中带勾、禁用变灰、点按回调', (tester) async {
+  testWidgets('名称胶囊：选中只有紫底紫边、禁用变灰、点按回调', (tester) async {
     var taps = 0;
     await _pump(
       tester,
@@ -165,7 +165,7 @@ void main() {
     expect(find.text('PROXY'), findsOneWidget);
     expect(find.text('香港 01'), findsOneWidget);
     expect(find.text('系统策略'), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsNothing);
 
     await tester.tap(find.text('PROXY'));
     expect(taps, 1);

@@ -43,14 +43,14 @@ class StartStopButton extends StatelessWidget {
           : OutlinedButton.icon(
               key: const ValueKey('start-stop-busy'),
               onPressed: null,
-              icon: const Icon(Icons.play_arrow_rounded, size: 19),
+              icon: const Icon(Icons.play_arrow_rounded, size: 20),
               label: Text(busyLabel),
             );
     } else if (running) {
       child = OutlinedButton.icon(
         key: const ValueKey('start-stop-stop'),
         onPressed: onStop,
-        icon: const Icon(Icons.stop_circle_outlined, size: 19),
+        icon: const Icon(Icons.stop_circle_outlined, size: 20),
         label: const Text('停止内核'),
       );
     } else {

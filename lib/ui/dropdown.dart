@@ -224,7 +224,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
           const SizedBox(width: 2),
           Icon(
             Icons.expand_more,
-            size: 17,
+            size: 20,
             color: enabled ? scheme.primary : scheme.onSurfaceVariant,
           ),
         ],
@@ -238,7 +238,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
       decoration: InputDecoration(
         labelText: widget.label,
         helperText: widget.helper,
-        prefixIcon: widget.icon == null ? null : Icon(widget.icon, size: 19),
+        prefixIcon: widget.icon == null ? null : Icon(widget.icon, size: 20),
         // 输入框本身不接收文本，焦点交给外层的手势。
         enabled: enabled,
         isDense: true,
@@ -259,7 +259,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
           ),
           Icon(
             Icons.expand_more,
-            size: 19,
+            size: 20,
             color: enabled ? scheme.onSurfaceVariant : scheme.outline,
           ),
         ],
@@ -275,7 +275,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
         constraints: const BoxConstraints(maxHeight: 320),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: const [
             BoxShadow(
@@ -342,7 +342,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
                 ],
               ),
             ),
-            if (selected) Icon(Icons.check, size: 17, color: scheme.primary),
+            if (selected) Icon(Icons.check, size: 16, color: scheme.primary),
           ],
         ),
       ),

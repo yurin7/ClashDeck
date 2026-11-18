@@ -7,6 +7,13 @@ import 'theme.dart';
 import './widgets/app_ink.dart';
 
 /// 胶囊的统一圆角：节点、规则、组、系统策略都用它，保证一排看起来是一套。
+/// 选中态前景/描边色：浅色主题下品牌紫贴在白底上对比度不够，
+/// 往下压到接近正文色；深色主题保持品牌紫。
+Color chipSelectionColor(ColorScheme scheme) =>
+    scheme.brightness == Brightness.light
+    ? Color.lerp(scheme.primary, scheme.onSurface, 0.42)!
+    : scheme.primary;
+
 const double kChipRadius = 9;
 
 /// 拖拽节点时携带的数据。
@@ -92,7 +99,7 @@ class ChipSpec {
     };
     return ChipSpec(
       accent: accent,
-      selectionAccent: scheme.primary,
+      selectionAccent: chipSelectionColor(scheme),
       padding: padding,
     );
   }
@@ -163,7 +170,7 @@ class _ChipShellState extends State<ChipShell>
     final selected = widget.selected;
     // 选中态只认品牌紫；家族色只服务类型小方块和未选中文字。
     final tint = selected
-        ? (widget.spec?.selectionAccent ?? widget.accent ?? scheme.primary)
+        ? (widget.spec?.selectionAccent ?? chipSelectionColor(scheme))
         : (widget.spec?.accent ?? widget.accent ?? scheme.primary);
     final radius = widget.spec?.radius ?? kChipRadius;
     final pad = widget.spec?.padding ?? widget.padding;
@@ -301,7 +308,7 @@ class NodeChip extends StatelessWidget {
             style: display(
               13,
               weight: selected ? 600 : 500,
-              color: selected ? scheme.primary : null,
+              color: selected ? chipSelectionColor(scheme) : null,
             ),
           ),
           if (onMenu != null)
@@ -393,7 +400,7 @@ class _ChipAction extends StatelessWidget {
         customBorder: const CircleBorder(),
         child: Padding(
           padding: EdgeInsets.all(padded),
-          child: Icon(icon, size: 14, color: scheme.onSurfaceVariant),
+          child: Icon(icon, size: 16, color: scheme.onSurfaceVariant),
         ),
       ),
     );
@@ -442,7 +449,7 @@ class GroupChip extends StatelessWidget {
             style: display(
               13,
               weight: selected ? 600 : 500,
-              color: selected ? scheme.primary : null,
+              color: selected ? chipSelectionColor(scheme) : null,
             ),
           ),
           const SizedBox(width: 5),
@@ -500,7 +507,7 @@ class SystemPolicyChip extends StatelessWidget {
             name,
             style: mono(
               12,
-              color: selected ? scheme.primary : accent,
+              color: selected ? chipSelectionColor(scheme) : accent,
               weight: 600,
             ),
           ),
@@ -553,7 +560,7 @@ class NameChip extends StatelessWidget {
         icon ?? (isPolicy ? builtinIcon(name) : Icons.dns_outlined);
     final fg = !enabled
         ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
-        : (selected ? scheme.primary : scheme.onSurface);
+        : (selected ? chipSelectionColor(scheme) : scheme.onSurface);
     return ChipShell(
       spec: ChipSpec.of(
         context,
@@ -575,10 +582,6 @@ class NameChip extends StatelessWidget {
           if (subtitle != null) ...[
             const SizedBox(width: 4),
             Text(subtitle!, style: hintStyle(context)?.copyWith(fontSize: 10)),
-          ],
-          if (selected) ...[
-            const SizedBox(width: 4),
-            Icon(Icons.check, size: 14, color: scheme.primary),
           ],
         ],
       ),
@@ -608,7 +611,7 @@ class RuleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = selected ? scheme.primary : scheme.secondary;
+    final accent = selected ? chipSelectionColor(scheme) : scheme.secondary;
     return ChipShell(
       spec: ChipSpec.of(context, ChipFamily.rule),
       selected: selected,

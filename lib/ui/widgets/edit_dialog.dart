@@ -88,10 +88,8 @@ class EditDialog extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -99,12 +97,12 @@ class EditDialog extends StatelessWidget {
                           const SizedBox(height: Insets.xs),
                           Text(
                             subtitle!,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: scheme.onSurfaceVariant.withValues(
-                                alpha: 0.8,
-                              ),
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: scheme.onSurfaceVariant.withValues(
+                                    alpha: 0.8,
+                                  ),
+                                ),
                           ),
                         ],
                       ],
@@ -290,7 +288,8 @@ class _NoticeDialog extends StatelessWidget {
           : SingleChildScrollView(
               child: Text(
                 message!,
-                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
       actions: [
@@ -377,10 +376,8 @@ class _ConfirmDialog extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -388,11 +385,8 @@ class _ConfirmDialog extends StatelessWidget {
                 const SizedBox(height: Insets.sm),
                 Text(
                   message!,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: scheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant, height: 1.4),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),

@@ -832,7 +832,7 @@ class _RulesTabState extends State<RulesTab> {
             margin: const EdgeInsets.only(right: Insets.xs),
             decoration: BoxDecoration(
               color: accent,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(4),
             ),
           ),
           Expanded(
@@ -934,7 +934,7 @@ class _RulesTabState extends State<RulesTab> {
               const SizedBox(height: Insets.sm),
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 14, color: scheme.error),
+                  Icon(Icons.info_outline, size: 16, color: scheme.error),
                   const SizedBox(width: Insets.xs),
                   Expanded(
                     child: Text(
@@ -983,7 +983,7 @@ class _RulesTabState extends State<RulesTab> {
                     children: [
                       Icon(
                         Icons.drag_indicator,
-                        size: 17,
+                        size: 20,
                         color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
                       ),
                       Text('${i + 1}', style: monoStyle(context, size: 10)),

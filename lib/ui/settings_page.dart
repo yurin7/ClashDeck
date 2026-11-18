@@ -460,7 +460,7 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             Row(
               children: [
-                Icon(icon, size: 15, color: scheme.primary),
+                Icon(icon, size: 16, color: scheme.primary),
                 const SizedBox(width: Insets.sm),
                 MicroLabel(title),
               ],

@@ -117,7 +117,7 @@ class _OverviewPageState extends State<OverviewPage> {
                         await widget.onRefreshProfiles();
                         await runtime.refreshStatus();
                       },
-                      icon: const Icon(Icons.refresh, size: 19),
+                      icon: const Icon(Icons.refresh, size: 20),
                     ),
                   ],
                 ),
@@ -290,11 +290,8 @@ class _StatusCard extends StatelessWidget {
             const SizedBox(height: Insets.md),
             Text(
               runtime.lastError!,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: semantic.danger,
-              ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(height: 1.4, color: semantic.danger),
             ),
           ],
           if (runtime.missingRuleCaches > 0) ...[
@@ -302,7 +299,8 @@ class _StatusCard extends StatelessWidget {
             Text(
               '规则缓存缺失，${runtime.missingRuleCaches} 个规则集未生效；'
               '重新导入该配置的规则集即可补齐。',
-              style: TextStyle(fontSize: 12, height: 1.4, color: semantic.warn),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(height: 1.4, color: semantic.warn),
             ),
           ],
         ],
@@ -747,7 +745,7 @@ class _ActiveProfileCard extends StatelessWidget {
                     Pill(label: '$profileCount 份', dense: true),
                   ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 MetaRow(items: meta),
               ],
             ),
@@ -755,7 +753,7 @@ class _ActiveProfileCard extends StatelessWidget {
           IconButton(
             tooltip: '切换运行配置',
             onPressed: onPickProfile,
-            icon: const Icon(Icons.swap_horiz, size: 19),
+            icon: const Icon(Icons.swap_horiz, size: 20),
           ),
         ],
       ),
@@ -817,11 +815,8 @@ class _LogCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: Insets.sm),
               child: Text(
                 runtime.lastError!,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  height: 1.4,
-                  color: semantic.danger,
-                ),
+                style: Theme.of(context).textTheme.labelMedium
+                    ?.copyWith(height: 1.4, color: semantic.danger),
               ),
             ),
         ],
@@ -851,7 +846,7 @@ class _Segmented<T> extends StatelessWidget {
     final rawIndex = values.indexOf(selected);
     final index = rawIndex < 0 ? 0 : rawIndex;
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.all(Radius.circular(Insets.sm)),
@@ -874,7 +869,7 @@ class _Segmented<T> extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: scheme.surfaceContainerHighest,
-                      borderRadius: const BorderRadius.all(Radius.circular(6)),
+                      borderRadius: const BorderRadius.all(Radius.circular(8)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.22),

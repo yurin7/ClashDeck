@@ -223,7 +223,7 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: scheme.outlineVariant,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
@@ -295,7 +295,7 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                               key: _chipKeys.putIfAbsent(i, GlobalKey.new),
                               label: Text(
                                 _groups[i],
-                                style: const TextStyle(fontSize: 12),
+                                style: Theme.of(context).textTheme.bodySmall,
                               ),
                               selected: i == _index,
                               showCheckmark: false,
@@ -335,8 +335,7 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                                 ),
                                 Text(
                                   '已选 $selectedHere',
-                                  style: hintStyle(context)
-                                      ?.copyWith(fontSize: 11),
+                                  style: Theme.of(context).textTheme.labelSmall,
                                 ),
                                 const Spacer(),
                                 importSheetAction(
@@ -515,7 +514,7 @@ class _GeoRow extends StatelessWidget {
       ),
       subtitle: Text(
         item.label,
-        style: hintStyle(context)?.copyWith(fontSize: 11),
+        style: Theme.of(context).textTheme.labelSmall,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

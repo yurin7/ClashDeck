@@ -141,7 +141,7 @@ class SectionTitle extends StatelessWidget {
           Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 13, color: scheme.onSurfaceVariant),
+                Icon(icon, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 6),
               ],
               Expanded(child: MicroLabel(title)),
@@ -219,7 +219,7 @@ class Pill extends StatelessWidget {
     if (onTap == null) return child;
     return AppInkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(8),
       child: child,
     );
   }
@@ -743,11 +743,8 @@ class _SlidableRowState extends State<SlidableRow>
                             child: Center(
                               child: Text(
                                 widget.actionLabel,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: scheme.onError,
-                                ),
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(color: scheme.onError),
                               ),
                             ),
                           ),

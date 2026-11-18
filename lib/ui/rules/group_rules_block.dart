@@ -207,10 +207,7 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
                 ),
                 if (rules.isEmpty) ...[
                   const SizedBox(width: Insets.sm),
-                  Text(
-                    '还没有规则',
-                    style: hintStyle(context)?.copyWith(fontSize: 11.5),
-                  ),
+                  Text('还没有规则', style: Theme.of(context).textTheme.labelMedium),
                 ],
                 const Spacer(),
                 if (rules.isNotEmpty)

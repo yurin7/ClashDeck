@@ -473,7 +473,7 @@ class _HomePageState extends State<HomePage> {
                         onPressed: _loading ? null : _import,
                         icon: const Icon(
                           Icons.file_download_outlined,
-                          size: 17,
+                          size: 20,
                         ),
                         label: const Text('导入'),
                       ),
@@ -800,7 +800,7 @@ class _ProfileRow extends StatelessWidget {
                           ? 'subscription'
                           : 'plain',
                     ),
-                    size: 17,
+                    size: 20,
                     color: iconColor,
                   ),
                 ),
@@ -878,7 +878,7 @@ class _ProfileRow extends StatelessWidget {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     MetaRow(items: meta),
                     if (host.isNotEmpty)
                       Padding(

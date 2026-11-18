@@ -466,14 +466,14 @@ class _EditorPageState extends State<EditorPage> {
                     padding: const EdgeInsets.symmetric(horizontal: Insets.sm),
                     tabs: const [
                       Tab(
-                        icon: Icon(Icons.account_tree_outlined, size: 19),
+                        icon: Icon(Icons.account_tree_outlined, size: 20),
                         text: '代理',
                       ),
                       Tab(
-                        icon: Icon(Icons.rule_outlined, size: 19),
+                        icon: Icon(Icons.rule_outlined, size: 20),
                         text: '规则',
                       ),
-                      Tab(icon: Icon(Icons.code, size: 19), text: 'YAML'),
+                      Tab(icon: Icon(Icons.code, size: 20), text: 'YAML'),
                     ],
                   ),
                 ),
@@ -556,7 +556,7 @@ class _StatusBar extends StatelessWidget {
                   ),
                   Icon(
                     Icons.chevron_right,
-                    size: 15,
+                    size: 16,
                     color: fg.withValues(alpha: 0.7),
                   ),
                 ],

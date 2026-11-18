@@ -171,7 +171,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                       height: 4,
                       decoration: BoxDecoration(
                         color: scheme.outlineVariant,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
@@ -340,16 +340,13 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                       _togglePreset(preset, !_picked.contains(preset.id)),
                   title: Text(
                     preset.label,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: Theme.of(context).textTheme.labelLarge,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
                     _hint(preset),
-                    style: hintStyle(context)?.copyWith(fontSize: 11),
+                    style: Theme.of(context).textTheme.labelSmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

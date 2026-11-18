@@ -59,7 +59,7 @@ class RuleRowCard extends StatelessWidget {
       color: scheme.surfaceContainerHigh,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
       ),
       child: AppInkWell(
@@ -139,7 +139,7 @@ class RuleRowCard extends StatelessWidget {
             Expanded(child: title),
           ],
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: 4),
         Row(
           children: [
             _TargetChip(label: '→ ${rule.target}', color: accent),
@@ -218,7 +218,7 @@ class _TargetChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 132),

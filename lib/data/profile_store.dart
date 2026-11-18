@@ -75,6 +75,13 @@ class ProfileStore {
   Future<StoredProfile> create(String name, String text) async {
     final fileName = await _freeFileName(name);
     await write(fileName, text);
+    // 新配置默认让 DEFAULT 组走 DIRECT：代理页一打开就有高亮，
+    // 停止状态下切组内节点也只需要改这份 sidecar。
+    await writeMeta(fileName, {
+      'app': {
+        'groupNodes': {'DEFAULT': 'DIRECT'},
+      },
+    });
     final stat = await File(_path(fileName)).stat();
     return StoredProfile(
       fileName: fileName,

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/member_picker.dart';
 import '../core/edit/config_ops.dart';
+import '../core/edit/group_selection.dart';
 import '../core/model/profile.dart';
 import '../core/schema/group_schema.dart';
 import '../core/yaml/yaml_doc.dart';
@@ -34,6 +35,8 @@ class ProxyBoard extends StatefulWidget {
     required this.state,
     this.onSubscriptionSaved,
     this.runtime,
+    this.groupSelection = const <String, String>{},
+    this.onGroupSelection,
   });
 
   final EditorState state;
@@ -43,6 +46,12 @@ class ProxyBoard extends StatefulWidget {
 
   /// 非空时，组内点节点 = 让这个组改用该节点（运行期切换）。
   final RuntimeController? runtime;
+
+  /// 每个组上次选中的节点（sidecar 里记的选择）。停止状态下也用它做高亮。
+  final Map<String, String> groupSelection;
+
+  /// 点组内节点时回调：把这次选择记进当前配置的 sidecar，重开仍在。
+  final Future<void> Function(String group, String node)? onGroupSelection;
 
   @override
   State<ProxyBoard> createState() => _ProxyBoardState();
@@ -189,14 +198,18 @@ class _ProxyBoardState extends State<ProxyBoard> {
     if (!s.apply((d) => ConfigOps.updateProxy(d, node.name, result))) _fail();
   }
 
-  /// 组内点节点 = 让这个组在运行期改用该节点。
+  /// 组内点节点 = 把这个组当前出口改成该节点。
+  ///
+  /// 关键点：选择先写进 sidecar（`meta.app.groupNodes`），不依赖内核在跑。
+  /// 内核运行中再顺带调一次接口立刻生效；停止状态下只记偏好、刷 UI，
+  /// 不弹「请先启动内核」，也不报错——下次启动内核会自动应用。
   Future<void> _selectNodeForGroup(String group, ProxyEntry node) async {
     final runtime = widget.runtime;
-    if (runtime == null) return;
-    if (runtime.phase != RuntimePhase.running) {
-      _toast('先启动内核，才能在配置页切换这个组的节点');
-      return;
-    }
+    final running = runtime != null && runtime.phase == RuntimePhase.running;
+    await widget.onGroupSelection?.call(group, node.name);
+    if (!mounted) return;
+    setState(() {});
+    if (!running) return;
     final ok = await runtime.selectNode(group, node.name);
     if (!ok) {
       _toast('切换失败，内核可能已经退出');
@@ -410,6 +423,11 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Widget _buildBody(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final profile = s.profile;
+    // 高亮用的选择：sidecar 里记的优先，运行中的实际选择覆盖它（会话内切换不回写）。
+    final selection = <String, String>{
+      ...groupSelectionSnapshot(profile, widget.groupSelection),
+      ...?widget.runtime?.selected,
+    };
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
@@ -446,8 +464,9 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onMove: (n, from) => _moveDialog(n, from),
               onDeleteNode: _deleteNode,
               onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
-              selectedName: widget.runtime?.selected[group.name],
-              onSelectNode: widget.runtime == null
+              selectedName: selection[group.name],
+              onSelectNode:
+                  widget.runtime == null && widget.onGroupSelection == null
                   ? null
                   : (n) => _selectNodeForGroup(group.name, n),
               onEdit: () => _editGroup(group),
@@ -777,6 +796,20 @@ class _GroupCard extends StatelessWidget {
                               ' · ${group.members.length} 成员',
                               style: mono(10.5, color: scheme.onSurfaceVariant),
                             ),
+                            if (selectedName != null &&
+                                group.members.contains(selectedName))
+                              Flexible(
+                                child: Text(
+                                  ' · 当前 $selectedName',
+                                  style: mono(
+                                    10.5,
+                                    color: scheme.primary,
+                                    weight: 600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             if (group.computedMembers) ...[
                               const SizedBox(width: Insets.xs),
                               Pill(

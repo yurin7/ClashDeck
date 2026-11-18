@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
+import '../core/edit/group_selection.dart';
 import '../core/validate/validator.dart';
 import '../data/profile_store.dart';
 import '../runtime/runtime_controller.dart';
@@ -48,6 +49,9 @@ class _EditorPageState extends State<EditorPage> {
   String? _loadError;
   bool _saving = false;
 
+  /// 组 → 上次选中的节点；来自当前配置 sidecar 的 `app.groupNodes`。
+  Map<String, String> _groupSelection = const <String, String>{};
+
   String get _title => widget.displayName ?? widget.fileName;
 
   @override
@@ -58,6 +62,33 @@ class _EditorPageState extends State<EditorPage> {
       _state = _prepareState(text, savedText: text);
     } else {
       _load();
+    }
+    _loadGroupSelection();
+  }
+
+  /// 读 sidecar 里记住的组内选择；读不到就留空，UI 会回落到组内第一个成员。
+  Future<void> _loadGroupSelection() async {
+    try {
+      final meta = await widget.store.readMeta(widget.fileName);
+      final nodes = groupNodesOf(meta);
+      if (!mounted || nodes.isEmpty) return;
+      setState(() => _groupSelection = nodes);
+    } catch (_) {
+      // meta 坏了只影响高亮，不影响编辑。
+    }
+  }
+
+  /// 把组内选择记进 sidecar：不启动内核也能切，重开 App 还在。
+  Future<void> _rememberGroupSelection(String group, String node) async {
+    setState(() => _groupSelection = {..._groupSelection, group: node});
+    try {
+      final meta = await widget.store.readMeta(widget.fileName);
+      await widget.store.writeMeta(
+        widget.fileName,
+        withGroupNode(meta, group, node),
+      );
+    } catch (_) {
+      // 记不上不影响这次点击，下次点击会再试。
     }
   }
 
@@ -468,6 +499,8 @@ class _EditorPageState extends State<EditorPage> {
                         state: state,
                         runtime: widget.runtime,
                         onSubscriptionSaved: _rememberSubscription,
+                        groupSelection: _groupSelection,
+                        onGroupSelection: _rememberGroupSelection,
                       ),
                       RulesTab(state: state, runtime: widget.runtime),
                       RawYamlTab(state: state),

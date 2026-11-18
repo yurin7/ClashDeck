@@ -1,0 +1,8 @@
+flutter_launcher_icons:
+  image_path: assets/icon/app_icon.png
+  android: true
+  min_sdk_android: 24
+  adaptive_icon_background: "#040406"
+  # 前景图本身已留出 14% 边距（内容 72%），不要再让生成器叠加 16% 内缩。
+  adaptive_icon_foreground: assets/icon/app_icon_foreground.png
+  adaptive_icon_foreground_inset: 0

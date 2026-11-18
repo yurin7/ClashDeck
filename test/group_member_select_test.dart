@@ -58,11 +58,11 @@ Finder _cardOf(String title) =>
 /// 取胶囊外层 Material 的描边色：选中态必须是品牌紫，未选中是中性描边。
 Color _borderOf(WidgetTester tester, Finder chip) {
   final shell = find.descendant(of: chip, matching: find.byType(ChipShell));
-  final material = tester.widget<Material>(
-    find.descendant(of: shell, matching: find.byType(Material)).first,
+  final box = tester.widget<AnimatedContainer>(
+    find.descendant(of: shell, matching: find.byType(AnimatedContainer)).first,
   );
-  final shape = material.shape! as RoundedRectangleBorder;
-  return shape.side.color;
+  final decoration = box.decoration! as BoxDecoration;
+  return decoration.border!.top.color;
 }
 
 Future<List<String>> _pump(

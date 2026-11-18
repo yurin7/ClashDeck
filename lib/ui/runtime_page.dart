@@ -4,6 +4,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'widgets/start_stop_button.dart';
 import './widgets/app_ink.dart';
 import './widgets/select_sheet.dart';
 
@@ -201,19 +202,11 @@ class _RuntimePageState extends State<RuntimePage> {
             Sparkline(values: _history, color: semantic.ok, height: 42),
           ],
           const SizedBox(height: Insets.lg),
-          SizedBox(
-            width: double.infinity,
-            child: running
-                ? OutlinedButton.icon(
-                    onPressed: busy ? null : _controller.stop,
-                    icon: const Icon(Icons.stop_circle_outlined, size: 19),
-                    label: const Text('停止内核'),
-                  )
-                : AccentButton(
-                    label: busy ? '启动中…' : '启动内核',
-                    icon: Icons.play_arrow_rounded,
-                    onPressed: busy ? null : _controller.start,
-                  ),
+          StartStopButton(
+            running: running,
+            busy: busy,
+            onStart: _controller.start,
+            onStop: _controller.stop,
           ),
         ],
       ),

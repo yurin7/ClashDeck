@@ -10,6 +10,7 @@ import '../core/model/profile.dart';
 import 'chips.dart';
 import 'sheets/sectioned_picker.dart';
 import 'widgets.dart';
+import 'widgets/start_stop_button.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
 class OverviewPage extends StatefulWidget {
@@ -278,36 +279,13 @@ class _StatusCard extends StatelessWidget {
             Sparkline(values: history, color: semantic.ok),
           ],
           const SizedBox(height: Insets.lg),
-          if (runtime.isBusy)
-            SizedBox(
-              height: 46,
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
-            )
-          else if (running)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => runtime.stop(),
-                icon: const Icon(Icons.stop_circle_outlined, size: 19),
-                label: const Text('停止内核'),
-              ),
-            )
-          else
-            AccentButton(
-              label: '启动内核',
-              icon: Icons.play_arrow_rounded,
-              expand: true,
-              onPressed: () => runtime.start(),
-            ),
+          StartStopButton(
+            running: running,
+            busy: runtime.isBusy,
+            busySpinner: true,
+            onStart: () => runtime.start(),
+            onStop: () => runtime.stop(),
+          ),
           if (runtime.lastError != null) ...[
             const SizedBox(height: Insets.md),
             Text(

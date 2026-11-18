@@ -68,9 +68,23 @@
 
 ### 5.2 动效
 
-- 页面路由统一 `appRoute()`（`lib/ui/navigation.dart`）：进入 300ms `easeOutCubic`（右滑入 + 0.6→1 淡入），返回 260ms `easeInCubic`。
-- 业务弹窗 `showAppDialog`：240ms fade + scale 0.96→1；底部 sheet 上滑 240ms。
-- 状态切换（配置行、组内选中）：`AnimatedContainer` / `AnimatedSwitcher` 220ms，不位移列表顺序。
+页面路由统一 `appRoute()`（`lib/ui/navigation.dart`）：进入 300ms `easeOutCubic`（右滑入 + 0.6→1 淡入），返回 260ms `easeInCubic`。
+业务弹窗 `showAppDialog` 240ms fade + scale 0.96→1；底部 sheet 上滑 240ms。
+
+组件内动画一律走 `Motion`（`lib/ui/motion.dart`），不在业务代码里散写 `Duration`：
+
+| token | normal | calm（减少动画） | 用途 |
+| --- | --- | --- | --- |
+| `fast` | 140ms | 60ms | 按下反馈、按钮 cross-fade |
+| `chip` | 140ms | 60ms | chip 选中/取消的颜色、描边、缩放 |
+| `arrow` | 180ms | 60ms | 展开箭头旋转 |
+| `expand` | 220ms | 60ms | 区展开折叠、成员/组卡增删的高度变化 |
+| `page` | 300ms | 60ms | 仅记录参考值；`appRoute` 实际固定 300/260ms |
+
+- 曲线：入场 `Motion.enter` = `easeOutCubic`，退场 `Motion.exit` = `easeInCubic`；仅 toast / 底部 sheet 允许轻微 `easeOutBack`。
+- `Motion.of(context)` 读 `MediaQuery.disableAnimations`：系统开启「减少动画」时全部降到 `calm`（60ms）；页面路由由 `appRoute` 固定，不随该 token 变化。
+- 允许的动效点**只有这些**：区展开 `AnimatedSize` + 箭头 `AnimatedRotation`；成员/组卡增删的单项 `MotionEntrance`（fade + 0.98→1）；chip 选中 `AnimatedContainer` + scale 0.98→1（不发光、不抖动）；内核启停 `StartStopButton`（`lib/ui/widgets/start_stop_button.dart`）cross-fade。
+- 禁止：整页缩放、整列表 fade 入场、并行超过 2 个动画、单项超过 350ms、动画回调里 `setState` 整表。动画只重建自身；大列表继续用惰性 sliver。
 
 ## 6. 禁止清单（CI 自检，0 基线）
 

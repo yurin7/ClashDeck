@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/rule_labels.dart';
 import '../core/model/profile.dart';
+import 'motion.dart';
 import 'theme.dart';
 import './widgets/app_ink.dart';
 
@@ -101,7 +102,7 @@ class ChipSpec {
 ///
 /// 四类胶囊（节点 / 规则 / 组 / 系统策略）都套它，只换里面的图标和文字，
 /// 这样深色背景下它们的圆角、粗细、点按时的高亮完全一致。
-class ChipShell extends StatelessWidget {
+class ChipShell extends StatefulWidget {
   const ChipShell({
     super.key,
     required this.child,
@@ -128,32 +129,70 @@ class ChipShell extends StatelessWidget {
   final EdgeInsetsGeometry margin;
 
   @override
+  State<ChipShell> createState() => _ChipShellState();
+}
+
+class _ChipShellState extends State<ChipShell>
+    with SingleTickerProviderStateMixin {
+  /// 选中瞬间 0.98 → 1 的回弹；初值 1 表示未选中时没有缩放。
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: Motion.normal.chip,
+    value: 1,
+  );
+
+  @override
+  void didUpdateWidget(covariant ChipShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      _pulse.duration = Motion.of(context).chip;
+      _pulse.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final motion = Motion.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final selected = widget.selected;
     // 选中态只认品牌紫；家族色只服务类型小方块和未选中文字。
     final tint = selected
-        ? (spec?.selectionAccent ?? accent ?? scheme.primary)
-        : (spec?.accent ?? accent ?? scheme.primary);
-    final radius = spec?.radius ?? kChipRadius;
-    final pad = spec?.padding ?? padding;
-    return Padding(
-      padding: margin,
-      child: Material(
-        color: selected
-            ? tint.withValues(alpha: 0.16)
-            : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(radius),
-          side: BorderSide(
-            color: selected ? tint : scheme.outlineVariant,
-            width: selected ? 1.4 : 1,
+        ? (widget.spec?.selectionAccent ?? widget.accent ?? scheme.primary)
+        : (widget.spec?.accent ?? widget.accent ?? scheme.primary);
+    final radius = widget.spec?.radius ?? kChipRadius;
+    final pad = widget.spec?.padding ?? widget.padding;
+    return ScaleTransition(
+      scale: Tween<double>(
+        begin: 0.98,
+        end: 1,
+      ).animate(CurvedAnimation(parent: _pulse, curve: motion.enter)),
+      child: Padding(
+        padding: widget.margin,
+        child: AnimatedContainer(
+          duration: motion.chip,
+          curve: motion.enter,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: selected
+                ? tint.withValues(alpha: 0.16)
+                : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: selected ? tint : scheme.outlineVariant,
+              width: selected ? 1.4 : 1,
+            ),
           ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: AppInkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(padding: pad, child: child),
+          child: AppInkWell(
+            onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
+            child: Padding(padding: pad, child: widget.child),
+          ),
         ),
       ),
     );

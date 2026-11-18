@@ -7,6 +7,7 @@ import '../../core/model/rule_types.dart';
 import '../../state/editor_state.dart';
 import '../rule_edit_dialog.dart';
 import '../rule_picker_sheet.dart';
+import '../motion.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import '../widgets/target_selector_field.dart';
@@ -178,6 +179,7 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
     final rules = _rules;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,69 +214,91 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
                 ],
                 const Spacer(),
                 if (rules.isNotEmpty)
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: motion.arrow,
+                    curve: motion.enter,
+                    child: Icon(
+                      Icons.expand_more,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
           ),
         ),
-        if (_expanded && rules.isNotEmpty) ...[
-          const SizedBox(height: Insets.xs),
-          for (final rule in rules)
-            Padding(
-              key: ValueKey('group-rule-${rule.index}'),
-              padding: const EdgeInsets.only(bottom: Insets.xs),
-              child: SlidableRow(
-                open: _swipedRule == rule.index,
-                onOpenChanged: (open) =>
-                    setState(() => _swipedRule = open ? rule.index : null),
-                actionLabel: '删除',
-                onAction: () => _delete(rule),
-                child: LongPressDraggable<RuleDragData>(
-                  data: RuleDragData(rule),
-                  feedback: Material(
-                    color: Colors.transparent,
-                    child: SizedBox(width: 240, child: RuleChip(rule: rule)),
-                  ),
-                  child: RuleChip(
-                    rule: rule,
-                    onTap: () => _edit(initial: rule),
-                    trailing: IconButton(
-                      tooltip: '换到别的组',
-                      visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints(
-                        minWidth: 44,
-                        minHeight: 44,
+        AnimatedSize(
+          duration: motion.expand,
+          curve: motion.enter,
+          alignment: Alignment.topCenter,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_expanded && rules.isNotEmpty) ...[
+                const SizedBox(height: Insets.xs),
+                for (final rule in rules)
+                  Padding(
+                    key: ValueKey('group-rule-${rule.index}'),
+                    padding: const EdgeInsets.only(bottom: Insets.xs),
+                    child: SlidableRow(
+                      open: _swipedRule == rule.index,
+                      onOpenChanged: (open) => setState(
+                        () => _swipedRule = open ? rule.index : null,
                       ),
-                      onPressed: () => _moveRule(rule),
-                      icon: const Icon(Icons.swap_horiz, size: 16),
+                      actionLabel: '删除',
+                      onAction: () => _delete(rule),
+                      child: LongPressDraggable<RuleDragData>(
+                        data: RuleDragData(rule),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: SizedBox(
+                            width: 240,
+                            child: RuleChip(rule: rule),
+                          ),
+                        ),
+                        child: RuleChip(
+                          rule: rule,
+                          onTap: () => _edit(initial: rule),
+                          trailing: IconButton(
+                            tooltip: '换到别的组',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                            onPressed: () => _moveRule(rule),
+                            icon: const Icon(Icons.swap_horiz, size: 16),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
-        ],
-        if (_expanded || rules.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: Insets.xs, right: Insets.sm),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: _addExisting,
-                  icon: const Icon(Icons.playlist_add, size: 16),
-                  label: const Text('添加已有规则'),
-                ),
-                TextButton.icon(
-                  onPressed: () => _edit(),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: Text(widget.newRuleLabel),
-                ),
               ],
-            ),
+              if (_expanded || rules.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: Insets.xs,
+                    right: Insets.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _addExisting,
+                        icon: const Icon(Icons.playlist_add, size: 16),
+                        label: const Text('添加已有规则'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _edit(),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: Text(widget.newRuleLabel),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }

@@ -10,6 +10,7 @@ import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'dropdown.dart';
 import 'fields.dart';
+import 'motion.dart';
 import 'rules/group_rules_block.dart';
 import 'rule_picker_sheet.dart';
 import 'chips.dart';
@@ -623,6 +624,7 @@ class _NodeListCardState extends State<_NodeListCard> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
     final count = widget.nodes.length;
     return DragTarget<DragNodeData>(
       onWillAcceptWithDetails: (d) => d.data.fromGroup != null,
@@ -664,10 +666,15 @@ class _NodeListCardState extends State<_NodeListCard> {
                     onPressed: widget.onAdd,
                     icon: const Icon(Icons.add_circle_outline, size: 20),
                   ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: scheme.onSurfaceVariant,
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: motion.arrow,
+                    curve: motion.enter,
+                    child: Icon(
+                      Icons.expand_more,
+                      size: 20,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -678,30 +685,43 @@ class _NodeListCardState extends State<_NodeListCard> {
                     : (_expanded ? '点节点编辑，长按拖到组里' : '点这里展开；所有节点都在，不管有没有进组'),
                 style: hintStyle(context),
               ),
-              if (_expanded) ...[
-                const SizedBox(height: Insets.md),
-                if (count == 0)
-                  Text('还没有节点：点右上角「+」添加。', style: hintStyle(context))
-                else
-                  Wrap(
-                    spacing: Insets.sm,
-                    runSpacing: Insets.sm,
-                    children: [
-                      for (final n in widget.nodes)
-                        NodeChip(
-                          node: n,
-                          fromGroup: null,
-                          onOpen: () => widget.onOpen(n),
-                          onMove: () => widget.onMove(n),
-                          onDelete: () => widget.onDelete(n),
-                          onRemove: null,
-                          onMenu: widget.onMenuNode == null
-                              ? null
-                              : () => widget.onMenuNode!(n),
-                        ),
-                    ],
-                  ),
-              ],
+              AnimatedSize(
+                duration: motion.expand,
+                curve: motion.enter,
+                alignment: Alignment.topCenter,
+                child: !_expanded
+                    ? const SizedBox(width: double.infinity)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: Insets.md),
+                          if (count == 0)
+                            Text('还没有节点：点右上角「+」添加。', style: hintStyle(context))
+                          else
+                            Wrap(
+                              spacing: Insets.sm,
+                              runSpacing: Insets.sm,
+                              children: [
+                                for (final n in widget.nodes)
+                                  MotionEntrance(
+                                    key: ValueKey('node-chip-${n.name}'),
+                                    child: NodeChip(
+                                      node: n,
+                                      fromGroup: null,
+                                      onOpen: () => widget.onOpen(n),
+                                      onMove: () => widget.onMove(n),
+                                      onDelete: () => widget.onDelete(n),
+                                      onRemove: null,
+                                      onMenu: widget.onMenuNode == null
+                                          ? null
+                                          : () => widget.onMenuNode!(n),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
+                      ),
+              ),
             ],
           ),
         );
@@ -803,6 +823,7 @@ class _GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final motion = Motion.of(context);
     final profile = state.profile;
     return DragTarget<Object>(
       onWillAcceptWithDetails: (d) {
@@ -961,63 +982,81 @@ class _GroupCard extends StatelessWidget {
                     top: Insets.md,
                     right: Insets.sm,
                   ),
-                  child: Wrap(
-                    spacing: Insets.sm,
-                    runSpacing: Insets.sm,
-                    children: [
-                      for (final name in group.members) ...[
-                        if (profile.proxyByName[name] case final node?)
-                          NodeChip(
-                            node: node,
-                            fromGroup: group.name,
-                            onOpen: () => onOpenNode(node),
-                            onMove: () => onMove(node, group.name),
-                            onDelete: () => onDeleteNode(node),
-                            onRemove: isAuto ? null : () => onRemove(name),
-                            selected: selectedName == node.name,
-                            onSelect: onSelectMember == null
-                                ? null
-                                : () => onSelectMember!(node.name),
-                            onMenu: isAuto || onMenuNode == null
-                                ? null
-                                : () => onMenuNode!(node, group.name),
-                          )
-                        else if (profile.groupByName[name] case final nested?)
-                          GroupChip(
-                            name: name,
-                            members: nested.members.length,
-                            type: nested.type,
-                            selected: selectedName == name,
-                            tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
-                            onTap: onSelectMember == null
-                                ? null
-                                : () => onSelectMember!(name),
-                            onRemove: () => onRemove(name),
-                          )
-                        else if (Profile.builtinTargets.contains(name))
-                          SystemPolicyChip(
-                            name: name,
-                            note: name == 'REJECT-DROP' ? '不常用' : null,
-                            selected: selectedName == name,
-                            tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
-                            onTap: onSelectMember == null
-                                ? null
-                                : () => onSelectMember!(name),
-                            onRemove: () => onRemove(name),
-                          )
-                        else
-                          InputChip(
-                            label: Text(name),
-                            avatar: Icon(
-                              Icons.help_outline,
-                              size: 15,
-                              color: scheme.error,
+                  child: AnimatedSize(
+                    duration: motion.expand,
+                    curve: motion.enter,
+                    alignment: Alignment.topCenter,
+                    child: Wrap(
+                      spacing: Insets.sm,
+                      runSpacing: Insets.sm,
+                      children: [
+                        for (final name in group.members) ...[
+                          if (profile.proxyByName[name] case final node?)
+                            MotionEntrance(
+                              key: ValueKey('member-$name'),
+                              child: NodeChip(
+                                node: node,
+                                fromGroup: group.name,
+                                onOpen: () => onOpenNode(node),
+                                onMove: () => onMove(node, group.name),
+                                onDelete: () => onDeleteNode(node),
+                                onRemove: isAuto ? null : () => onRemove(name),
+                                selected: selectedName == node.name,
+                                onSelect: onSelectMember == null
+                                    ? null
+                                    : () => onSelectMember!(node.name),
+                                onMenu: isAuto || onMenuNode == null
+                                    ? null
+                                    : () => onMenuNode!(node, group.name),
+                              ),
+                            )
+                          else if (profile.groupByName[name] case final nested?)
+                            MotionEntrance(
+                              key: ValueKey('member-$name'),
+                              child: GroupChip(
+                                name: name,
+                                members: nested.members.length,
+                                type: nested.type,
+                                selected: selectedName == name,
+                                tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
+                                onTap: onSelectMember == null
+                                    ? null
+                                    : () => onSelectMember!(name),
+                                onRemove: () => onRemove(name),
+                              ),
+                            )
+                          else if (Profile.builtinTargets.contains(name))
+                            MotionEntrance(
+                              key: ValueKey('member-$name'),
+                              child: SystemPolicyChip(
+                                name: name,
+                                note: name == 'REJECT-DROP' ? '不常用' : null,
+                                selected: selectedName == name,
+                                tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
+                                onTap: onSelectMember == null
+                                    ? null
+                                    : () => onSelectMember!(name),
+                                onRemove: () => onRemove(name),
+                              ),
+                            )
+                          else
+                            MotionEntrance(
+                              key: ValueKey('member-$name'),
+                              child: InputChip(
+                                label: Text(name),
+                                avatar: Icon(
+                                  Icons.help_outline,
+                                  size: 15,
+                                  color: scheme.error,
+                                ),
+                                onDeleted: () => onRemove(name),
+                                deleteButtonTooltipMessage:
+                                    '从组里移除（这个成员在内核里不存在）',
+                              ),
                             ),
-                            onDeleted: () => onRemove(name),
-                            deleteButtonTooltipMessage: '从组里移除（这个成员在内核里不存在）',
-                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ],

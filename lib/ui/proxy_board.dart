@@ -486,7 +486,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
       children: [
         SectionTitle(
           title: 'PROXIES',
-          subtitle: '点节点编辑，长按拖到别的组；× 从本组移除',
+          subtitle: '点行编辑，长按拖到组卡；左滑删除',
           icon: Icons.hub_outlined,
           trailing: Text(
             '${profile.proxies.length} 节点 · ${profile.groups.length} 组',
@@ -719,7 +719,7 @@ class _NodeListCardState extends State<_NodeListCard> {
               Text(
                 active
                     ? '松手就从当前组移除'
-                    : (_expanded ? '点节点编辑，长按拖到组里' : '点这里展开；所有节点都在，不管有没有进组'),
+                    : (_expanded ? '点行编辑，长按拖到组卡' : '点这里展开；所有节点都在，不管有没有进组'),
                 style: hintStyle(context),
               ),
               AnimatedSize(

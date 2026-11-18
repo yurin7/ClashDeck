@@ -20,7 +20,6 @@ import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'widgets/delete_confirm.dart';
 import 'widgets/file_pick.dart';
-import 'import_source_sheet.dart';
 import 'widgets/edit_dialog.dart';
 import 'motion.dart';
 
@@ -242,21 +241,10 @@ class _HomePageState extends State<HomePage> {
   Future<void> _import() async {
     final store = _store;
     if (store == null) return;
-    final source = await showImportSourceSheet(context);
-    if (source == null || !mounted) return;
-    switch (source) {
-      case ImportSource.paste:
-        await _importPasted(store);
-      case ImportSource.file:
-        await _importFile(store);
-    }
-  }
-
-  Future<void> _importPasted(ProfileStore store) async {
     final input = await showAppDialog<_ImportInput>(
       context,
       width: dialogWidthOf(context),
-      builder: (_) => const _ImportDialog(),
+      builder: (_) => _ImportDialog(pickFile: widget.pickYamlFile),
     );
     if (input == null || !mounted) return;
     final text = input.text.trim();
@@ -276,47 +264,6 @@ class _HomePageState extends State<HomePage> {
       await _open(stored);
     } on ConfigEditException catch (e) {
       _toast(e.message);
-    } catch (e) {
-      _toast('导入失败：$e');
-    }
-  }
-
-  /// 从系统文件选择器导入：先做字节层校验，再走与粘贴相同的 YAML 校验。
-  Future<void> _importFile(ProfileStore store) async {
-    final PickedYamlFile? file;
-    try {
-      file = await widget.pickYamlFile();
-    } on YamlFileException catch (e) {
-      _toast(e.message);
-      return;
-    } catch (e) {
-      _toast('读取文件失败：$e');
-      return;
-    }
-    if (file == null || !mounted) return; // 用户取消：静默返回
-
-    final String text;
-    try {
-      text = decodeYamlFile(file);
-    } on YamlFileException catch (e) {
-      _toast(e.message);
-      return;
-    }
-
-    final name = configNameFromFileName(file.name);
-    try {
-      final yaml = buildConfigFromText(text, name: name);
-      final stored = await store.create(name, yaml);
-      await _refresh();
-      if (!mounted) return;
-      if (stored.name == name) {
-        _toast('已导入「${stored.name}」');
-      } else {
-        _toast('已导入「${stored.name}」（「$name」已存在，已自动改名）');
-      }
-      await _open(stored);
-    } on ConfigEditException catch (e) {
-      _toast('解析失败：${e.message}');
     } catch (e) {
       _toast('导入失败：$e');
     }
@@ -1069,10 +1016,14 @@ class _ImportInput {
 
 /// 「导入」对话框：名字 + 内容（YAML / 分享链接 / 订阅地址）。
 ///
+/// 底部操作行最左侧有「从文件」：选完文件后回填名称与文本，用户仍可编辑再导入。
 /// 控制器归 State 所有（不要在 `await showDialog` 之后手动 dispose，
 /// 对话框退场动画还在用它）。
 class _ImportDialog extends StatefulWidget {
-  const _ImportDialog();
+  const _ImportDialog({required this.pickFile});
+
+  /// 打开系统文件选择器；测试可注入假实现。
+  final YamlFilePicker pickFile;
 
   @override
   State<_ImportDialog> createState() => _ImportDialogState();
@@ -1096,6 +1047,37 @@ class _ImportDialogState extends State<_ImportDialog> {
     );
   }
 
+  Future<void> _pickFile() async {
+    final PickedYamlFile? file;
+    try {
+      file = await widget.pickFile();
+    } on YamlFileException catch (e) {
+      _warn(e.message);
+      return;
+    } catch (e) {
+      _warn('读取文件失败：$e');
+      return;
+    }
+    if (file == null || !mounted) return; // 用户取消：静默，保留已输入内容
+    final picked = file;
+
+    final String text;
+    try {
+      text = decodeYamlFile(picked);
+    } on YamlFileException catch (e) {
+      _warn(e.message);
+      return; // 失败不清空用户已输入内容
+    }
+    setState(() {
+      _name.text = configNameFromFileName(picked.name);
+      _text.text = text;
+    });
+  }
+
+  void _warn(String message) {
+    if (mounted) showToast(context, message);
+  }
+
   @override
   Widget build(BuildContext context) {
     return EditDialog(
@@ -1115,8 +1097,20 @@ class _ImportDialogState extends State<_ImportDialog> {
           ),
         ],
       ),
-      onCancel: () => Navigator.pop(context),
-      onConfirm: _submit,
+      actions: [
+        TextButton.icon(
+          onPressed: _pickFile,
+          icon: const Icon(Icons.folder_open, size: 18),
+          label: const Text('从文件'),
+        ),
+        const Spacer(),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(onPressed: _submit, child: const Text('导入')),
+      ],
     );
   }
 }

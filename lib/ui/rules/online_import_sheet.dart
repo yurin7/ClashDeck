@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
+import '../widgets/selectable_tile.dart';
 import '../widgets.dart';
 import '../fields.dart';
 import 'import_sheet_style.dart';
@@ -332,16 +333,10 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
             ),
             if (open)
               for (final preset in group.presets)
-                CheckboxListTile(
-                  value: _picked.contains(preset.id),
-                  onChanged: (value) => _togglePreset(preset, value),
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: const EdgeInsets.only(
-                    left: Insets.sm,
-                    right: Insets.md,
-                  ),
-                  visualDensity: VisualDensity.compact,
+                SelectableTile(
+                  selected: _picked.contains(preset.id),
+                  onTap: () =>
+                      _togglePreset(preset, !_picked.contains(preset.id)),
                   title: Text(
                     preset.label,
                     style: const TextStyle(

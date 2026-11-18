@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../core/edit/member_picker.dart';
 import '../core/edit/config_ops.dart';
 import '../core/edit/group_selection.dart';
 import '../core/model/profile.dart';
@@ -14,7 +13,9 @@ import 'fields.dart';
 import 'rules/group_rules_block.dart';
 import 'chips.dart';
 import 'sheets.dart';
+import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
+import 'widgets/selectable_tile.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
 
@@ -526,22 +527,18 @@ class _ProxyBoardState extends State<ProxyBoard> {
 
   /// 「选择要加入的节点」底部弹窗。
   ///
-  /// 返回要加进这个组的成员；返回 `null` 表示放弃。三种情况都要能走下去：
-  /// 有候选就多选、全局没节点就引导去新建、全在组里也要给新建入口。
+  /// 走统一的 [showNodePickerSheet]：系统策略 → 节点 → 策略组三段、
+  /// 高亮多选、全选/反选/清空，0 节点时「系统策略」段照样可选。
   Future<List<String>?> _pickMembers(Profile profile, GroupEntry group) {
-    return showAppSheet<List<String>>(
+    return showNodePickerSheet(
       context,
-      title: '选择要加入的节点',
-      subtitle: '向「${group.name}」批量添加成员',
-      body: (ctx) => _AddMemberSheet(
-        profile: profile,
-        groupName: group.name,
-        members: group.members,
-        onCreateNode: () {
-          Navigator.pop(ctx);
-          _addNodeForm();
-        },
-      ),
+      profile: profile,
+      groupName: group.name,
+      members: group.members,
+      onCreateNode: () {
+        Navigator.pop(context);
+        _addNodeForm();
+      },
     );
   }
 }
@@ -1067,6 +1064,7 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
       title: const Text('新建策略组'),
       content: Column(
@@ -1085,21 +1083,21 @@ class _NewGroupDialogState extends State<_NewGroupDialog> {
             onChanged: (v) => setState(() => _type = v),
           ),
           const SizedBox(height: 4),
-          CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            value: _withDirect,
-            onChanged: (v) => setState(() => _withDirect = v ?? false),
+          SelectableTile(
+            selected: _withDirect,
+            onTap: () => setState(() => _withDirect = !_withDirect),
+            leading: Icon(
+              Icons.arrow_outward,
+              size: 16,
+              color: scheme.tertiary,
+            ),
             title: const Text('添加 DIRECT'),
             subtitle: Text('直连：不经过代理，作为兜底出口', style: hintStyle(context)),
           ),
-          CheckboxListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            value: _withReject,
-            onChanged: (v) => setState(() => _withReject = v ?? false),
+          SelectableTile(
+            selected: _withReject,
+            onTap: () => setState(() => _withReject = !_withReject),
+            leading: Icon(Icons.block, size: 16, color: scheme.error),
             title: const Text('添加 REJECT'),
             subtitle: Text('拒绝：命中即断开，不发请求', style: hintStyle(context)),
           ),
@@ -1247,300 +1245,6 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
           child: const Text('保存'),
         ),
       ],
-    );
-  }
-}
-
-/// 组头「+」打开的底部弹窗：多选把节点/策略组加进这个组。
-///
-/// 三个状态都要能走：
-/// - 有候选：多选后点「加入」；
-/// - 整个配置没有任何节点：空态 + 直达「新建节点」；
-/// - 该组已经包含所有候选：提示「全部节点已在组内」，但保留「新建节点」入口。
-class _AddMemberSheet extends StatefulWidget {
-  const _AddMemberSheet({
-    required this.profile,
-    required this.groupName,
-    required this.members,
-    required this.onCreateNode,
-  });
-
-  final Profile profile;
-  final String groupName;
-  final List<String> members;
-  final VoidCallback onCreateNode;
-
-  @override
-  State<_AddMemberSheet> createState() => _AddMemberSheetState();
-}
-
-class _AddMemberSheetState extends State<_AddMemberSheet> {
-  final Set<String> _picked = <String>{};
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  /// 全部候选（含已在组内的，置灰显示）；DIRECT / REJECT 作为系统策略可选。
-  List<MemberCandidate> get _all => memberCandidates(
-    widget.profile,
-    groupName: widget.groupName,
-    members: widget.members,
-  );
-
-  List<MemberCandidate> get _visible => filterMemberCandidates(_all, _query);
-
-  void _selectAll() {
-    setState(() {
-      final next = selectVisible(_all, _query, _picked);
-      _picked
-        ..clear()
-        ..addAll(next);
-    });
-  }
-
-  void _invert() {
-    setState(() {
-      final next = invertVisible(_all, _query, _picked);
-      _picked
-        ..clear()
-        ..addAll(next);
-    });
-  }
-
-  void _clear() {
-    setState(_picked.clear);
-  }
-
-  void _toggle(String name, bool selected) {
-    setState(() {
-      if (selected) {
-        _picked.add(name);
-      } else {
-        _picked.remove(name);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final all = _all;
-    final visible = _visible;
-    final noNodes = widget.profile.proxies.isEmpty;
-    final everythingInside = !noNodes && all.every((c) => c.inGroup);
-    final selectable = all.where((c) => !c.inGroup).length;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (everythingInside) ...[
-          const SizedBox(height: Insets.sm),
-          Pill(
-            label: '全部节点已在组内',
-            icon: Icons.check_circle_outline,
-            color: scheme.primary,
-          ),
-        ],
-        const SizedBox(height: Insets.sm),
-        AppTextField(
-          controller: _searchCtrl,
-          hint: '搜索节点或策略组',
-          prefixIcon: const Icon(Icons.search, size: 18),
-          suffixIcon: _query.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: '清空搜索',
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () {
-                    _searchCtrl.clear();
-                    setState(() => _query = '');
-                  },
-                ),
-          onChanged: (value) => setState(() => _query = value),
-        ),
-        const SizedBox(height: Insets.xs),
-        Row(
-          children: [
-            TextButton(
-              onPressed: selectable == 0 ? null : _selectAll,
-              child: const Text('全选'),
-            ),
-            TextButton(
-              onPressed: selectable == 0 ? null : _invert,
-              child: const Text('反选'),
-            ),
-            TextButton(
-              onPressed: _picked.isEmpty ? null : _clear,
-              child: const Text('清空'),
-            ),
-            const Spacer(),
-            Pill(
-              label: '已选 ${_picked.length}',
-              dense: true,
-              color: _picked.isEmpty ? null : scheme.primary,
-            ),
-          ],
-        ),
-        const SizedBox(height: Insets.xs),
-        Flexible(
-          child: noNodes
-              ? _emptyState(context)
-              : visible.isEmpty
-              ? _noMatchState(context)
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final candidate in visible)
-                      if (!candidate.isGroup && !candidate.isBuiltin)
-                        _row(context, scheme, candidate),
-                    if (visible.any((c) => c.isBuiltin))
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: Insets.sm,
-                          bottom: 2,
-                        ),
-                        child: MicroLabel('内置', color: scheme.onSurfaceVariant),
-                      ),
-                    for (final candidate in visible)
-                      if (candidate.isBuiltin) _row(context, scheme, candidate),
-                    if (visible.any((c) => c.isGroup))
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: Insets.sm,
-                          bottom: 2,
-                        ),
-                        child: MicroLabel(
-                          '策略组',
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    for (final candidate in visible)
-                      if (candidate.isGroup) _row(context, scheme, candidate),
-                  ],
-                ),
-        ),
-        const SizedBox(height: Insets.sm),
-        Row(
-          children: [
-            TextButton.icon(
-              onPressed: widget.onCreateNode,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('新建节点'),
-            ),
-            const Spacer(),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            const SizedBox(width: Insets.sm),
-            FilledButton(
-              onPressed: _picked.isEmpty
-                  ? null
-                  : () => Navigator.pop(
-                      context,
-                      prunePicked(all, _picked).toList(),
-                    ),
-              child: Text('加入 ${_picked.length} 个'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _row(
-    BuildContext context,
-    ColorScheme scheme,
-    MemberCandidate candidate,
-  ) {
-    final inside = candidate.inGroup;
-    final checked = inside || _picked.contains(candidate.name);
-    final note = inside
-        ? '已在组内'
-        : candidate.note ?? (candidate.isBuiltin ? '系统策略' : null);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Checkbox(
-            value: checked,
-            onChanged: inside
-                ? null
-                : (value) => _toggle(candidate.name, value ?? false),
-          ),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: inside ? null : () => _toggle(candidate.name, !checked),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: NameChip(
-                  name: candidate.name,
-                  icon: candidate.isBuiltin
-                      ? builtinIcon(candidate.name)
-                      : candidate.isGroup
-                      ? Icons.account_tree_outlined
-                      : Icons.dns_outlined,
-                  selected: _picked.contains(candidate.name),
-                  enabled: !inside,
-                  subtitle: note,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _noMatchState(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Insets.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.search_off,
-            size: 32,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: Insets.sm),
-          Text('没有匹配「${_query.trim()}」的成员', style: display(15, weight: 600)),
-          const SizedBox(height: 4),
-          Text('换个关键字，或清空搜索看全部。', style: hintStyle(context)),
-        ],
-      ),
-    );
-  }
-
-  Widget _emptyState(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Insets.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.cloud_off_outlined,
-            size: 32,
-            color: scheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: Insets.sm),
-          Text('还没有节点', style: display(15, weight: 600)),
-          const SizedBox(height: 4),
-          Text(
-            '先建一个节点，再把它加进「${widget.groupName}」。',
-            textAlign: TextAlign.center,
-            style: hintStyle(context),
-          ),
-        ],
-      ),
     );
   }
 }

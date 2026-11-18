@@ -1,11 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
-import '../core/edit/rule_targets.dart';
-import '../core/model/profile.dart';
 import '../core/model/rule_types.dart';
 import 'dropdown.dart';
 import 'fields.dart';
+import 'widgets/target_selector_field.dart';
 import 'toast.dart';
 
 /// 规则编辑对话框的输入结果。
@@ -60,7 +59,6 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
   late String _type;
   late String _target;
   late bool _noResolve;
-  bool _showOther = false;
   late final TextEditingController _payloadCtrl;
 
   @override
@@ -166,40 +164,18 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
                 hint: _payloadHint,
               ),
             if (_needsPayload) const SizedBox(height: 12),
-            AppDropdown<String>(
+            TargetSelectorField(
               label: '目标（策略 / 组）',
-              expand: true,
               value: _target,
-              options: [
-                for (final t in <String>{
-                  ...widget.targets,
-                  if (!widget.targets.contains(_target)) _target,
-                  if (_showOther) ...widget.otherBuiltins,
-                })
-                  DropdownOption(
-                    t,
-                    t,
-                    subtitle: widget.otherBuiltins.contains(t)
-                        ? kAdvancedBuiltinNotes[t] ?? '高级内置'
-                        : Profile.builtinTargets.contains(t)
-                        ? '系统策略'
-                        : null,
-                  ),
-              ],
+              options: <String>{
+                ...widget.targets,
+                if (!widget.targets.contains(_target)) _target,
+              }.toList(),
+              otherOptions: widget.isNew
+                  ? const <String>[]
+                  : widget.otherBuiltins,
               onChanged: (v) => setState(() => _target = v),
             ),
-            if (!widget.isNew && widget.otherBuiltins.isNotEmpty)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => setState(() => _showOther = !_showOther),
-                  icon: Icon(
-                    _showOther ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                  ),
-                  label: Text(_showOther ? '收起高级内置' : '高级内置（不常用）'),
-                ),
-              ),
 
             if (kNoResolveTypes.contains(_type))
               SwitchListTile(

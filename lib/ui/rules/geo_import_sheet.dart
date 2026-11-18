@@ -4,6 +4,7 @@ import '../../core/edit/geosite_index.dart';
 import '../../core/edit/import_plan.dart';
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
+import '../widgets/selectable_tile.dart';
 import '../widgets.dart';
 import '../fields.dart';
 import 'import_sheet_style.dart';
@@ -425,13 +426,9 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
 
   Widget _buildFreeInput(BuildContext context, String code) {
     final scheme = Theme.of(context).colorScheme;
-    return CheckboxListTile(
-      value: _picked.contains(code),
-      onChanged: (value) => _toggle(code, value),
-      dense: true,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: const EdgeInsets.only(left: Insets.sm, right: Insets.sm),
-      visualDensity: VisualDensity.compact,
+    return SelectableTile(
+      selected: _picked.contains(code),
+      onTap: () => _toggle(code, !_picked.contains(code)),
       title: Text(
         '＋ 直接使用 $code',
         style: mono(12.5, color: scheme.secondary, weight: 600),
@@ -504,13 +501,12 @@ class _GeoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final already = existing.contains(item.code);
-    return CheckboxListTile(
-      value: already || picked.contains(item.code),
-      onChanged: already ? null : (value) => onToggle(item.code, value),
-      dense: true,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: const EdgeInsets.only(left: Insets.sm, right: Insets.sm),
-      visualDensity: VisualDensity.compact,
+    return SelectableTile(
+      selected: picked.contains(item.code),
+      enabled: !already,
+      onTap: already
+          ? null
+          : () => onToggle(item.code, !picked.contains(item.code)),
       title: Text(
         item.code,
         style: mono(12.5, weight: already ? 400 : 600),
@@ -523,7 +519,7 @@ class _GeoRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      secondary: already
+      trailing: already
           ? Pill(
               label: '已添加',
               dense: true,

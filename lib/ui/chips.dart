@@ -45,6 +45,44 @@ IconData groupIcon(String type) => switch (type) {
   _ => Icons.account_tree_outlined,
 };
 
+/// 胶囊家族：决定强调色、内边距与圆角，不允许页面自绘。
+enum ChipFamily { node, rule, group, systemPolicy, name }
+
+/// 四类胶囊的唯一配色 / 尺寸来源。
+///
+/// 页面只引用组件、不写 `Container` 样式；要改观感只改这里。
+class ChipSpec {
+  const ChipSpec({
+    required this.accent,
+    this.padding = const EdgeInsets.fromLTRB(5, 3, 4, 3),
+    this.radius = kChipRadius,
+  });
+
+  final Color accent;
+  final EdgeInsets padding;
+  final double radius;
+
+  factory ChipSpec.of(
+    BuildContext context,
+    ChipFamily family, {
+    String? policy,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = switch (family) {
+      ChipFamily.node => scheme.onSurface,
+      ChipFamily.rule => scheme.secondary,
+      ChipFamily.group => scheme.secondary,
+      ChipFamily.name => scheme.primary,
+      ChipFamily.systemPolicy => systemPolicyColor(policy ?? 'DIRECT', scheme),
+    };
+    final padding = switch (family) {
+      ChipFamily.rule => const EdgeInsets.fromLTRB(6, 4, 4, 4),
+      _ => const EdgeInsets.fromLTRB(5, 3, 4, 3),
+    };
+    return ChipSpec(accent: accent, padding: padding);
+  }
+}
+
 /// 胶囊外壳：统一圆角、内边距、选中描边与底色。
 ///
 /// 四类胶囊（节点 / 规则 / 组 / 系统策略）都套它，只换里面的图标和文字，
@@ -55,6 +93,7 @@ class ChipShell extends StatelessWidget {
     required this.child,
     this.selected = false,
     this.accent,
+    this.spec,
     this.onTap,
     this.onLongPress,
     this.padding = const EdgeInsets.fromLTRB(5, 3, 4, 3),
@@ -64,8 +103,11 @@ class ChipShell extends StatelessWidget {
   final Widget child;
   final bool selected;
 
-  /// 选中时的强调色；默认主题主色。
+  /// 选中时的强调色；默认取 [spec] 或主题主色。
   final Color? accent;
+
+  /// 统一规格；传了就以它为准（四类胶囊都走 `ChipSpec.of`）。
+  final ChipSpec? spec;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final EdgeInsetsGeometry padding;
@@ -74,7 +116,9 @@ class ChipShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tint = accent ?? scheme.primary;
+    final tint = spec?.accent ?? accent ?? scheme.primary;
+    final radius = spec?.radius ?? kChipRadius;
+    final pad = spec?.padding ?? padding;
     return Padding(
       padding: margin,
       child: Material(
@@ -82,7 +126,7 @@ class ChipShell extends StatelessWidget {
             ? tint.withValues(alpha: 0.16)
             : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(kChipRadius),
+          borderRadius: BorderRadius.circular(radius),
           side: BorderSide(
             color: selected ? tint : scheme.outlineVariant,
             width: selected ? 1.4 : 1,
@@ -92,7 +136,7 @@ class ChipShell extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          child: Padding(padding: padding, child: child),
+          child: Padding(padding: pad, child: child),
         ),
       ),
     );
@@ -187,6 +231,7 @@ class NodeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final shell = ChipShell(
+      spec: ChipSpec.of(context, ChipFamily.node),
       selected: selected,
       onTap: onSelect ?? onOpen,
       child: Row(
@@ -324,6 +369,7 @@ class GroupChip extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accent = scheme.secondary;
     final chip = ChipShell(
+      spec: ChipSpec.of(context, ChipFamily.group),
       selected: selected,
       accent: accent,
       onTap: onTap,
@@ -378,6 +424,7 @@ class SystemPolicyChip extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accent = systemPolicyColor(name, scheme);
     final chip = ChipShell(
+      spec: ChipSpec.of(context, ChipFamily.systemPolicy, policy: name),
       selected: selected,
       accent: accent,
       onTap: onTap,
@@ -438,6 +485,11 @@ class NameChip extends StatelessWidget {
         ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
         : (selected ? accent : scheme.onSurface);
     return ChipShell(
+      spec: ChipSpec.of(
+        context,
+        isPolicy ? ChipFamily.systemPolicy : ChipFamily.name,
+        policy: name,
+      ),
       selected: selected,
       accent: accent,
       onTap: enabled ? onTap : null,
@@ -488,6 +540,7 @@ class RuleChip extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accent = selected ? scheme.primary : scheme.secondary;
     return ChipShell(
+      spec: ChipSpec.of(context, ChipFamily.rule),
       selected: selected,
       accent: accent,
       onTap: onTap,

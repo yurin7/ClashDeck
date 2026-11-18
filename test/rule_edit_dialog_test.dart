@@ -1,5 +1,5 @@
-import 'package:clashdeck/ui/dropdown.dart';
 import 'package:clashdeck/ui/rule_edit_dialog.dart';
+import 'package:clashdeck/ui/widgets/target_selector_field.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -129,15 +129,15 @@ void main() {
       target: 'DIRECT',
       otherBuiltins: const ['PASS', 'GLOBAL'],
     );
-    expect(find.text('高级内置（不常用）'), findsOneWidget);
+    // 目标不再是下拉：点字段打开统一选择面板。
+    expect(find.text('高级内置（2）'), findsNothing);
+    await tester.tap(find.byType(TargetSelectorField));
+    await tester.pumpAndSettle();
     expect(find.text('PASS'), findsNothing);
 
-    await tester.tap(find.text('高级内置（不常用）'));
+    await tester.tap(find.text('高级内置（2）'));
     await tester.pumpAndSettle();
     expect(find.text('收起高级内置'), findsOneWidget);
-
-    await tester.tap(find.byType(AppDropdown<String>).last);
-    await tester.pumpAndSettle();
     expect(find.text('PASS'), findsOneWidget);
     expect(find.text('GLOBAL'), findsOneWidget);
     expect(find.text('跳过本条，继续匹配下一条'), findsOneWidget);
@@ -148,13 +148,16 @@ void main() {
 
   testWidgets('新增规则：不渲染高级内置折叠区', (tester) async {
     await _open(tester, otherBuiltins: const ['PASS', 'GLOBAL']);
-    expect(find.text('高级内置（不常用）'), findsNothing);
+    await tester.tap(find.byType(TargetSelectorField));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('高级内置'), findsNothing);
+    expect(find.text('PASS'), findsNothing);
   });
 
   testWidgets('系统策略的目标显示为「系统策略」', (tester) async {
     await _open(tester, target: 'DIRECT');
-    await tester.tap(find.byType(AppDropdown<String>).last);
+    await tester.tap(find.byType(TargetSelectorField));
     await tester.pumpAndSettle();
-    expect(find.text('系统策略'), findsOneWidget);
+    expect(find.text('系统策略'), findsWidgets);
   });
 }

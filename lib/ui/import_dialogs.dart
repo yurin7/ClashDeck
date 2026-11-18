@@ -4,9 +4,9 @@ import '../core/parse/share_link.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'theme.dart';
-import 'dropdown.dart';
 import 'fields.dart';
 import 'widgets.dart';
+import 'widgets/target_selector_field.dart';
 
 /// 「粘贴分享链接」对话框：多行输入，返回原文；取消返回 null。
 Future<String?> showPasteLinksDialog(
@@ -160,16 +160,17 @@ class _RuleImportDialogState extends State<_RuleImportDialog> {
                 alignLabelWithHint: true,
               ),
               const SizedBox(height: 12),
-              AppDropdown<String>(
-                value: _group,
+              TargetSelectorField(
+                value: _isCustom ? _customCtrl.text.trim() : _group,
                 label: '目标组',
-                helper: '规则集地址导入时用',
-                expand: true,
+                emptyLabel: '（默认）用规则集名称',
+                options: <String>{
+                  '',
+                  for (final name in widget.groups) name,
+                  if (_isCustom && _customCtrl.text.trim().isNotEmpty)
+                    _customCtrl.text.trim(),
+                }.toList(),
                 enabled: !_isCustom,
-                options: [
-                  const DropdownOption('', '（默认）用规则集名称'),
-                  for (final name in widget.groups) DropdownOption(name, name),
-                ],
                 onChanged: (value) => setState(() => _group = value),
               ),
               if (_isCustom) ...[

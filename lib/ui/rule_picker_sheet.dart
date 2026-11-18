@@ -3,9 +3,11 @@ import 'package:material_ui/material_ui.dart';
 import '../core/edit/config_ops.dart';
 import '../core/model/profile.dart';
 import '../core/yaml/yaml_doc.dart';
+import 'chips.dart';
+import 'sheets/picker_sheet.dart';
 import 'theme.dart';
-import 'fields.dart';
 import 'widgets.dart';
+import 'widgets/select_sheet.dart';
 
 /// 把一条规则改写成指向另一个目标组，其余字段原样保留。
 String ruleWithTarget(RuleEntry rule, String target) {
@@ -45,44 +47,25 @@ List<RuleEntry> rulesAssignableTo(Profile profile, String group) => [
     if (rule.target != group && !rule.isTerminal) rule,
 ];
 
-/// 「添加规则」面板：像选节点那样批量挑已有规则，挑中的挂到本组。
+/// 「添加规则」面板：与「选择要加入的节点」同一个骨架（PickerSheetScaffold），
+/// 行内用 [RuleChip]，选中即整行高亮。
 Future<List<RuleEntry>?> showRulePickerSheet(
   BuildContext context, {
   required String group,
   required List<RuleEntry> candidates,
 }) {
   if (candidates.isEmpty) return Future.value(const <RuleEntry>[]);
-  return showGeneralDialog<List<RuleEntry>>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: '选择规则',
-    barrierColor: Colors.black54,
-    transitionDuration: const Duration(milliseconds: 240),
-    pageBuilder: (_, _, _) => const SizedBox.shrink(),
-    transitionBuilder: (dialogContext, animation, _, _) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.12),
-            end: Offset.zero,
-          ).animate(curved),
-          child: _RulePickerSheet(group: group, candidates: candidates),
-        ),
-      );
-    },
+  return showSelectSheet<List<RuleEntry>>(
+    context,
+    title: '添加规则到「$group」',
+    subtitle: '从配置里已有的规则中挑，选中的应用后会改到本组名下',
+    body: (_) => _RulePickerSheet(candidates: candidates),
   );
 }
 
 class _RulePickerSheet extends StatefulWidget {
-  const _RulePickerSheet({required this.group, required this.candidates});
+  const _RulePickerSheet({required this.candidates});
 
-  final String group;
   final List<RuleEntry> candidates;
 
   @override
@@ -90,25 +73,7 @@ class _RulePickerSheet extends StatefulWidget {
 }
 
 class _RulePickerSheetState extends State<_RulePickerSheet> {
-  final Set<int> _picked = {};
-
-  List<RuleEntry> get _visible {
-    final keyword = _query.trim().toLowerCase();
-    if (keyword.isEmpty) return widget.candidates;
-    return [
-      for (final rule in widget.candidates)
-        if (rule.raw.toLowerCase().contains(keyword)) rule,
-    ];
-  }
-
-  final TextEditingController _search = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
+  final Set<int> _picked = <int>{};
 
   void _toggle(RuleEntry rule) {
     setState(() {
@@ -116,161 +81,78 @@ class _RulePickerSheetState extends State<_RulePickerSheet> {
     });
   }
 
-  void _selectAll() {
-    setState(() {
-      for (final rule in _visible) {
-        _picked.add(rule.index);
-      }
-    });
-  }
+  void _selectAll() => setState(() {
+    for (final rule in widget.candidates) {
+      _picked.add(rule.index);
+    }
+  });
+
+  void _invert() => setState(() {
+    for (final rule in widget.candidates) {
+      if (!_picked.remove(rule.index)) _picked.add(rule.index);
+    }
+  });
 
   void _clear() => setState(_picked.clear);
 
+  List<RuleEntry> get _selected => [
+    for (final rule in widget.candidates)
+      if (_picked.contains(rule.index)) rule,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final visible = _visible;
-    final picked = [
-      for (final r in widget.candidates)
-        if (_picked.contains(r.index)) r,
-    ];
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
-        child: Material(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(Radiuses.lg),
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.78,
-              maxWidth: 520,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Insets.xl,
-                    Insets.xl,
-                    Insets.xl,
-                    Insets.sm,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '添加规则到「${widget.group}」',
-                        style: display(17, weight: 600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '从配置里已有的规则中挑，选中的应用后会改到本组名下。',
-                        style: hintStyle(context),
-                      ),
-                    ],
+    return PickerSheetScaffold(
+      searchHint: '搜索规则',
+      sections: [
+        PickerSheetSection(
+          rows: [
+            for (final rule in widget.candidates)
+              PickerSheetRow(
+                searchText: rule.raw,
+                title: RuleChip(rule: rule),
+                subtitle: Text(
+                  '现在指向 ${rule.target}',
+                  style: mono(
+                    10.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Insets.xl),
-                  child: AppTextField(
-                    controller: _search,
-                    hint: '搜索规则',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    onChanged: (value) => setState(() => _query = value),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Insets.xl,
-                    Insets.sm,
-                    Insets.xl,
-                    0,
-                  ),
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: _selectAll,
-                        child: const Text('全选'),
-                      ),
-                      TextButton(onPressed: _clear, child: const Text('清空')),
-                      const Spacer(),
-                      Text(
-                        '已选 ${picked.length} / ${widget.candidates.length}',
-                        style: hintStyle(context),
-                      ),
-                    ],
-                  ),
-                ),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: Insets.xs),
-                    itemCount: visible.length,
-                    itemBuilder: (_, i) {
-                      final rule = visible[i];
-                      return CheckboxListTile(
-                        dense: true,
-                        value: _picked.contains(rule.index),
-                        onChanged: (_) => _toggle(rule),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                rule.payload.isEmpty
-                                    ? rule.type
-                                    : '${rule.type} · ${rule.payload}',
-                                style: mono(12, color: scheme.onSurface),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (rule.type == 'RULE-SET') ...[
-                              const SizedBox(width: Insets.sm),
-                              const Pill(label: '规则集'),
-                            ],
-                          ],
-                        ),
-                        subtitle: Text(
-                          '现在指向 ${rule.target}',
-                          style: hintStyle(context),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const Hairline(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    Insets.xl,
-                    Insets.sm,
-                    Insets.xl,
-                    Insets.sm,
-                  ),
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('取消'),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: picked.isEmpty
-                            ? null
-                            : () => Navigator.of(context).pop(picked),
-                        child: Text('添加 ${picked.length} 条'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+                trailing: rule.type == 'RULE-SET'
+                    ? const Pill(label: '规则集', dense: true)
+                    : null,
+                selected: _picked.contains(rule.index),
+                onTap: () => _toggle(rule),
+              ),
+          ],
         ),
+      ],
+      selectedCount: _picked.length,
+      onSelectAll: _selectAll,
+      onInvert: _invert,
+      onClear: _clear,
+      emptyHint: '没有可挂到本组的规则',
+      footer: Row(
+        children: [
+          const Spacer(),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          const SizedBox(width: Insets.md),
+          FilledButton(
+            onPressed: _picked.isEmpty
+                ? null
+                : () => Navigator.of(context).pop(_selected),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(96, 44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text('加入 ${_picked.length} 条'),
+          ),
+        ],
       ),
     );
   }

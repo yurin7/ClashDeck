@@ -91,7 +91,7 @@ void main() {
     expect(calls, isEmpty);
   });
 
-  testWidgets('添加成员面板顶部「内置」段：DIRECT / REJECT / REJECT-DROP（不常用）', (
+  testWidgets('添加成员面板顶部「系统策略」段：DIRECT / REJECT / REJECT-DROP（不常用）', (
     tester,
   ) async {
     await _pump(tester, _oneNode);
@@ -99,7 +99,8 @@ void main() {
     await tester.tap(find.byTooltip('添加成员'));
     await tester.pumpAndSettle();
 
-    expect(find.text('内置'), findsOneWidget);
+    // 分区标题「系统策略」同时会出现在 DIRECT / REJECT 行的副标题里。
+    expect(find.text('系统策略'), findsWidgets);
     expect(find.text('REJECT-DROP'), findsOneWidget);
     expect(find.text('不常用'), findsOneWidget);
     // DIRECT 已经在 DEFAULT 里：行还在，只是置灰。

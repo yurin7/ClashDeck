@@ -98,6 +98,11 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # 界面规范自检：禁止业务代码裸用 Checkbox / showDialog / showModalBottomSheet /
+      # AlertDialog，禁止业务弹窗不传 width。基线只减不增（tool/ui_conventions_baseline.txt）。
+      - name: UI conventions
+        run: dart run tool/check_ui_conventions.dart --check
+
       # 测试失败时把关键行写进 job summary：匿名访问 run 页面也能看到失败
       # 用例名，不用登录下载日志。
       - name: Test

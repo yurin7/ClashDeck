@@ -197,19 +197,22 @@ class _ProxyBoardState extends State<ProxyBoard> {
   /// 关键点：选择先写进 sidecar（`meta.app.groupNodes`），不依赖内核在跑。
   /// 内核运行中再顺带调一次接口立刻生效；停止状态下只记偏好、刷 UI，
   /// 不弹「请先启动内核」，也不报错——下次启动内核会自动应用。
-  Future<void> _selectNodeForGroup(String group, ProxyEntry node) async {
+  /// 组内任何成员（节点 / 策略组 / 系统策略）都能点成当前出口。
+  ///
+  /// 停止状态下只写偏好（sidecar）并刷新 UI；运行中再顺带通知内核。
+  Future<void> _selectNodeForGroup(String group, String name) async {
     final runtime = widget.runtime;
     final running = runtime != null && runtime.phase == RuntimePhase.running;
-    await widget.onGroupSelection?.call(group, node.name);
+    await widget.onGroupSelection?.call(group, name);
     if (!mounted) return;
     setState(() {});
     if (!running) return;
-    final ok = await runtime.selectNode(group, node.name);
+    final ok = await runtime.selectNode(group, name);
     if (!ok) {
       _toast('切换失败，内核可能已经退出');
       return;
     }
-    _toast('「$group」现在用 ${node.name}');
+    _toast('「$group」现在用 $name');
   }
 
   Future<void> _deleteNode(ProxyEntry node) async {
@@ -505,11 +508,11 @@ class _ProxyBoardState extends State<ProxyBoard> {
                 selectedName: group.name == kAutoGroupName
                     ? null
                     : selection[group.name],
-                onSelectNode: group.name == kAutoGroupName
+                onSelectMember: group.name == kAutoGroupName
                     ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
                     : widget.runtime == null && widget.onGroupSelection == null
                     ? null
-                    : (n) => _selectNodeForGroup(group.name, n),
+                    : (name) => _selectNodeForGroup(group.name, name),
                 onEdit: () => _editGroup(group),
                 onDelete: () => _deleteGroup(group),
                 onAddMember: () async {
@@ -751,7 +754,7 @@ class _GroupCard extends StatelessWidget {
     this.onDropRule,
     this.onMenuNode,
     this.selectedName,
-    this.onSelectNode,
+    this.onSelectMember,
     this.isAuto = false,
   });
 
@@ -767,8 +770,11 @@ class _GroupCard extends StatelessWidget {
   /// 运行期这个组当前选中的节点名（用于高亮）。
   final String? selectedName;
 
-  /// 非空时，点芯片 = 让这个组改用该节点。
-  final void Function(ProxyEntry)? onSelectNode;
+  /// 非空时，点成员胶囊 = 让这个组改用该成员。
+  ///
+  /// 节点、策略组、系统策略（DIRECT / REJECT）走同一个回调：
+  /// 以前只给 NodeChip 接线，DIRECT/REJECT 胶囊的 onTap 一直是 null。
+  final void Function(String name)? onSelectMember;
 
   /// true = 「自动选择」卡：成员随节点同步、只读、按测速选出口。
   final bool isAuto;
@@ -943,9 +949,9 @@ class _GroupCard extends StatelessWidget {
                             onDelete: () => onDeleteNode(node),
                             onRemove: isAuto ? null : () => onRemove(name),
                             selected: selectedName == node.name,
-                            onSelect: onSelectNode == null
+                            onSelect: onSelectMember == null
                                 ? null
-                                : () => onSelectNode!(node),
+                                : () => onSelectMember!(node.name),
                             onMenu: isAuto || onMenuNode == null
                                 ? null
                                 : () => onMenuNode!(node, group.name),
@@ -957,6 +963,9 @@ class _GroupCard extends StatelessWidget {
                             type: nested.type,
                             selected: selectedName == name,
                             tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
+                            onTap: onSelectMember == null
+                                ? null
+                                : () => onSelectMember!(name),
                             onRemove: () => onRemove(name),
                           )
                         else if (Profile.builtinTargets.contains(name))
@@ -965,6 +974,9 @@ class _GroupCard extends StatelessWidget {
                             note: name == 'REJECT-DROP' ? '不常用' : null,
                             selected: selectedName == name,
                             tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
+                            onTap: onSelectMember == null
+                                ? null
+                                : () => onSelectMember!(name),
                             onRemove: () => onRemove(name),
                           )
                         else

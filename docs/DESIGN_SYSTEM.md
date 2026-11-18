@@ -43,6 +43,9 @@
 - 四区色（规则页）：本地 `primary`、在线 `tertiary`、GEO `secondary`、兜底 `error`。
 - 胶囊统一 `chips.dart`：`NodeChip` / `RuleChip` / `GroupChip` / `SystemPolicyChip` / `NameChip`，
   外用 `ChipShell`；不要各自写 `Container` 样式。
+- 胶囊选中态唯一强调色 = `scheme.primary`（品牌紫）：底色 16%、描边 1.4、文字与 ✓ 同色；
+  **禁止**拿 `onSurface`/白色当选中色。未选中一律中性底 + `outlineVariant` 细边，不做强调。
+- 组内成员（节点 / 策略组 / 系统策略）都走同一个 `onSelectMember(name)`；同组同时只有一个选中。
 
 ## 5. 交互约定
 

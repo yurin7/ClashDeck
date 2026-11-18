@@ -54,11 +54,20 @@ enum ChipFamily { node, rule, group, systemPolicy, name }
 class ChipSpec {
   const ChipSpec({
     required this.accent,
+    this.selectionAccent,
     this.padding = const EdgeInsets.fromLTRB(5, 3, 4, 3),
     this.radius = kChipRadius,
   });
 
+  /// 家族色：类型小方块 / 图标 / 未选中时的文字用它。
   final Color accent;
+
+  /// 选中态专用强调色，四类胶囊一律是品牌紫 `scheme.primary`。
+  ///
+  /// 不能拿家族色参与选中态：节点家族以前用 `onSurface`，
+  /// 深色主题下接近白色，选中看起来像「白块」。
+  final Color? selectionAccent;
+
   final EdgeInsets padding;
   final double radius;
 
@@ -79,7 +88,11 @@ class ChipSpec {
       ChipFamily.rule => const EdgeInsets.fromLTRB(6, 4, 4, 4),
       _ => const EdgeInsets.fromLTRB(5, 3, 4, 3),
     };
-    return ChipSpec(accent: accent, padding: padding);
+    return ChipSpec(
+      accent: accent,
+      selectionAccent: scheme.primary,
+      padding: padding,
+    );
   }
 }
 
@@ -116,7 +129,10 @@ class ChipShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tint = spec?.accent ?? accent ?? scheme.primary;
+    // 选中态只认品牌紫；家族色只服务类型小方块和未选中文字。
+    final tint = selected
+        ? (spec?.selectionAccent ?? accent ?? scheme.primary)
+        : (spec?.accent ?? accent ?? scheme.primary);
     final radius = spec?.radius ?? kChipRadius;
     final pad = spec?.padding ?? padding;
     return Padding(
@@ -244,7 +260,14 @@ class NodeChip extends StatelessWidget {
             ),
           _TypeSquare(label: typeBadge(node.type), color: scheme.primary),
           const SizedBox(width: 6),
-          Text(node.name, style: display(13, weight: 500)),
+          Text(
+            node.name,
+            style: display(
+              13,
+              weight: selected ? 600 : 500,
+              color: selected ? scheme.primary : null,
+            ),
+          ),
           if (onMenu != null)
             _ChipAction(icon: Icons.more_vert, tooltip: '节点操作', onTap: onMenu),
           if (onRemove != null)
@@ -380,7 +403,11 @@ class GroupChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             name,
-            style: display(13, weight: 500, color: selected ? accent : null),
+            style: display(
+              13,
+              weight: selected ? 600 : 500,
+              color: selected ? scheme.primary : null,
+            ),
           ),
           const SizedBox(width: 5),
           Text('$members 成员', style: mono(10, color: scheme.onSurfaceVariant)),
@@ -433,7 +460,14 @@ class SystemPolicyChip extends StatelessWidget {
         children: [
           _TypeSquare(icon: builtinIcon(name), color: accent),
           const SizedBox(width: 6),
-          Text(name, style: mono(12, color: accent, weight: 600)),
+          Text(
+            name,
+            style: mono(
+              12,
+              color: selected ? scheme.primary : accent,
+              weight: 600,
+            ),
+          ),
           if (note != null) ...[
             const SizedBox(width: 4),
             Text(note!, style: mono(9.5, color: scheme.onSurfaceVariant)),
@@ -483,7 +517,7 @@ class NameChip extends StatelessWidget {
         icon ?? (isPolicy ? builtinIcon(name) : Icons.dns_outlined);
     final fg = !enabled
         ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
-        : (selected ? accent : scheme.onSurface);
+        : (selected ? scheme.primary : scheme.onSurface);
     return ChipShell(
       spec: ChipSpec.of(
         context,
@@ -508,7 +542,7 @@ class NameChip extends StatelessWidget {
           ],
           if (selected) ...[
             const SizedBox(width: 4),
-            Icon(Icons.check, size: 14, color: accent),
+            Icon(Icons.check, size: 14, color: scheme.primary),
           ],
         ],
       ),

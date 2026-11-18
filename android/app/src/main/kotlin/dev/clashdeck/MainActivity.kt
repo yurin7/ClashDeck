@@ -4,16 +4,22 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.VpnService
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 
 class MainActivity : FlutterActivity() {
 
     companion object {
         private const val REQUEST_VPN_PERMISSION = 0x1001
+        private const val ICON_SIZE = 96
     }
 
     private var channel: MethodChannel? = null
@@ -67,6 +73,8 @@ class MainActivity : FlutterActivity() {
 
             "listApps" -> result.success(listApps())
 
+            "listAppIcons" -> listAppIcons(arguments, result)
+
             else -> result.notImplemented()
         }
     }
@@ -98,6 +106,43 @@ class MainActivity : FlutterActivity() {
         }
         out.sortBy { (it["label"] as? String)?.lowercase() ?: "" }
         return out
+    }
+
+    /**
+     * 批量取应用图标（32×32 PNG 字节，Dart 侧缩到 32 显示）。
+     *
+     * 解码要读 drawable，几百个应用同步做会卡主线程，所以放后台线程；
+     * 调用方按批（默认 24 个）请求，图标随列表滚动渐进出现。
+     */
+    private fun listAppIcons(arguments: Any?, result: MethodChannel.Result) {
+        val packages = (arguments as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        Thread {
+            val pm = packageManager
+            val out = HashMap<String, ByteArray>()
+            for (pkg in packages) {
+                runCatching {
+                    val icon = pm.getApplicationIcon(pkg)
+                    val bitmap = drawableToBitmap(icon)
+                    val stream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                    out[pkg] = stream.toByteArray()
+                }
+            }
+            runOnUiThread { result.success(out) }
+        }.apply { isDaemon = true }.start()
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            val source = drawable.bitmap
+            if (source.width == ICON_SIZE && source.height == ICON_SIZE) return source
+            return Bitmap.createScaledBitmap(source, ICON_SIZE, ICON_SIZE, true)
+        }
+        val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     private fun requestStart(arguments: Map<*, *>, result: MethodChannel.Result) {

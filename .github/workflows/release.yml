@@ -99,7 +99,7 @@ jobs:
         run: flutter analyze
 
       # 界面规范自检：禁止业务代码裸用 Checkbox / showDialog / showModalBottomSheet /
-      # AlertDialog，禁止业务弹窗不传 width。基线只减不增（tool/ui_conventions_baseline.txt）。
+      # AlertDialog，禁止业务弹窗不传 width 等；全部规则为 0 基线。
       - name: UI conventions
         run: dart run tool/check_ui_conventions.dart --check
 
@@ -222,7 +222,7 @@ jobs:
             echo "\`minSdk 24\`（Android 7.0 及以上）、\`targetSdk 36\`。APK 里已经带上 mihomo 内核与"
             echo "GEOIP/GEOSITE 数据，不用另外下载；首次启动会请求 VPN 授权，也可以只开本地代理端口。"
             echo
-            echo "> 用 debug keystore 签名，仅用于试用；正式分发请自行配置签名密钥。"
+            echo "> 已使用固定签名，可直接覆盖安装；早期 debug 版本需先卸载一次。"
             if [ "$KIND" = "release" ]; then
               echo
               echo "完整改动见 [CHANGELOG](https://github.com/${REPO}/compare/${TAG}...main) 或本页下方的自动生成说明。"

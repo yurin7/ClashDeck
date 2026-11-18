@@ -2,7 +2,7 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
-## [Unreleased]
+## [0.2.0] - 2026-11-18
 
 ### Features
 
@@ -37,10 +37,12 @@
 
 - 共享组件：`EditDialog` / `ConfirmDialog` / `NoticeDialog` / `AppTextField` / `AppSearchField` / `AppInkWell` / `appRoute` / 胶囊组件 / 分区选择器。
 - UI 自检改为 0 基线（禁止裸 `AlertDialog`、`InkWell`、`MaterialPageRoute`、`DropdownButton`、裸 `TextField`、`Checkbox*` 等）。
+- 统一间距 / 圆角 / 图标刻度与字号走 `textTheme`，浅色主题选中胶囊加深。
 - 规则行抽出的可识别名（`ruleTitleOf`）、成员顺序归一化（`member_order.dart`）与目标排序（`rule_targets.dart`）。
 
 ### Tests · CI
 
-- 测试从 329 增至 494：动效、订阅弹窗、应用选择、图标缓存、组选择、成员顺序、导航转场等。
+- 测试从 329 增至 507：动效、订阅弹窗、应用选择、图标缓存、组选择、成员顺序、导航转场等。
+- UI 自检新增动画时长 / 多行文本 / 左滑 / 面板四类禁用（0 基线）。
 - CI 失败用例写入 `$GITHUB_STEP_SUMMARY`；新增 UI 约定自检与零基线断言。
 - 文档：README 用户向、`docs/DEVELOPMENT.md`、`docs/DESIGN_SYSTEM.md`。

@@ -7,6 +7,15 @@
 /// 4. `AlertDialog(` 只允许共享封装 + 基线里已有的历史文件（只减不增）；
 /// 5. `showAppDialog(` 必须带 `width:`（同样按基线只减不增）。
 ///
+/// 基线文件：`tool/ui_conventions_baseline.txt`（只减不增）。
+/// allowlist 常量在本文件内（`alertAllowlist` / `sheetAllowlist`），
+/// **只放共享封装文件**（`lib/ui/app_dialog.dart`、`lib/ui/widgets/edit_dialog.dart`、
+/// `lib/ui/sheets.dart`、`lib/ui/widgets/selectable_tile.dart`），业务文件不得加入。
+///
+/// CI：`.github/workflows/release.yml` 在 Analyze 之后、Test 之前跑
+///   dart run tool/check_ui_conventions.dart --check
+/// 失败即 fail 整个 job。
+///
 /// 用法：
 ///   dart run tool/check_ui_conventions.dart --check
 ///   dart run tool/check_ui_conventions.dart --update-baseline

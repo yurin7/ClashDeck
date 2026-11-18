@@ -4,6 +4,8 @@ import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import './widgets/app_ink.dart';
+import './widgets/select_sheet.dart';
 
 /// 运行页：启动/停止内核，看运行期策略组、切换节点、看日志与速度。
 class RuntimePage extends StatefulWidget {
@@ -316,7 +318,7 @@ class _RuntimePageState extends State<RuntimePage> {
           : Column(
               children: [
                 for (final group in groups)
-                  InkWell(
+                  AppInkWell(
                     onTap: () => _pickNode(group.key, group.value),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -349,20 +351,13 @@ class _RuntimePageState extends State<RuntimePage> {
   }
 
   Future<void> _pickNode(String group, List<String> nodes) async {
-    final picked = await showAppDialog<String>(
+    final picked = await showSelectSheet<String>(
       context,
-      builder: (context) => SimpleDialog(
-        title: Text('切换到…'),
-        children: [
-          SizedBox(
-            width: 330,
-            height: 400,
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: Insets.sm),
-              children: [for (final node in nodes) _delayTile(node)],
-            ),
-          ),
-        ],
+      title: '切换到…',
+      subtitle: group,
+      body: (ctx) => ListView(
+        padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+        children: [for (final node in nodes) _delayTile(node)],
       ),
     );
     if (picked == null) return;

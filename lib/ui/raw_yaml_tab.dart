@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../state/editor_state.dart';
 import 'widgets.dart';
+import 'fields.dart';
+import './widgets/edit_dialog.dart';
 
 /// 只读 YAML 源码视图 + 整体替换编辑。
 class RawYamlTab extends StatelessWidget {
@@ -13,12 +15,14 @@ class RawYamlTab extends StatelessWidget {
     final ctrl = TextEditingController(text: state.doc.text);
     final result = await showAppDialog<String>(
       context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('编辑 YAML 源码'),
+      width: dialogWidthOf(context),
+      builder: (ctx) => EditDialog(
+        title: '编辑 YAML 源码',
+        confirmLabel: '应用',
         content: SizedBox(
           width: double.maxFinite,
           height: 420,
-          child: TextField(
+          child: AppTextField(
             controller: ctrl,
             maxLines: null,
             expands: true,
@@ -29,16 +33,8 @@ class RawYamlTab extends StatelessWidget {
             ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('应用'),
-          ),
-        ],
+        onCancel: () => Navigator.pop(ctx),
+        onConfirm: () => Navigator.pop(ctx, ctrl.text),
       ),
     );
     disposeAfterDialog(ctrl);

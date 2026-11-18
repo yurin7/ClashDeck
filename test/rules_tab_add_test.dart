@@ -31,7 +31,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'google.com');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('保存'));
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
 
     expect(state.lastError, isNull);

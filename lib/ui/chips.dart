@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/edit/rule_labels.dart';
 import '../core/model/profile.dart';
 import 'theme.dart';
+import './widgets/app_ink.dart';
 
 /// 胶囊的统一圆角：节点、规则、组、系统策略都用它，保证一排看起来是一套。
 const double kChipRadius = 9;
@@ -149,7 +150,7 @@ class ChipShell extends StatelessWidget {
           ),
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
+        child: AppInkWell(
           onTap: onTap,
           onLongPress: onLongPress,
           child: Padding(padding: pad, child: child),
@@ -253,11 +254,7 @@ class NodeChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (selected)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Icon(Icons.check_circle, size: 13, color: scheme.primary),
-            ),
+          // 选中只靠紫色底 / 描边表达，不再加 ✓（四类胶囊统一）。
           _TypeSquare(label: typeBadge(node.type), color: scheme.primary),
           const SizedBox(width: 6),
           Text(
@@ -352,7 +349,7 @@ class _ChipAction extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
-      child: InkWell(
+      child: AppInkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Padding(

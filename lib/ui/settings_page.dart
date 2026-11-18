@@ -7,9 +7,11 @@ import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'app_picker_page.dart';
 import 'dropdown.dart';
-import 'fields.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import './widgets/app_ink.dart';
+import 'navigation.dart';
+import './widgets/text_input_dialog.dart';
 
 /// 设置页：把内核与本 App 的行为全部摊开成可开关的项。
 ///
@@ -209,8 +211,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       onTap: () async {
                         final picked = await Navigator.of(context)
                             .push<List<String>>(
-                              MaterialPageRoute(
-                                builder: (_) => AppPickerPage(
+                              appRoute<List<String>>(
+                                AppPickerPage(
                                   selected: state.app.routePackages,
                                   title:
                                       state.app.routeMode ==
@@ -487,30 +489,13 @@ class _SettingsPageState extends State<SettingsPage> {
     required String hint,
     required Future<void> Function(String value) onSaved,
   }) async {
-    final controller = TextEditingController(text: initial);
-    final result = await showAppDialog<String>(
+    final result = await showTextInputDialog(
       context,
-      width: dialogWidthOf(context),
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: AppTextField(
-          controller: controller,
-          autofocus: true,
-          hint: hint,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+      title: title,
+      initial: initial,
+      hint: hint,
+      confirmLabel: '保存',
     );
-    disposeAfterDialog(controller);
     if (result == null || result.isEmpty) return;
     await _run(() => onSaved(result));
   }
@@ -613,7 +598,7 @@ class _ValueRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
+    return AppInkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -669,7 +654,7 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
+    return AppInkWell(
       onTap: enabled ? onTap : null,
       child: Opacity(
         opacity: enabled ? 1 : 0.45,

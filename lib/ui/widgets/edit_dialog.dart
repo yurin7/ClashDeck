@@ -31,6 +31,9 @@ class EditDialog extends StatelessWidget {
     this.onCancel,
     this.onDelete,
     this.danger = false,
+    this.showFooter = true,
+    this.showCancel = true,
+    this.actions,
   });
 
   final String title;
@@ -44,6 +47,15 @@ class EditDialog extends StatelessWidget {
 
   /// 主按钮用 error 色（例如「覆盖」这类破坏性保存）。
   final bool danger;
+
+  /// false = 不渲染底部按钮区（编辑规则这种「点外面自动保存」的弹窗）。
+  final bool showFooter;
+
+  /// false = 只有一个主按钮（说明型弹窗）。
+  final bool showCancel;
+
+  /// 非空时整行替换底部按钮区（三分支选择这类特殊弹窗）。
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -122,46 +134,53 @@ class EditDialog extends StatelessWidget {
                 child: content,
               ),
             ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                Insets.xl,
-                Insets.lg,
-                Insets.xl,
-                Insets.lg,
-              ),
-              child: Row(
-                children: [
-                  if (onDelete != null)
-                    TextButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('删除'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.error,
+            if (showFooter) ...[
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Insets.xl,
+                  Insets.lg,
+                  Insets.xl,
+                  Insets.lg,
+                ),
+                child: actions != null
+                    ? Row(children: actions!)
+                    : Row(
+                        children: [
+                          if (onDelete != null)
+                            TextButton.icon(
+                              onPressed: onDelete,
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: const Text('删除'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: scheme.error,
+                              ),
+                            ),
+                          const Spacer(),
+                          if (showCancel) ...[
+                            TextButton(
+                              onPressed:
+                                  onCancel ?? () => Navigator.of(context).pop(),
+                              child: Text(cancelLabel),
+                            ),
+                            const SizedBox(width: Insets.md),
+                          ],
+                          FilledButton(
+                            onPressed: onConfirm,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(96, 44),
+                              backgroundColor: danger ? scheme.error : null,
+                              foregroundColor: danger ? scheme.onError : null,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(confirmLabel),
+                          ),
+                        ],
                       ),
-                    ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: onCancel ?? () => Navigator.of(context).pop(),
-                    child: Text(cancelLabel),
-                  ),
-                  const SizedBox(width: Insets.md),
-                  FilledButton(
-                    onPressed: onConfirm,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(96, 44),
-                      backgroundColor: danger ? scheme.error : null,
-                      foregroundColor: danger ? scheme.onError : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(confirmLabel),
-                  ),
-                ],
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -204,7 +223,92 @@ Future<bool?> showEditDialog(
   );
 }
 
+/// 说明型弹窗：只有一个「知道了」按钮，点外可关闭。
+Future<void> showInfoDialog(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  String? message,
+  Widget? content,
+  String confirmLabel = '知道了',
+}) {
+  return showAppDialog<void>(
+    context,
+    width: dialogWidthOf(context),
+    builder: (ctx) => EditDialog(
+      title: title,
+      subtitle: subtitle,
+      confirmLabel: confirmLabel,
+      showCancel: false,
+      onConfirm: () => Navigator.of(ctx).pop(),
+      content: content ?? Text(message ?? ''),
+    ),
+  );
+}
+
 /// 统一确认弹窗：宽 min(400, 屏宽-64)，不可点外关闭。
+/// 错误 / 信息提示：窄确认样式，只有一个「知道了」。
+///
+/// 全站提示统一走这里（不要再用 `AlertDialog`），宽度与确认弹窗一致。
+Future<void> showNoticeDialog(
+  BuildContext context, {
+  required String title,
+  String? message,
+  String confirmLabel = '知道了',
+}) async {
+  await showAppDialog<void>(
+    context,
+    width: confirmDialogWidth(context),
+    barrierDismissible: false,
+    builder: (_) => _NoticeDialog(
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+    ),
+  );
+}
+
+class _NoticeDialog extends StatelessWidget {
+  const _NoticeDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final String? message;
+  final String confirmLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AlertDialog(
+      backgroundColor: scheme.surfaceContainerHigh,
+      title: Text(title, style: display(20, weight: 600)),
+      content: message == null
+          ? null
+          : SingleChildScrollView(
+              child: Text(
+                message!,
+                style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+              ),
+            ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(96, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: Text(confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
 Future<bool?> showConfirmDialog(
   BuildContext context, {
   required String title,

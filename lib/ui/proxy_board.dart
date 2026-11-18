@@ -20,6 +20,8 @@ import 'widgets/edit_dialog.dart';
 import 'widgets/selectable_tile.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
+import 'navigation.dart';
+import './widgets/select_sheet.dart';
 
 /// 「添加节点」的三种入口。
 enum _AddMode { manual, links, subscription }
@@ -110,9 +112,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _addNodeForm() async {
     final profile = s.profile;
     final result = await Navigator.of(context).push<Map<String, Object?>>(
-      MaterialPageRoute(
-        builder: (_) =>
-            NodeFormPage(existingNames: profile.proxyNames.toList()),
+      appRoute<Map<String, Object?>>(
+        NodeFormPage(existingNames: profile.proxyNames.toList()),
       ),
     );
     if (result == null || !mounted) return;
@@ -175,8 +176,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
 
   Future<void> _editNode(ProxyEntry node) async {
     final result = await Navigator.of(context).push<Map<String, Object?>>(
-      MaterialPageRoute(
-        builder: (_) => NodeFormPage(
+      appRoute<Map<String, Object?>>(
+        NodeFormPage(
           initial: node.raw,
           existingNames: s.profile.proxyNames
               .where((n) => n != node.name)
@@ -271,20 +272,24 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<String?> _pickGroup({String title = '选择策略组'}) async {
     final groups = s.profile.groups;
     if (groups.isEmpty) return null;
-    return showAppDialog<String>(
+    return showSelectSheet<String>(
       context,
-      builder: (ctx) => SimpleDialog(
-        title: Text(title),
+      title: title,
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('跳过'),
+        ),
+      ],
+      body: (ctx) => ListView(
+        padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
         children: [
           for (final g in groups)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, g.name),
-              child: Text('${g.name}  ·  ${g.typeLabel}'),
+            SelectableTile(
+              title: Text(g.name),
+              subtitle: Text(g.typeLabel, style: hintStyle(ctx)),
+              onTap: () => Navigator.pop(ctx, g.name),
             ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('跳过'),
-          ),
         ],
       ),
     );
@@ -293,15 +298,17 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _moveDialog(ProxyEntry node, String? fromGroup) async {
     final groups = s.profile.groups.where((g) => g.name != fromGroup).toList();
     if (groups.isEmpty) return;
-    final target = await showAppDialog<String>(
+    final target = await showSelectSheet<String>(
       context,
-      builder: (ctx) => SimpleDialog(
-        title: Text('把「${node.name}」移动到…'),
+      title: '把「${node.name}」移动到…',
+      body: (ctx) => ListView(
+        padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
         children: [
           for (final g in groups)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, g.name),
-              child: Text(g.name),
+            SelectableTile(
+              title: Text(g.name),
+              subtitle: Text(g.typeLabel, style: hintStyle(ctx)),
+              onTap: () => Navigator.pop(ctx, g.name),
             ),
         ],
       ),
@@ -386,23 +393,8 @@ class _ProxyBoardState extends State<ProxyBoard> {
     _ => t,
   };
 
-  Future<bool?> _confirm(String title, String message) => showAppDialog<bool>(
-    context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
+  Future<bool?> _confirm(String title, String message) =>
+      showConfirmDialog(context, title: title, message: message);
 
   Future<void> _deleteGroup(GroupEntry group) async {
     final ok = await _confirm('删除策略组「${group.name}」？', '引用它的规则会变成悬空引用，校验会提示。');
@@ -491,58 +483,54 @@ class _ProxyBoardState extends State<ProxyBoard> {
         for (final group in groups)
           Padding(
             padding: const EdgeInsets.only(top: Insets.md),
-            child: SlidableRow(
-              open: _swipedGroup == group.name,
-              onOpenChanged: (open) =>
+            child: _GroupCard(
+              swipeOpen: _swipedGroup == group.name,
+              onSwipeOpenChanged: (open) =>
                   setState(() => _swipedGroup = open ? group.name : null),
-              actionLabel: '删除',
-              onAction: () => _deleteGroup(group),
-              child: _GroupCard(
-                group: group,
-                isAuto: group.name == kAutoGroupName,
-                state: s,
-                onOpenNode: _editNode,
-                onMove: (n, from) => _moveDialog(n, from),
-                onDeleteNode: _deleteNode,
-                onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
-                selectedName: group.name == kAutoGroupName
-                    ? null
-                    : selection[group.name],
-                onSelectMember: group.name == kAutoGroupName
-                    ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
-                    : widget.runtime == null && widget.onGroupSelection == null
-                    ? null
-                    : (name) => _selectNodeForGroup(group.name, name),
-                onEdit: () => _editGroup(group),
-                onDelete: () => _deleteGroup(group),
-                onAddMember: () async {
-                  final picked = await _pickMembers(profile, group);
-                  if (picked == null || picked.isEmpty) return;
-                  var added = 0;
-                  for (final name in picked) {
-                    if (s.addGroupMember(group.name, name)) added++;
-                  }
-                  if (added == 0) {
-                    _fail();
-                    return;
-                  }
-                  // 组头计数直接读 state，刷新一次就能看到新成员。
-                  if (mounted) {
-                    setState(() {});
-                    _toast('已加入 $added 个');
-                  }
-                },
-                onDrop: (data) {
-                  final ok = data.fromGroup == null
-                      ? s.addGroupMember(group.name, data.node)
-                      : s.moveMember(data.node, data.fromGroup!, group.name);
-                  if (!ok) _fail();
-                },
-                onRemove: (name) {
-                  if (!s.removeGroupMember(group.name, name)) _fail();
-                },
-                onDropRule: (rule) => _retargetRule(rule, group.name),
-              ),
+              group: group,
+              isAuto: group.name == kAutoGroupName,
+              state: s,
+              onOpenNode: _editNode,
+              onMove: (n, from) => _moveDialog(n, from),
+              onDeleteNode: _deleteNode,
+              onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
+              selectedName: group.name == kAutoGroupName
+                  ? null
+                  : selection[group.name],
+              onSelectMember: group.name == kAutoGroupName
+                  ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
+                  : widget.runtime == null && widget.onGroupSelection == null
+                  ? null
+                  : (name) => _selectNodeForGroup(group.name, name),
+              onEdit: () => _editGroup(group),
+              onDelete: () => _deleteGroup(group),
+              onAddMember: () async {
+                final picked = await _pickMembers(profile, group);
+                if (picked == null || picked.isEmpty) return;
+                var added = 0;
+                for (final name in picked) {
+                  if (s.addGroupMember(group.name, name)) added++;
+                }
+                if (added == 0) {
+                  _fail();
+                  return;
+                }
+                // 组头计数直接读 state，刷新一次就能看到新成员。
+                if (mounted) {
+                  setState(() {});
+                  _toast('已加入 $added 个');
+                }
+              },
+              onDrop: (data) {
+                final ok = data.fromGroup == null
+                    ? s.addGroupMember(group.name, data.node)
+                    : s.moveMember(data.node, data.fromGroup!, group.name);
+                if (!ok) _fail();
+              },
+              onRemove: (name) {
+                if (!s.removeGroupMember(group.name, name)) _fail();
+              },
+              onDropRule: (rule) => _retargetRule(rule, group.name),
             ),
           ),
         // 系统策略：不进 YAML 建同名组，只在这里只读展示，但可以挂规则。
@@ -742,6 +730,8 @@ class _GroupsToolRow extends StatelessWidget {
 class _GroupCard extends StatelessWidget {
   const _GroupCard({
     required this.group,
+    required this.swipeOpen,
+    required this.onSwipeOpenChanged,
     required this.state,
     required this.onOpenNode,
     required this.onMove,
@@ -759,6 +749,11 @@ class _GroupCard extends StatelessWidget {
   });
 
   final GroupEntry group;
+
+  /// 标题行是否左滑展开（只有标题行跟著滑，成员与规则区固定）。
+  final bool swipeOpen;
+  final ValueChanged<bool> onSwipeOpenChanged;
+
   final EditorState state;
   final void Function(ProxyEntry) onOpenNode;
   final void Function(ProxyEntry, String?) onMove;
@@ -822,98 +817,113 @@ class _GroupCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(Radiuses.xs),
-                      border: Border.all(
-                        color: scheme.primary.withValues(alpha: 0.20),
+              SlidableRow(
+                open: swipeOpen,
+                onOpenChanged: onSwipeOpenChanged,
+                actionLabel: '删除',
+                onAction: onDelete,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(Radiuses.xs),
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.20),
+                        ),
+                      ),
+                      child: Icon(
+                        groupIcon(group.type),
+                        size: 17,
+                        color: scheme.primary,
                       ),
                     ),
-                    child: Icon(
-                      groupIcon(group.type),
-                      size: 17,
-                      color: scheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: Insets.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          style: display(16, weight: 700, letterSpacing: -0.2),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            if (isAuto)
-                              Pill(
-                                label: '自动测速',
-                                color: scheme.tertiary,
-                                dense: true,
-                              )
-                            else
-                              Text(
-                                group.typeLabel,
-                                style: mono(
-                                  10.5,
-                                  color: scheme.onSurfaceVariant,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                            Text(
-                              ' · ${group.members.length} 成员',
-                              style: mono(10.5, color: scheme.onSurfaceVariant),
-                            ),
-                            if (group.computedMembers) ...[
-                              const SizedBox(width: Insets.xs),
-                              Pill(
-                                label: '运行时决定',
-                                color: scheme.tertiary,
-                                dense: true,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (selectedName != null &&
-                            group.members.contains(selectedName)) ...[
-                          const SizedBox(height: 3),
-                          // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
+                    const SizedBox(width: Insets.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            '当前 $selectedName',
-                            style: mono(
-                              10.5,
-                              color: scheme.primary,
-                              weight: 600,
+                            group.name,
+                            style: display(
+                              16,
+                              weight: 700,
+                              letterSpacing: -0.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              if (isAuto)
+                                Pill(
+                                  label: '自动测速',
+                                  color: scheme.tertiary,
+                                  dense: true,
+                                )
+                              else
+                                Text(
+                                  group.typeLabel,
+                                  style: mono(
+                                    10.5,
+                                    color: scheme.onSurfaceVariant,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              Text(
+                                ' · ${group.members.length} 成员',
+                                style: mono(
+                                  10.5,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (group.computedMembers) ...[
+                                const SizedBox(width: Insets.xs),
+                                Pill(
+                                  label: '运行时决定',
+                                  color: scheme.tertiary,
+                                  dense: true,
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (selectedName != null &&
+                              group.members.contains(selectedName)) ...[
+                            const SizedBox(height: 3),
+                            // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
+                            Text(
+                              '当前 $selectedName',
+                              style: mono(
+                                10.5,
+                                color: scheme.primary,
+                                weight: 600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  if (!isAuto)
-                    IconButton(
-                      tooltip: group.computedMembers ? '成员由 filter 决定' : '添加成员',
-                      onPressed: group.computedMembers ? null : onAddMember,
-                      icon: const Icon(Icons.add_circle_outline, size: 20),
-                    ),
-                  if (!isAuto)
-                    IconButton(
-                      tooltip: '组设置',
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.more_vert, size: 20),
-                    ),
-                ],
+                    if (!isAuto)
+                      IconButton(
+                        tooltip: group.computedMembers
+                            ? '成员由 filter 决定'
+                            : '添加成员',
+                        onPressed: group.computedMembers ? null : onAddMember,
+                        icon: const Icon(Icons.add_circle_outline, size: 20),
+                      ),
+                    if (!isAuto)
+                      IconButton(
+                        tooltip: '组设置',
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.more_vert, size: 20),
+                      ),
+                  ],
+                ),
               ),
               if (group.members.isEmpty)
                 Padding(

@@ -34,10 +34,14 @@ class PickerSheetRow {
 
 /// 选择面板的一个分区；顺序由调用方给定（规范：系统策略 → 节点 → 策略组）。
 class PickerSheetSection {
-  const PickerSheetSection({this.label, required this.rows});
+  const PickerSheetSection({this.label, required this.rows, this.header});
 
   final String? label;
   final List<PickerSheetRow> rows;
+
+  /// 分区内可点的自定义头（例如「高级内置（不常用）」折叠头）。
+  /// 渲染在 rows 之前，搜索时也保留。
+  final Widget? header;
 }
 
 /// **唯一**的选择面板骨架：
@@ -95,6 +99,7 @@ class _PickerSheetScaffoldState extends State<PickerSheetScaffold> {
       for (final section in widget.sections)
         PickerSheetSection(
           label: section.label,
+          header: section.header,
           rows: [
             for (final row in section.rows)
               if (row.searchText.toLowerCase().contains(keyword)) row,
@@ -150,7 +155,8 @@ class _PickerSheetScaffoldState extends State<PickerSheetScaffold> {
                     (sum, section) =>
                         sum +
                         section.rows.length +
-                        (section.label == null ? 0 : 1),
+                        (section.label == null ? 0 : 1) +
+                        (section.header == null ? 0 : 1),
                   ),
                   itemBuilder: (context, index) =>
                       _buildItem(context, sections, index),
@@ -184,6 +190,15 @@ class _PickerSheetScaffoldState extends State<PickerSheetScaffold> {
           return Padding(
             padding: const EdgeInsets.only(top: Insets.xs, bottom: 2),
             child: MicroLabel(section.label!),
+          );
+        }
+        cursor -= 1;
+      }
+      if (section.header != null) {
+        if (cursor == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: section.header,
           );
         }
         cursor -= 1;

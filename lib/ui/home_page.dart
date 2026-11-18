@@ -14,6 +14,10 @@ import 'theme.dart';
 import 'fields.dart';
 import 'sheets.dart';
 import 'widgets.dart';
+import './widgets/app_ink.dart';
+import 'navigation.dart';
+import './widgets/text_input_dialog.dart';
+import 'widgets/edit_dialog.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -185,8 +189,8 @@ class _HomePageState extends State<HomePage> {
     final store = _store;
     if (store == null) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => EditorPage(
+      appRoute<void>(
+        EditorPage(
           store: store,
           fileName: item.fileName,
           initialText: null,
@@ -200,34 +204,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<String?> _askName({String initial = '我的配置'}) async {
-    final ctrl = TextEditingController(text: initial);
-    final name = await showAppDialog<String>(
+    final name = await showTextInputDialog(
       context,
-      width: dialogWidthOf(context),
-      builder: (ctx) => AlertDialog(
-        title: const Text('配置名称'),
-        content: AppTextField(
-          controller: ctrl,
-          autofocus: true,
-          label: '名称',
-          helper: '会作为文件名保存，可直接被 mihomo 读取',
-          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+      title: '配置名称',
+      initial: initial,
+      label: '名称',
+      helper: '会作为文件名保存，可直接被 mihomo 读取',
+      confirmLabel: '确定',
     );
-    disposeAfterDialog(ctrl);
-    if (name == null || name.isEmpty) return null;
-    return name;
+    if (name == null || name.trim().isEmpty) return null;
+    return name.trim();
   }
 
   Future<void> _createBlank() async {
@@ -348,25 +334,12 @@ class _HomePageState extends State<HomePage> {
     final store = _store;
     if (store == null) return;
     setState(() => _swipedFileName = null);
-    final ok = await showAppDialog<bool>(
+    final ok = await showConfirmDialog(
       context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除「${item.name}」？'),
-        content: const Text('删除后不可恢复，建议先备份 YAML。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除「${item.name}」？',
+      message: '删除后不可恢复，建议先备份 YAML。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (ok != true) return;
     final onDelete = widget.onDeleteProfile;
@@ -774,7 +747,7 @@ class _ProfileRow extends StatelessWidget {
       _formatDate(item.modified),
     ];
 
-    return InkWell(
+    return AppInkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       child: AnimatedContainer(
@@ -1063,33 +1036,28 @@ class _ImportDialogState extends State<_ImportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('导入配置'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(controller: _name, label: '配置名称'),
-            const SizedBox(height: Insets.md),
-            AppTextField(
-              controller: _text,
-              minLines: 6,
-              maxLines: 12,
-              style: monoStyle(context, size: 12),
-              label: 'YAML 配置 / 分享链接 / 订阅地址',
-              hint: '整份 YAML，或 vless://…（可多行），或 https://… 订阅地址',
-              alignLabelWithHint: true,
-            ),
-          ],
-        ),
+    return EditDialog(
+      title: '导入配置',
+      confirmLabel: '导入',
+      cancelLabel: '取消',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppTextField(controller: _name, label: '配置名称'),
+          const SizedBox(height: Insets.md),
+          AppTextField(
+            controller: _text,
+            minLines: 6,
+            maxLines: 12,
+            style: monoStyle(context, size: 12),
+            label: 'YAML 配置 / 分享链接 / 订阅地址',
+            hint: '整份 YAML，或 vless://…（可多行），或 https://… 订阅地址',
+            alignLabelWithHint: true,
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('导入')),
-      ],
+      onCancel: () => Navigator.pop(context),
+      onConfirm: _submit,
     );
   }
 }

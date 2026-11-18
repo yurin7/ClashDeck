@@ -14,6 +14,9 @@ import 'runtime_page.dart';
 import 'theme.dart';
 import 'fields.dart';
 import 'widgets.dart';
+import './widgets/app_ink.dart';
+import 'navigation.dart';
+import 'widgets/edit_dialog.dart';
 
 /// 单个配置的编辑器外壳：撤销/重做/保存 + 代理/规则/源码三个页签。
 class EditorPage extends StatefulWidget {
@@ -152,22 +155,12 @@ class _EditorPageState extends State<EditorPage> {
 
     final report = state.report;
     if (report.hasErrors) {
-      final leave = await showAppDialog<bool>(
+      final leave = await showConfirmDialog(
         context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('配置还有错误'),
-          content: Text('还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('留下处理'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('仍然返回'),
-            ),
-          ],
-        ),
+        title: '配置还有错误',
+        message: '还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？',
+        confirmLabel: '仍然返回',
+        cancelLabel: '留下处理',
       );
       if (leave == true && mounted) Navigator.of(context).pop();
       return;
@@ -182,18 +175,22 @@ class _EditorPageState extends State<EditorPage> {
     // 关掉「自动保存」时，返回前问一句要不要保存。
     final choice = await showAppDialog<String>(
       context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('有未保存的改动'),
+      width: dialogWidthOf(context),
+      builder: (ctx) => EditDialog(
+        title: '有未保存的改动',
         content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。'),
+        onCancel: () => Navigator.of(ctx).pop('cancel'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop('cancel'),
             child: const Text('取消'),
           ),
+          const Spacer(),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop('discard'),
             child: const Text('不保存'),
           ),
+          const SizedBox(width: 8),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop('save'),
             child: const Text('保存'),
@@ -278,12 +275,13 @@ class _EditorPageState extends State<EditorPage> {
   Future<void> _showIssues(ValidationReport report) async {
     await showAppDialog<void>(
       context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          report.isClean
-              ? '校验通过'
-              : '${report.errors.length} 个错误 · ${report.warnings.length} 个警告',
-        ),
+      width: dialogWidthOf(context),
+      builder: (ctx) => EditDialog(
+        title: report.isClean
+            ? '校验通过'
+            : '${report.errors.length} 个错误 · ${report.warnings.length} 个警告',
+        confirmLabel: '关闭',
+        showCancel: false,
         content: SizedBox(
           width: double.maxFinite,
           height: 360,
@@ -325,12 +323,8 @@ class _EditorPageState extends State<EditorPage> {
                   },
                 ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
-          ),
-        ],
+        onConfirm: () => Navigator.pop(ctx),
+        onCancel: () => Navigator.pop(ctx),
       ),
     );
   }
@@ -417,9 +411,8 @@ class _EditorPageState extends State<EditorPage> {
                 IconButton(
                   tooltip: '运行',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          RuntimePage(state: state, controller: widget.runtime),
+                    appRoute<void>(
+                      RuntimePage(state: state, controller: widget.runtime),
                     ),
                   ),
                   icon: const Icon(Icons.play_circle_outline),
@@ -544,7 +537,7 @@ class _StatusBar extends StatelessWidget {
 
     return Material(
       color: bg,
-      child: InkWell(
+      child: AppInkWell(
         onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -604,24 +597,17 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('另存为'),
+    return EditDialog(
+      title: '另存为',
+      confirmLabel: '保存',
       content: AppTextField(
         controller: _ctrl,
         autofocus: true,
         label: '配置名称',
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _ctrl.text.trim()),
-          child: const Text('保存'),
-        ),
-      ],
+      onCancel: () => Navigator.pop(context),
+      onConfirm: () => Navigator.pop(context, _ctrl.text.trim()),
     );
   }
 }

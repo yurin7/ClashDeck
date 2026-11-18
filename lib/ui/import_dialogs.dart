@@ -18,44 +18,36 @@ Future<String?> showPasteLinksDialog(
   return showAppDialog<String>(
     context,
     width: dialogWidthOf(context),
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppTextField(
-              controller: ctrl,
-              minLines: 6,
-              maxLines: 12,
-              autofocus: true,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              label: '一行一个链接，可以混着来',
-              hint: 'vless://…\nvmess://…\nhysteria2://…',
-              alignLabelWithHint: true,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '支持 ${supportedSchemes.join(' / ')}；'
-              '也可以直接粘贴整段 base64 订阅内容。',
-              style: Theme.of(ctx).textTheme.bodySmall,
-            ),
-          ],
-        ),
+    builder: (ctx) => EditDialog(
+      title: title,
+      confirmLabel: '解析',
+      cancelLabel: '取消',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            controller: ctrl,
+            minLines: 6,
+            maxLines: 12,
+            autofocus: true,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            label: '一行一个链接，可以混着来',
+            hint: 'vless://…\nvmess://…\nhysteria2://…',
+            alignLabelWithHint: true,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '支持 ${supportedSchemes.join(' / ')}；'
+            '也可以直接粘贴整段 base64 订阅内容。',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, ctrl.text),
-          child: const Text('解析'),
-        ),
-      ],
+      onCancel: () => Navigator.pop(ctx),
+      onConfirm: () => Navigator.pop(ctx, ctrl.text),
     ),
-  );
+  ).whenComplete(() => disposeAfterDialog(ctrl));
 }
 
 /// 「从订阅链接导入」对话框的返回值。

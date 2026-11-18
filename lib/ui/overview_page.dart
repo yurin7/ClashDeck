@@ -6,8 +6,9 @@ import '../core/model/app_settings.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'theme.dart';
-import 'widgets/target_selector_field.dart';
+import '../core/model/profile.dart';
 import 'chips.dart';
+import 'sheets/sectioned_picker.dart';
 import 'widgets.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
@@ -459,31 +460,47 @@ class _GlobalExitRow extends StatelessWidget {
   final SettingsState settings;
   final VoidCallback onChanged;
 
-  /// 内核的 `GLOBAL` 组能选的范围：内置出站 + 本配置里的所有节点和策略组。
-  List<String> _candidates() {
-    return [for (final entry in _kinds().keys) entry];
+  /// 内核的 `GLOBAL` 组能选的范围：面板按「系统策略 / 策略组 / 节点」分区展示。
+  List<ProxyEntry> _proxyItems() {
+    final list = settings.doc.plainAt(['proxies']);
+    final entries = <ProxyEntry>[];
+    if (list is List) {
+      for (var i = 0; i < list.length; i++) {
+        final item = list[i];
+        if (item is! Map) continue;
+        final name = item['name'];
+        if (name is! String || name.isEmpty) continue;
+        entries.add(
+          ProxyEntry(
+            index: i,
+            name: name,
+            type: '${item['type'] ?? ''}',
+            raw: {for (final e in item.entries) '${e.key}': e.value},
+          ),
+        );
+      }
+    }
+    return entries;
   }
 
-  /// 名字 → 类型：1 内置出站，2 节点，3 策略组。胶囊左侧小方块的图标用它。
-  Map<String, int> _kinds() {
-    final doc = settings.doc;
-    final kinds = <String, int>{'DIRECT': 1, 'REJECT': 1};
-    for (final item in _asMapList(doc.plainAt(['proxies']))) {
-      final name = item['name'];
-      if (name is String && name.isNotEmpty) kinds[name] = 2;
+  List<({String name, String type, int members})> _groupItems() {
+    final list = settings.doc.plainAt(['proxy-groups']);
+    final groups = <({String name, String type, int members})>[];
+    if (list is List) {
+      for (final item in list) {
+        if (item is! Map) continue;
+        final name = item['name'];
+        if (name is! String || name.isEmpty) continue;
+        final proxies = item['proxies'];
+        groups.add((
+          name: name,
+          type: item['type'] is String ? item['type'] as String : 'select',
+          members: proxies is List ? proxies.length : 0,
+        ));
+      }
     }
-    for (final item in _asMapList(doc.plainAt(['proxy-groups']))) {
-      final name = item['name'];
-      if (name is String && name.isNotEmpty) kinds[name] = 3;
-    }
-    return kinds;
+    return groups;
   }
-
-  List<Map<Object?, Object?>> _asMapList(Object? value) => [
-    if (value is List)
-      for (final item in value)
-        if (item is Map) item,
-  ];
 
   IconData _iconOf(String name) {
     switch (name) {
@@ -500,10 +517,9 @@ class _GlobalExitRow extends StatelessWidget {
       case 'GLOBAL':
         return Icons.public;
     }
-    final kind = _kinds()[name];
-    if (kind == 3) return Icons.account_tree_outlined;
-    if (kind == 2) return Icons.dns_outlined;
-    return Icons.bolt_outlined;
+    final groupNames = {for (final group in _groupItems()) group.name};
+    if (groupNames.contains(name)) return Icons.account_tree_outlined;
+    return Icons.dns_outlined;
   }
 
   /// 某个策略组的成员；不是组就返回空。
@@ -525,18 +541,74 @@ class _GlobalExitRow extends StatelessWidget {
   }
 
   Future<void> _pick(BuildContext context) async {
-    final candidates = _candidates();
-    final picked = await showTargetPickerSheet(
+    final proxies = _proxyItems();
+    final groups = _groupItems();
+    final picked = await showSectionedPicker<String>(
       context,
       title: 'GLOBAL 走哪个节点',
-      options: candidates,
-      current: settings.globalNode ?? '',
-      emptyLabel: '跟随内核默认（DIRECT）',
-      subtitles: {
-        for (final name in candidates)
-          if (_membersOf(name).isNotEmpty)
-            name: '组 · ${_membersOf(name).length}',
-      },
+      subtitle: '按分类挑；选中后立即保存',
+      searchHint: '搜索系统策略、策略组或节点',
+      sections: [
+        SectionedPickerSection<String>(
+          items: [
+            SectionedPickerItem<String>(
+              value: '',
+              chip: Text('跟随内核默认（DIRECT）', style: hintStyle(context)),
+              searchText: '跟随内核默认 DIRECT',
+              selected: settings.globalNode == null,
+            ),
+          ],
+        ),
+        SectionedPickerSection<String>(
+          label: '系统策略',
+          items: [
+            for (final name in Profile.systemPolicyTargets)
+              SectionedPickerItem<String>(
+                value: name,
+                chip: NameChip(name: name),
+                searchText: name,
+                selected: settings.globalNode == name,
+              ),
+          ],
+        ),
+        if (groups.isNotEmpty)
+          SectionedPickerSection<String>(
+            label: '策略组',
+            items: [
+              for (final group in groups)
+                SectionedPickerItem<String>(
+                  value: group.name,
+                  chip: GroupChip(
+                    name: group.name,
+                    members: group.members,
+                    type: group.type,
+                  ),
+                  searchText: group.name,
+                  selected: settings.globalNode == group.name,
+                ),
+            ],
+          ),
+        if (proxies.isNotEmpty)
+          SectionedPickerSection<String>(
+            label: '节点',
+            items: [
+              for (final node in proxies)
+                SectionedPickerItem<String>(
+                  value: node.name,
+                  chip: NodeChip(
+                    node: node,
+                    fromGroup: null,
+                    onOpen: () {},
+                    onMove: () {},
+                    onDelete: () {},
+                    onRemove: () {},
+                  ),
+                  searchText: node.name,
+                  selected: settings.globalNode == node.name,
+                ),
+            ],
+          ),
+      ],
     );
     if (picked == null || !context.mounted) return;
 
@@ -547,16 +619,44 @@ class _GlobalExitRow extends StatelessWidget {
     }
 
     // 选中的是策略组时，再问一次「组里用哪个节点」，这样一次点选就把
-    // GLOBAL → 组 → 节点 这条链走完，不用再去运行页翻两层。
+    // GLOBAL -> 组 -> 节点 这条链走完，不用再去运行页翻两层。
     final members = _membersOf(picked);
     String? member;
     if (members.isNotEmpty) {
-      final choice = await showTargetPickerSheet(
+      final proxyNames = {for (final node in proxies) node.name};
+      final groupNames = {for (final group in groups) group.name};
+      final choice = await showSectionedPicker<String>(
         context,
         title: '「$picked」里用哪个节点',
-        options: members,
-        current: settings.groupNodes[picked] ?? '',
-        emptyLabel: '跟着组自己的选择走',
+        searchHint: '搜索成员',
+        sections: [
+          SectionedPickerSection<String>(
+            items: [
+              SectionedPickerItem<String>(
+                value: '',
+                chip: Text('跟着组自己的选择走', style: hintStyle(context)),
+                searchText: '跟着组自己的选择走',
+                selected: (settings.groupNodes[picked] ?? '').isEmpty,
+              ),
+            ],
+          ),
+          SectionedPickerSection<String>(
+            label: '成员',
+            items: [
+              for (final name in members)
+                SectionedPickerItem<String>(
+                  value: name,
+                  chip: proxyNames.contains(name)
+                      ? NameChip(name: name, icon: Icons.dns_outlined)
+                      : groupNames.contains(name)
+                      ? NameChip(name: name, icon: Icons.account_tree_outlined)
+                      : NameChip(name: name),
+                  searchText: name,
+                  selected: settings.groupNodes[picked] == name,
+                ),
+            ],
+          ),
+        ],
       );
       if (choice == null || !context.mounted) return;
       member = choice.isEmpty ? null : choice;

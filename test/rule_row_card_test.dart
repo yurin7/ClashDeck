@@ -11,7 +11,6 @@ void main() {
     VoidCallback? onEdit,
     VoidCallback? onMoveToGroup,
     VoidCallback? onRefresh,
-    VoidCallback? onDelete,
     Widget? trailing,
     bool compact = false,
   }) {
@@ -30,9 +29,8 @@ void main() {
                     : const Icon(Icons.drag_indicator, size: 17),
                 onTap: onTap ?? () {},
                 onEdit: onEdit ?? () {},
-                onMoveToGroup: onMoveToGroup,
+                onMoveToGroup: onMoveToGroup ?? () {},
                 onRefresh: onRefresh,
-                onDelete: onDelete ?? () {},
               ),
             ),
           ),
@@ -78,53 +76,51 @@ void main() {
     expect(find.text('→ PROXY'), findsOneWidget);
   });
 
-  testWidgets('规则行胶囊卡：缓存信息在副标题，更新入口在 ⋮ 菜单', (tester) async {
+  testWidgets('规则行胶囊卡：没有保存/取消/删除按钮，删除只走左滑', (tester) async {
+    final rule = RuleEntry.parse(0, 'DOMAIN-SUFFIX,google.com,PROXY');
+    await pumpCard(tester, rule: rule);
+
+    expect(find.text('保存'), findsNothing);
+    expect(find.text('取消'), findsNothing);
+    expect(find.text('删除'), findsNothing);
+    expect(find.byTooltip('更多操作'), findsNothing);
+  });
+
+  testWidgets('规则行胶囊卡：行尾刷新按钮触发 onRefresh，不点整行', (tester) async {
     var refreshes = 0;
+    var taps = 0;
     final rule = RuleEntry.parse(0, 'RULE-SET,loyal-reject,PROXY');
     await pumpCard(
       tester,
       rule: rule,
       trailing: const Text('未缓存'),
       onRefresh: () => refreshes++,
+      onTap: () => taps++,
     );
 
     expect(find.text('未缓存'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('更多操作'));
-    await tester.pumpAndSettle();
-    expect(find.text('编辑'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
-    expect(find.text('更新规则集'), findsOneWidget);
-
-    await tester.tap(find.text('更新规则集'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更新规则集'));
+    await tester.pump();
     expect(refreshes, 1);
+    expect(taps, 0);
   });
 
-  testWidgets('规则行胶囊卡：⋮ 菜单提供编辑 / 改挂到组 / 删除', (tester) async {
-    var edits = 0;
+  testWidgets('规则行胶囊卡：换组图标触发 onMoveToGroup，不点整行', (tester) async {
     var moves = 0;
-    var deletes = 0;
+    var taps = 0;
     final rule = RuleEntry.parse(0, 'DOMAIN-SUFFIX,google.com,PROXY');
     await pumpCard(
       tester,
       rule: rule,
-      onEdit: () => edits++,
       onMoveToGroup: () => moves++,
-      onDelete: () => deletes++,
+      onTap: () => taps++,
     );
 
-    await tester.tap(find.byTooltip('更多操作'));
-    await tester.pumpAndSettle();
-    expect(find.text('编辑'), findsOneWidget);
-    expect(find.text('改挂到组'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
-
-    await tester.tap(find.text('删除'));
-    await tester.pumpAndSettle();
-    expect(deletes, 1);
-    expect(edits, 0);
-    expect(moves, 0);
+    expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+    await tester.tap(find.byTooltip('换到别的组'));
+    await tester.pump();
+    expect(moves, 1);
+    expect(taps, 0);
   });
 
   testWidgets('规则行胶囊卡：紧凑模式只留图标 + 标题', (tester) async {
@@ -135,11 +131,6 @@ void main() {
     expect(find.byIcon(Icons.chevron_right), findsNothing);
     expect(find.byIcon(Icons.drag_indicator), findsNothing);
     expect(find.text('DOMAIN-SUFFIX'), findsNothing);
-
-    await tester.tap(find.byTooltip('更多操作'));
-    await tester.pumpAndSettle();
-    expect(find.text('编辑'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
-    expect(find.text('改挂到组'), findsNothing);
+    expect(find.byIcon(Icons.swap_horiz), findsNothing);
   });
 }

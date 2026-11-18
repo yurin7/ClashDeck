@@ -11,6 +11,15 @@ double dialogWidthOf(BuildContext context) {
   return math.min(520, math.max(0, width - 64));
 }
 
+/// 点遮罩时的行为：要么关闭并带回一个结果，要么什么都不做（保持打开）。
+class BarrierAction<T> {
+  const BarrierAction.close(this.value) : closes = true;
+  const BarrierAction.keepOpen() : value = null, closes = false;
+
+  final T? value;
+  final bool closes;
+}
+
 /// 打开一个带统一过渡动画的对话框。
 ///
 /// 和直接 `showDialog` 的区别只有动效：淡入 + 轻微上滑 + 0.96→1 的缩放，
@@ -26,6 +35,7 @@ Future<T?> showAppDialog<T>(
   Color? barrierColor,
   bool useRootNavigator = true,
   double? width,
+  BarrierAction<T> Function()? onBarrierTap,
 }) {
   return showGeneralDialog<T>(
     context: context,
@@ -36,9 +46,29 @@ Future<T?> showAppDialog<T>(
     transitionDuration: const Duration(milliseconds: 240),
     pageBuilder: (ctx, _, _) {
       final child = builder(ctx);
-      if (width == null) return child;
-      return Center(
-        child: SizedBox(width: width, child: child),
+      final sized = width == null
+          ? child
+          : Center(
+              child: SizedBox(width: width, child: child),
+            );
+      if (onBarrierTap == null) return sized;
+      // barrierDismissible 必须为 false，才能由我们决定「点外面做什么」：
+      // 编辑规则这类弹窗点外面 = 自动保存，校验不过就不关。
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                final action = onBarrierTap();
+                if (action.closes) {
+                  Navigator.of(ctx).pop(action.value);
+                }
+              },
+            ),
+          ),
+          sized,
+        ],
       );
     },
     transitionBuilder: (ctx, animation, _, child) {

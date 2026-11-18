@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
+import './widgets/app_ink.dart';
 
 /// 下拉菜单里的一项。
 class DropdownOption<T> {
@@ -305,7 +306,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>>
     DropdownOption<T> option,
   ) {
     final selected = option.value == widget.value;
-    return InkWell(
+    return AppInkWell(
       onTap: () {
         _close();
         if (!selected) widget.onChanged(option.value);

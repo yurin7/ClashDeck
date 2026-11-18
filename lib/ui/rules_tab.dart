@@ -27,6 +27,9 @@ import 'rules/online_import_sheet.dart';
 import 'rules/rule_row_card.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import './widgets/app_ink.dart';
+import './widgets/edit_dialog.dart';
+import './widgets/busy_dialog.dart';
 
 class RulesTab extends StatefulWidget {
   const RulesTab({super.key, required this.state, this.runtime});
@@ -55,6 +58,9 @@ class _RulesTabState extends State<RulesTab> {
 
   /// 这次会话里刷新失败的规则集，行尾标「更新失败」。
   final Set<String> _failedProviders = <String>{};
+
+  /// 当前左滑露出「删除」的规则 index。
+  int? _swipedRule;
 
   bool _localOpen = true;
   bool _onlineOpen = true;
@@ -125,28 +131,17 @@ class _RulesTabState extends State<RulesTab> {
 
   Future<void> _editRule({RuleEntry? initial, int? index}) async {
     final targets = ruleTargetsFor(s.profile, preferred: initial?.target);
-
-    final result = await showAppDialog<Object>(
+    final draft = await showRuleEditDialog(
       context,
-      width: dialogWidthOf(context),
-      builder: (_) => RuleEditDialog(
-        initialType: initial?.type,
-        initialPayload: initial?.payload,
-        initialTarget: initial?.target,
-        initialNoResolve: initial?.noResolve ?? false,
-        targets: targets.primary,
-        otherBuiltins: targets.otherBuiltins,
-        isNew: initial == null,
-      ),
+      initialType: initial?.type,
+      initialPayload: initial?.payload,
+      initialTarget: initial?.target,
+      initialNoResolve: initial?.noResolve ?? false,
+      targets: targets.primary,
+      otherBuiltins: targets.otherBuiltins,
+      isNew: initial == null || index == null,
     );
-
-    if (result == null) return; // 取消
-    if (result == 'delete') {
-      if (index == null) return;
-      await _confirmDeleteRule(index);
-      return;
-    }
-    final draft = result as RuleDraft;
+    if (draft == null || !mounted) return; // 取消 / 校验没过
     final parts = <String>[
       draft.type,
       if (!kTerminalRuleTypes.contains(draft.type)) draft.payload,
@@ -169,28 +164,12 @@ class _RulesTabState extends State<RulesTab> {
   /// 删除一条规则前的二次确认（编辑对话框里的删除走同一套）。
   Future<void> _confirmDeleteRule(int index) async {
     if (!mounted) return;
-    final confirmed = await showAppDialog<bool>(
+    final confirmed = await showConfirmDialog(
       context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除这条规则？'),
-        content: Text(
-          '这条规则会从当前配置里移除，删掉后只能重新添加。',
-          style: Theme.of(ctx).textTheme.bodySmall,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除这条规则？',
+      message: '这条规则会从当前配置里移除，删掉后只能重新添加。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (confirmed == true && !s.deleteRule(index)) _fail();
   }
@@ -399,31 +378,22 @@ class _RulesTabState extends State<RulesTab> {
     final ok = await showAppDialog<bool>(
       context,
       width: dialogWidthOf(context),
-      builder: (ctx) => AlertDialog(
-        title: const Text('导入预览'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(plan.summary),
-              if (plan.similarLines.isNotEmpty) ...[
-                const SizedBox(height: Insets.sm),
-                Text('疑似重名（默认复用已有规则集）：${plan.similarLines.join('、')}'),
-              ],
+      builder: (ctx) => EditDialog(
+        title: '导入预览',
+        confirmLabel: '导入',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(plan.summary),
+            if (plan.similarLines.isNotEmpty) ...[
+              const SizedBox(height: Insets.sm),
+              Text('疑似重名（默认复用已有规则集）：${plan.similarLines.join('、')}'),
             ],
-          ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('导入'),
-          ),
-        ],
+        onCancel: () => Navigator.of(ctx).pop(false),
+        onConfirm: () => Navigator.of(ctx).pop(true),
       ),
     );
     return ok == true;
@@ -846,7 +816,7 @@ class _RulesTabState extends State<RulesTab> {
       RuleZone.geo => scheme.secondary,
       RuleZone.terminal => scheme.error,
     };
-    return InkWell(
+    return AppInkWell(
       onTap: onToggle,
       child: Row(
         children: [
@@ -988,37 +958,44 @@ class _RulesTabState extends State<RulesTab> {
       key: ValueKey('rule-${rule.index}'),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
-        child: RuleRowCard(
-          rule: rule,
-          trailing: _cacheTrailing(context, rule),
-          onRefresh: _refreshFor(rule),
-          dragHandle: ReorderableDragStartListener(
-            index: i,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Insets.xs,
-                  vertical: Insets.xs,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.drag_indicator,
-                      size: 17,
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-                    ),
-                    Text('${i + 1}', style: monoStyle(context, size: 10)),
-                  ],
+        // 只有行本体参与左滑，露出删除；不再是整块区域一起滑。
+        child: SlidableRow(
+          open: _swipedRule == rule.index,
+          onOpenChanged: (open) =>
+              setState(() => _swipedRule = open ? rule.index : null),
+          actionLabel: '删除',
+          onAction: () => _confirmDelete(rule),
+          child: RuleRowCard(
+            rule: rule,
+            trailing: _cacheTrailing(context, rule),
+            onRefresh: _refreshFor(rule),
+            dragHandle: ReorderableDragStartListener(
+              index: i,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Insets.xs,
+                    vertical: Insets.xs,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.drag_indicator,
+                        size: 17,
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                      Text('${i + 1}', style: monoStyle(context, size: 10)),
+                    ],
+                  ),
                 ),
               ),
             ),
+            onTap: () => _editRule(initial: rule, index: rule.index),
+            onEdit: () => _editRule(initial: rule, index: rule.index),
+            onMoveToGroup: () => _moveRuleToGroup(rule),
           ),
-          onTap: () => _editRule(initial: rule, index: rule.index),
-          onEdit: () => _editRule(initial: rule, index: rule.index),
-          onMoveToGroup: () => _moveRuleToGroup(rule),
-          onDelete: () => _confirmDelete(rule),
         ),
       ),
     );
@@ -1048,43 +1025,17 @@ class _RulesTabState extends State<RulesTab> {
     unawaited(
       showAppDialog<void>(
         context,
+        width: dialogWidthOf(context),
         barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          content: ValueListenableBuilder<String>(
-            valueListenable: progress ?? ValueNotifier<String>(""),
-            builder: (context, extra, _) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: Insets.md),
-                    Expanded(child: Text(message)),
-                  ],
-                ),
-                if (extra.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Insets.sm),
-                    child: Text(extra, style: hintStyle(context)),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            if (cancellable)
-              TextButton(
-                onPressed: () {
+        builder: (_) => BusyDialog(
+          message: message,
+          progress: progress,
+          onCancel: cancellable
+              ? () {
                   _cancelled = true;
                   navigator.pop();
-                },
-                child: const Text('取消'),
-              ),
-          ],
+                }
+              : null,
         ),
       ).then((_) => closed = true),
     );

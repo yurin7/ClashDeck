@@ -58,7 +58,7 @@ void main() {
     expect(find.text('编辑规则'), findsOneWidget);
     expect(find.text('匹配内容'), findsOneWidget);
 
-    await tester.tap(find.text('保存'));
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
     expect(state.profile.rules.first.raw, 'DOMAIN-SUFFIX,a.com,PROXY');
   });
@@ -73,7 +73,7 @@ void main() {
     expect(find.text('新建规则'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'b.com');
-    await tester.tap(find.text('保存'));
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
 
     expect(state.profile.rules.first.raw, 'DOMAIN-SUFFIX,b.com,PROXY');
@@ -85,7 +85,7 @@ void main() {
 
     await tester.tap(find.text('本组规则 1'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('a.com'));
+    await tester.drag(find.text('a.com'), const Offset(-120, 0));
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();

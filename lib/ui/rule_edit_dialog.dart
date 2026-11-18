@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/model/rule_types.dart';
+import 'app_dialog.dart';
 import 'dropdown.dart';
 import 'fields.dart';
 import 'widgets/edit_dialog.dart';
@@ -23,6 +24,52 @@ class RuleDraft {
   final bool noResolve;
 }
 
+/// 外部持有的「当前草稿」句柄。
+///
+/// 点遮罩自动保存时，`showRuleEditDialog` 在 barrier 回调里读它：
+/// 校验不过（匹配内容为空）就是 null，不关闭弹窗。
+class RuleDraftHandle {
+  RuleDraft? draft;
+}
+
+/// 打开规则编辑弹窗：没有底部按钮，点遮罩 / 右上 × 即保存并关闭；
+/// 校验不过时保持打开并提示，删除只走规则行左滑。
+Future<RuleDraft?> showRuleEditDialog(
+  BuildContext context, {
+  String? initialType,
+  String? initialPayload,
+  String? initialTarget,
+  bool initialNoResolve = false,
+  required List<String> targets,
+  List<String> otherBuiltins = const <String>[],
+  required bool isNew,
+}) {
+  final handle = RuleDraftHandle();
+  return showAppDialog<RuleDraft>(
+    context,
+    width: dialogWidthOf(context),
+    barrierDismissible: false,
+    onBarrierTap: () {
+      final draft = handle.draft;
+      if (draft == null) {
+        showToast(context, '请填写匹配内容');
+        return const BarrierAction<RuleDraft>.keepOpen();
+      }
+      return BarrierAction<RuleDraft>.close(draft);
+    },
+    builder: (_) => RuleEditDialog(
+      initialType: initialType,
+      initialPayload: initialPayload,
+      initialTarget: initialTarget,
+      initialNoResolve: initialNoResolve,
+      targets: targets,
+      otherBuiltins: otherBuiltins,
+      isNew: isNew,
+      handle: handle,
+    ),
+  );
+}
+
 /// 编辑/新建一条规则。
 ///
 /// 用 StatefulWidget 而不是 `showDialog` + 外部 `TextEditingController`：
@@ -39,6 +86,7 @@ class RuleEditDialog extends StatefulWidget {
     required this.targets,
     this.otherBuiltins = const <String>[],
     required this.isNew,
+    required this.handle,
   });
 
   final String? initialType;
@@ -51,6 +99,9 @@ class RuleEditDialog extends StatefulWidget {
   /// 「高级内置（不常用）」展示。
   final List<String> otherBuiltins;
   final bool isNew;
+
+  /// 把当前草稿同步给外层，供「点遮罩自动保存」读取。
+  final RuleDraftHandle handle;
 
   @override
   State<RuleEditDialog> createState() => _RuleEditDialogState();
@@ -73,10 +124,18 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
     _target = widget.initialTarget ?? preferred;
     _noResolve = widget.initialNoResolve;
     _payloadCtrl = TextEditingController(text: widget.initialPayload ?? '');
+    // 点遮罩时外层直接读 handle.draft；输入不重建本对话框，必须主动同步，
+    // 否则填了内容再点外面仍会被当成「没填」。
+    _payloadCtrl.addListener(_syncDraft);
+  }
+
+  void _syncDraft() {
+    widget.handle.draft = _draft;
   }
 
   @override
   void dispose() {
+    _payloadCtrl.removeListener(_syncDraft);
     _payloadCtrl.dispose();
     super.dispose();
   }
@@ -121,31 +180,36 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
     }
   }
 
-  void _submit() {
+  RuleDraft? get _draft {
     final payload = _payloadCtrl.text.trim();
-    if (_needsPayload && payload.isEmpty) {
+    if (_needsPayload && payload.isEmpty) return null;
+    return RuleDraft(
+      type: _type,
+      payload: payload,
+      target: _target,
+      noResolve: _noResolve,
+    );
+  }
+
+  void _closeSaving() {
+    final draft = _draft;
+    if (draft == null) {
       showToast(context, '请填写匹配内容');
       return;
     }
-    Navigator.of(context).pop(
-      RuleDraft(
-        type: _type,
-        payload: payload,
-        target: _target,
-        noResolve: _noResolve,
-      ),
-    );
+    Navigator.of(context).pop(draft);
   }
 
   @override
   Widget build(BuildContext context) {
+    widget.handle.draft = _draft;
     final types = <String>{
       ...kRuleTypes,
       if (!kRuleTypes.contains(_type)) _type,
     };
     return EditDialog(
       title: widget.isNew ? '新建规则' : '编辑规则',
-      confirmLabel: '保存',
+      showFooter: false,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -187,9 +251,7 @@ class _RuleEditDialogState extends State<RuleEditDialog> {
             ),
         ],
       ),
-      onConfirm: _submit,
-      onCancel: () => Navigator.of(context).pop(),
-      onDelete: widget.isNew ? null : () => Navigator.of(context).pop('delete'),
+      onCancel: _closeSaving,
     );
   }
 }

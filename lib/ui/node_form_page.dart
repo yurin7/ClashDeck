@@ -8,6 +8,7 @@ import 'dropdown.dart';
 import 'fields.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'widgets/edit_dialog.dart';
 
 /// 新增/编辑一个节点。表单完全由 [kProxySchemas] 驱动，
 /// schema 没覆盖到的字段会落在「其它字段」里，保证任何 mihomo 字段都能手改。
@@ -182,22 +183,12 @@ class _NodeFormPageState extends State<NodeFormPage> {
     final onDelete = widget.onDelete;
     if (onDelete == null) return;
     final name = '${widget.initial?['name'] ?? ''}';
-    final ok = await showAppDialog<bool>(
+    final ok = await showConfirmDialog(
       context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除节点「$name」？'),
-        content: const Text('会同时从所有策略组里移除它，这个操作可以撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除节点「$name」？',
+      message: '会同时从所有策略组里移除它，这个操作可以撤销。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (ok != true) return;
     await onDelete();
@@ -462,7 +453,7 @@ class _NodeFormPageState extends State<NodeFormPage> {
         final controller = _controller(key, displayText(current));
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: TextField(
+          child: AppTextField(
             controller: controller,
             focusNode: _focusNode(key),
             keyboardType: switch (spec.kind) {
@@ -586,8 +577,9 @@ class _NodeFormPageState extends State<NodeFormPage> {
     final result = await showAppDialog<MapEntry<String, Object?>?>(
       context,
       width: dialogWidthOf(context),
-      builder: (ctx) => AlertDialog(
-        title: const Text('添加字段'),
+      builder: (ctx) => EditDialog(
+        title: '添加字段',
+        confirmLabel: '添加',
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -599,20 +591,12 @@ class _NodeFormPageState extends State<NodeFormPage> {
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final k = keyCtrl.text.trim();
-              if (k.isEmpty) return;
-              Navigator.pop(ctx, MapEntry(k, _parseYamlValue(valueCtrl.text)));
-            },
-            child: const Text('添加'),
-          ),
-        ],
+        onCancel: () => Navigator.pop(ctx),
+        onConfirm: () {
+          final k = keyCtrl.text.trim();
+          if (k.isEmpty) return;
+          Navigator.pop(ctx, MapEntry(k, _parseYamlValue(valueCtrl.text)));
+        },
       ),
     );
     disposeAfterDialog(keyCtrl);

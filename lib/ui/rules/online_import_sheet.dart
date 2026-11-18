@@ -6,6 +6,7 @@ import '../widgets/selectable_tile.dart';
 import '../widgets.dart';
 import '../fields.dart';
 import 'import_sheet_style.dart';
+import '../widgets/app_ink.dart';
 
 /// 在线面板的返回值：要么勾选了一组预置规则集，要么填了一个自定义地址。
 sealed class OnlineImportRequest {
@@ -269,7 +270,7 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
             Row(
               children: [
                 Expanded(
-                  child: InkWell(
+                  child: AppInkWell(
                     onTap: () => setState(() {
                       if (open) {
                         _collapsed.add(group.title);

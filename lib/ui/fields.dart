@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
@@ -53,6 +54,10 @@ InputDecoration fieldDecoration({
 }
 
 /// 单行输入的便捷封装：统一装饰 + 统一字号。
+///
+/// 业务代码不应该再直接写 `TextField`（自检里有规则拦）。个别需要自定义
+/// 装饰的地方把 [decoration] 传进来，会与统一装饰合并；边框/圆角仍以统一
+/// 装修为准，避免又出现「有的框圆角 4、有的 14」。
 class AppTextField extends StatelessWidget {
   const AppTextField({
     super.key,
@@ -69,11 +74,24 @@ class AppTextField extends StatelessWidget {
     this.textInputAction,
     this.maxLines = 1,
     this.minLines,
+    this.expands = false,
     this.enabled = true,
     this.autofocus = false,
     this.alignLabelWithHint = false,
+    this.obscureText = false,
+    this.readOnly = false,
+    this.maxLength,
+    this.focusNode,
+    this.decoration,
+    this.textAlign = TextAlign.start,
+    this.textAlignVertical,
+    this.inputFormatters,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
     this.onChanged,
     this.onSubmitted,
+    this.onTap,
+    this.onEditingComplete,
   });
 
   final TextEditingController? controller;
@@ -89,35 +107,136 @@ class AppTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final int? maxLines;
   final int? minLines;
+  final bool expands;
   final bool enabled;
   final bool autofocus;
   final bool alignLabelWithHint;
+  final bool obscureText;
+  final bool readOnly;
+  final int? maxLength;
+  final FocusNode? focusNode;
+
+  /// 额外的装饰（如计数、清空按钮）。边框和字号仍由统一装修决定。
+  final InputDecoration? decoration;
+  final TextAlign textAlign;
+  final TextAlignVertical? textAlignVertical;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autocorrect;
+  final bool enableSuggestions;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final VoidCallback? onTap;
+  final VoidCallback? onEditingComplete;
 
   @override
   Widget build(BuildContext context) {
+    final base = fieldDecoration(
+      label: label,
+      hint: hint,
+      helper: helper,
+      error: error,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      enabled: enabled,
+      alignLabelWithHint: alignLabelWithHint,
+    );
+    final extra = decoration;
+    final merged = extra == null
+        ? base
+        : base.copyWith(
+            labelText: extra.labelText ?? base.labelText,
+            hintText: extra.hintText ?? base.hintText,
+            helperText: extra.helperText ?? base.helperText,
+            errorText: extra.errorText ?? base.errorText,
+            counterText: extra.counterText,
+            counter: extra.counter,
+            prefixIcon: extra.prefixIcon ?? base.prefixIcon,
+            suffixIcon: extra.suffixIcon ?? base.suffixIcon,
+            suffixText: extra.suffixText,
+            hintStyle: extra.hintStyle,
+            helperStyle: extra.helperStyle,
+            errorStyle: extra.errorStyle,
+            labelStyle: extra.labelStyle,
+            floatingLabelBehavior: extra.floatingLabelBehavior,
+            semanticCounterText: extra.semanticCounterText,
+          );
+
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      readOnly: readOnly,
+      obscureText: obscureText,
+      maxLength: maxLength,
       autofocus: autofocus,
       enabled: enabled,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       minLines: minLines,
       maxLines: maxLines,
+      expands: expands,
+      textAlign: textAlign,
+      textAlignVertical: textAlignVertical,
+      inputFormatters: inputFormatters,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
+      onTap: onTap,
+      onEditingComplete: onEditingComplete,
       style: style ?? const TextStyle(fontSize: 13.5),
-      decoration: fieldDecoration(
-        label: label,
-        hint: hint,
-        helper: helper,
-        error: error,
-        prefixIcon: prefixIcon,
-        suffixIcon: suffixIcon,
-        enabled: enabled,
-        alignLabelWithHint: alignLabelWithHint,
-      ),
+      decoration: merged,
+    );
+  }
+}
+
+/// 搜索输入框：统一带放大镜图标与清空按钮。
+class AppSearchField extends StatelessWidget {
+  const AppSearchField({
+    super.key,
+    required this.controller,
+    this.hint = '搜索',
+    this.onChanged,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        return AppTextField(
+          controller: controller,
+          hint: hint,
+          autofocus: autofocus,
+          prefixIcon: Icon(
+            Icons.search,
+            size: 18,
+            color: scheme.onSurfaceVariant,
+          ),
+          suffixIcon: value.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清空搜索',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    controller.clear();
+                    onChanged?.call('');
+                  },
+                  icon: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+          onChanged: onChanged,
+        );
+      },
     );
   }
 }

@@ -5,6 +5,7 @@ import '../../core/model/profile.dart';
 import '../../core/model/rule_zone.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../widgets/app_ink.dart';
 
 /// 规则行胶囊卡。
 ///
@@ -21,9 +22,8 @@ class RuleRowCard extends StatelessWidget {
     required this.rule,
     required this.onTap,
     required this.onEdit,
-    required this.onDelete,
+    required this.onMoveToGroup,
     this.dragHandle,
-    this.onMoveToGroup,
     this.onRefresh,
     this.trailing,
     this.compact = false,
@@ -39,13 +39,11 @@ class RuleRowCard extends StatelessWidget {
 
   final VoidCallback onEdit;
 
-  /// 「改挂到组」；为 null 时菜单不出现这一项（紧凑模式不需要）。
-  final VoidCallback? onMoveToGroup;
+  /// 行尾「换组」图标：直接打开目标选择面板，选完即改。
+  final VoidCallback onMoveToGroup;
 
-  /// 「更新规则集」；为 null 时菜单不出现这一项。
+  /// 「更新规则集」；为 null 时没有这个动作（在线规则集的缓存由 ⋮ 收起）。
   final VoidCallback? onRefresh;
-
-  final VoidCallback onDelete;
 
   /// 副标题行尾的附加信息（在线规则集的缓存时间 / 更新失败标记）。
   final Widget? trailing;
@@ -64,7 +62,7 @@ class RuleRowCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(17),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
       ),
-      child: InkWell(
+      child: AppInkWell(
         onTap: onTap,
         child: Container(
           constraints: BoxConstraints(minHeight: compact ? 44 : 54),
@@ -85,7 +83,22 @@ class RuleRowCard extends StatelessWidget {
               Expanded(child: _texts(context, scheme, accent.color)),
               if (!compact)
                 Icon(Icons.chevron_right, size: 18, color: scheme.outline),
-              _menu(context, scheme),
+              if (onRefresh != null)
+                IconButton(
+                  tooltip: '更新规则集',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  onPressed: onRefresh,
+                  icon: Icon(
+                    Icons.refresh,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              if (!compact) _swapButton(context),
               ?dragHandle,
             ],
           ),
@@ -155,62 +168,18 @@ class RuleRowCard extends StatelessWidget {
     );
   }
 
-  Widget _menu(BuildContext context, ColorScheme scheme) {
-    return PopupMenuButton<_RowAction>(
-      tooltip: '更多操作',
-      padding: EdgeInsets.zero,
-      icon: Icon(Icons.more_vert, size: 18, color: scheme.onSurfaceVariant),
-      onSelected: (action) {
-        switch (action) {
-          case _RowAction.edit:
-            onEdit();
-          case _RowAction.move:
-            onMoveToGroup?.call();
-          case _RowAction.refresh:
-            onRefresh?.call();
-          case _RowAction.delete:
-            onDelete();
-        }
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem<_RowAction>(
-          value: _RowAction.edit,
-          height: 40,
-          child: _menuRow(Icons.edit_outlined, '编辑', scheme.onSurface),
-        ),
-        if (onMoveToGroup != null)
-          PopupMenuItem<_RowAction>(
-            value: _RowAction.move,
-            height: 40,
-            child: _menuRow(Icons.swap_horiz, '改挂到组', scheme.onSurface),
-          ),
-        if (onRefresh != null)
-          PopupMenuItem<_RowAction>(
-            value: _RowAction.refresh,
-            height: 40,
-            child: _menuRow(Icons.refresh, '更新规则集', scheme.onSurface),
-          ),
-        PopupMenuItem<_RowAction>(
-          value: _RowAction.delete,
-          height: 40,
-          child: _menuRow(Icons.delete_outline, '删除', scheme.error),
-        ),
-      ],
-    );
-  }
-
-  Widget _menuRow(IconData icon, String label, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: Insets.sm),
-        Text(label, style: TextStyle(color: color)),
-      ],
+  /// 换组：一点就开目标选择面板，选完即改；没有二次确认。
+  Widget _swapButton(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: '换到别的组',
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+      onPressed: onMoveToGroup,
+      icon: Icon(Icons.swap_horiz, size: 18, color: scheme.onSurfaceVariant),
     );
   }
 }
-
-enum _RowAction { edit, move, refresh, delete }
 
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({

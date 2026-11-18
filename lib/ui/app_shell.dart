@@ -18,8 +18,9 @@ import 'overview_page.dart';
 import 'settings_page.dart';
 import 'sheets.dart';
 import 'theme.dart';
-import 'fields.dart';
 import 'widgets.dart';
+import 'navigation.dart';
+import './widgets/text_input_dialog.dart';
 
 /// 三页壳：概览 / 配置 / 设置，底部悬浮岛切换。
 ///
@@ -330,8 +331,8 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => EditorPage(
+      appRoute<void>(
+        EditorPage(
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
@@ -394,8 +395,8 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _openEditorFor(String fileName) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => EditorPage(
+      appRoute<void>(
+        EditorPage(
           store: widget.store,
           fileName: fileName,
           runtime: _runtime,
@@ -407,32 +408,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<String?> _showTextImportDialog() {
-    final controller = TextEditingController();
-    return showAppDialog<String>(
+    return showTextInputDialog(
       context,
-      width: dialogWidthOf(context),
-      builder: (ctx) => AlertDialog(
-        title: const Text('粘贴导入'),
-        content: AppTextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 6,
-          maxLines: 12,
-          style: mono(12),
-          hint: 'YAML 配置，或一行/多行 vless、vmess、hy2 链接',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    ).whenComplete(controller.dispose);
+      title: '粘贴导入',
+      hint: 'YAML 配置，或一行/多行 vless、vmess、hy2 链接',
+      monospace: true,
+      minLines: 6,
+      maxLines: 12,
+      confirmLabel: '导入',
+    );
   }
 
   // ------------------------------------------------------------------ 订阅

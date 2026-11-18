@@ -1,163 +1,191 @@
 import 'package:clashdeck/ui/rule_edit_dialog.dart';
-import 'package:clashdeck/ui/widgets/target_selector_field.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 打开对话框并把 pop 出来的值抓回来。
-Future<Object? Function()> _open(
-  WidgetTester tester, {
-  bool isNew = true,
-  String? type,
-  String? payload,
-  String? target,
-  List<String> otherBuiltins = const [],
-}) async {
-  Object? captured;
-  var done = false;
-  await tester.pumpWidget(
-    MaterialApp(
-      home: Builder(
-        builder: (ctx) => Scaffold(
-          body: Center(
-            child: FilledButton(
-              onPressed: () async {
-                captured = await showDialog<Object>(
-                  context: ctx,
-                  builder: (_) => RuleEditDialog(
-                    isNew: isNew,
-                    initialType: type,
-                    initialPayload: payload,
-                    initialTarget: target,
-                    targets: const ['DIRECT', 'PROXY'],
-                    otherBuiltins: otherBuiltins,
-                  ),
-                );
-                done = true;
-              },
-              child: const Text('open'),
+void main() {
+  Future<void> pumpHost(
+    WidgetTester tester,
+    void Function(BuildContext context) onPressed,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: FilledButton(
+                onPressed: () => onPressed(context),
+                child: const Text('打开'),
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-  await tester.tap(find.text('open'));
-  await tester.pumpAndSettle();
-  return () => done ? captured : throw StateError('对话框还没关闭');
-}
-
-void main() {
-  testWidgets('新建规则：保存返回草稿（类型/内容/目标）', (tester) async {
-    final result = await _open(tester);
-    expect(find.text('新建规则'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextField).first, 'google.com');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-
-    final draft = result() as RuleDraft;
-    expect(draft.type, 'DOMAIN-SUFFIX');
-    expect(draft.payload, 'google.com');
-    expect(draft.target, 'DIRECT');
-    expect(draft.noResolve, isFalse);
-  });
-
-  testWidgets('缺匹配内容时不关闭对话框', (tester) async {
-    final result = await _open(tester);
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-    expect(find.text('新建规则'), findsOneWidget);
-    expect(result, throwsStateError); // 仍未关闭
-  });
-
-  testWidgets('取消返回 null，关闭动画期间不崩', (tester) async {
-    final result = await _open(tester);
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(result(), isNull);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('编辑已有规则：带删除按钮，GEOIP 有 no-resolve 开关', (tester) async {
-    await _open(
-      tester,
-      isNew: false,
-      type: 'GEOIP',
-      payload: 'cn',
-      target: 'DIRECT',
     );
+  }
+
+  testWidgets('新建规则：点遮罩自动保存草稿', (tester) async {
+    RuleDraft? saved;
+    await pumpHost(tester, (context) async {
+      saved = await showRuleEditDialog(
+        context,
+        targets: const ['DIRECT', 'PROXY', 'DEFAULT'],
+        isNew: true,
+      );
+    });
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新建规则'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'google.com');
+    // 点对话框外面 = 保存关闭。
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    expect(saved, isNotNull);
+    expect(saved!.type, 'DOMAIN-SUFFIX');
+    expect(saved!.payload, 'google.com');
+    expect(saved!.target, 'DEFAULT'); // 目标里含 DEFAULT 时默认写 DEFAULT。
+  });
+
+  testWidgets('校验不过时点遮罩不关闭，点关闭按钮才保存', (tester) async {
+    RuleDraft? saved;
+    await pumpHost(tester, (context) async {
+      saved = await showRuleEditDialog(
+        context,
+        targets: const ['DIRECT', 'DEFAULT'],
+        isNew: true,
+      );
+    });
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('新建规则'), findsOneWidget);
+    expect(find.text('请填写匹配内容'), findsOneWidget);
+    expect(saved, isNull);
+
+    await tester.enterText(find.byType(TextField), 'google.com');
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 4)); // 清掉 toast 计时器。
+
+    expect(saved, isNotNull);
+    expect(saved!.payload, 'google.com');
+  });
+
+  testWidgets('编辑规则没有保存/取消/删除按钮', (tester) async {
+    await pumpHost(tester, (context) async {
+      await showRuleEditDialog(
+        context,
+        initialType: 'DOMAIN-SUFFIX',
+        initialPayload: 'google.com',
+        targets: const ['DIRECT', 'DEFAULT'],
+        isNew: false,
+      );
+    });
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
     expect(find.text('编辑规则'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
-    expect(find.text('no-resolve'), findsOneWidget);
-    expect(find.text('不解析域名（仅 GEOIP / IP-CIDR 生效）'), findsOneWidget);
+    expect(find.text('保存'), findsNothing);
+    expect(find.text('取消'), findsNothing);
+    expect(find.text('删除'), findsNothing);
   });
 
-  testWidgets('删除返回占位值', (tester) async {
-    final result = await _open(
-      tester,
-      isNew: false,
-      type: 'GEOIP',
-      payload: 'cn',
-      target: 'DIRECT',
-    );
-    await tester.tap(find.text('删除'));
+  testWidgets('MATCH 不需要匹配内容，点遮罩直接保存', (tester) async {
+    RuleDraft? saved;
+    await pumpHost(tester, (context) async {
+      saved = await showRuleEditDialog(
+        context,
+        initialType: 'MATCH',
+        targets: const ['DIRECT', 'DEFAULT'],
+        isNew: false,
+      );
+    });
+    await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    expect(result(), 'delete');
-  });
 
-  testWidgets('MATCH 不需要匹配内容', (tester) async {
-    final result = await _open(
-      tester,
-      isNew: false,
-      type: 'MATCH',
-      target: 'DIRECT',
-    );
     expect(find.text('匹配内容'), findsNothing);
-    await tester.tap(find.text('保存'));
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
-    final draft = result() as RuleDraft;
-    expect(draft.type, 'MATCH');
-    expect(draft.payload, isEmpty);
+
+    expect(saved, isNotNull);
+    expect(saved!.type, 'MATCH');
+    expect(saved!.payload, '');
+    expect(saved!.target, 'DEFAULT');
   });
 
-  testWidgets('编辑规则：高级内置默认折叠，展开后带说明并进目标下拉', (tester) async {
-    await _open(
-      tester,
-      isNew: false,
-      type: 'DOMAIN-SUFFIX',
-      payload: 'a.com',
-      target: 'DIRECT',
-      otherBuiltins: const ['PASS', 'GLOBAL'],
-    );
-    // 目标不再是下拉：点字段打开统一选择面板。
-    expect(find.text('高级内置（2）'), findsNothing);
-    await tester.tap(find.byType(TargetSelectorField));
+  testWidgets('编辑规则：高级内置默认折叠，展开后四个都在', (tester) async {
+    await pumpHost(tester, (context) async {
+      await showRuleEditDialog(
+        context,
+        initialType: 'DOMAIN-SUFFIX',
+        initialPayload: 'google.com',
+        targets: const ['DIRECT', 'DEFAULT'],
+        otherBuiltins: const ['REJECT-DROP', 'PASS', 'COMPATIBLE', 'GLOBAL'],
+        isNew: false,
+      );
+    });
+    await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    expect(find.text('PASS'), findsNothing);
 
-    await tester.tap(find.text('高级内置（2）'));
+    expect(find.text('高级内置（不常用）（4）'), findsNothing);
+    await tester.tap(find.text('目标（策略 / 组）'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('高级内置（不常用）（4）'), findsOneWidget);
+    expect(find.text('REJECT-DROP'), findsNothing);
+
+    await tester.tap(find.text('高级内置（不常用）（4）'));
     await tester.pumpAndSettle();
     expect(find.text('收起高级内置'), findsOneWidget);
+    expect(find.text('REJECT-DROP'), findsOneWidget);
     expect(find.text('PASS'), findsOneWidget);
+    // 折叠区在可滚动列表里，后两条需要滚出来。
+    await tester.drag(find.byType(ListView).last, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    expect(find.text('COMPATIBLE'), findsOneWidget);
     expect(find.text('GLOBAL'), findsOneWidget);
-    expect(find.text('跳过本条，继续匹配下一条'), findsOneWidget);
-    expect(find.text('全局出口组'), findsOneWidget);
-    // 系统策略标出来源。
-    expect(find.text('系统策略'), findsWidgets);
+
+    // 关掉目标面板，再点遮罩关掉规则弹窗。
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
   });
 
-  testWidgets('新增规则：不渲染高级内置折叠区', (tester) async {
-    await _open(tester, otherBuiltins: const ['PASS', 'GLOBAL']);
-    await tester.tap(find.byType(TargetSelectorField));
+  testWidgets('新增规则不出现高级内置', (tester) async {
+    await pumpHost(tester, (context) async {
+      await showRuleEditDialog(
+        context,
+        targets: const ['DIRECT', 'DEFAULT'],
+        otherBuiltins: const ['REJECT-DROP', 'PASS'],
+        isNew: true,
+      );
+    });
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('目标（策略 / 组）'));
     await tester.pumpAndSettle();
     expect(find.textContaining('高级内置'), findsNothing);
-    expect(find.text('PASS'), findsNothing);
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
   });
 
-  testWidgets('系统策略的目标显示为「系统策略」', (tester) async {
-    await _open(tester, target: 'DIRECT');
-    await tester.tap(find.byType(TargetSelectorField));
+  testWidgets('目标包含 DEFAULT 时默认目标为 DEFAULT', (tester) async {
+    await pumpHost(tester, (context) async {
+      await showRuleEditDialog(
+        context,
+        targets: const ['PROXY', 'DEFAULT'],
+        isNew: true,
+      );
+    });
+    await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    expect(find.text('系统策略'), findsWidgets);
+
+    expect(find.text('DEFAULT'), findsOneWidget);
+    expect(find.text('PROXY'), findsNothing);
   });
 }

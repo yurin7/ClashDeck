@@ -7,6 +7,7 @@ import '../fields.dart';
 import '../sheets/picker_sheet.dart';
 import '../theme.dart';
 import 'select_sheet.dart';
+import './app_ink.dart';
 
 /// 所有「目标组」输入的唯一组件：点开 = 选择面板（分类 + 胶囊 + 高亮行）。
 ///
@@ -56,7 +57,7 @@ class TargetSelectorField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final showEmpty = value.isEmpty && emptyLabel != null;
-    return InkWell(
+    return AppInkWell(
       borderRadius: BorderRadius.circular(Radiuses.md),
       onTap: enabled && onChanged != null ? () => _open(context) : null,
       child: InputDecorator(
@@ -144,38 +145,74 @@ class _TargetPickerSheetState extends State<_TargetPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final advanced = widget.otherOptions;
     final primary = [
       for (final name in widget.options)
-        if (name.isNotEmpty && !widget.otherOptions.contains(name))
-          PickerSheetRow(
-            searchText: name,
-            title: _chip(name),
-            selected: name == widget.current,
-            onTap: () => Navigator.of(context).pop(name),
-          ),
+        if (name.isNotEmpty && !advanced.contains(name)) name,
     ];
-    final rows = <PickerSheetRow>[
-      if (widget.emptyLabel != null)
-        PickerSheetRow(
-          searchText: widget.emptyLabel!,
-          title: Text(widget.emptyLabel!, style: hintStyle(context)),
-          selected: widget.current.isEmpty,
-          onTap: () => Navigator.of(context).pop(''),
-        ),
-      ...primary,
-      if (_showAdvanced)
-        for (final name in widget.otherOptions)
-          PickerSheetRow(
-            searchText: name,
-            title: _chip(name),
-            selected: name == widget.current,
-            onTap: () => Navigator.of(context).pop(name),
-          ),
+    final groups = [
+      for (final name in primary)
+        if (!Profile.systemPolicyTargets.contains(name)) name,
     ];
+    final policies = [
+      for (final name in primary)
+        if (Profile.systemPolicyTargets.contains(name)) name,
+    ];
+
+    PickerSheetRow row(String name) => PickerSheetRow(
+      searchText: name,
+      title: _chip(name),
+      selected: name == widget.current,
+      onTap: () => Navigator.of(context).pop(name),
+    );
+
     return PickerSheetScaffold(
       searchHint: '搜索目标组或节点',
       toolbar: false,
-      sections: [PickerSheetSection(rows: rows)],
+      sections: [
+        if (widget.emptyLabel != null)
+          PickerSheetSection(
+            rows: [
+              PickerSheetRow(
+                searchText: widget.emptyLabel!,
+                title: Text(widget.emptyLabel!, style: hintStyle(context)),
+                selected: widget.current.isEmpty,
+                onTap: () => Navigator.of(context).pop(''),
+              ),
+            ],
+          ),
+        // 顺序固定：策略组 -> 系统策略 -> 高级内置（折叠头在行之上）。
+        if (groups.isNotEmpty)
+          PickerSheetSection(
+            label: '策略组',
+            rows: [for (final name in groups) row(name)],
+          ),
+        if (policies.isNotEmpty)
+          PickerSheetSection(
+            label: '系统策略',
+            rows: [for (final name in policies) row(name)],
+          ),
+        if (advanced.isNotEmpty)
+          PickerSheetSection(
+            header: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
+                icon: Icon(
+                  _showAdvanced ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                ),
+                label: Text(
+                  _showAdvanced ? '收起高级内置' : '高级内置（不常用）（${advanced.length}）',
+                ),
+              ),
+            ),
+            rows: [
+              if (_showAdvanced)
+                for (final name in advanced) row(name),
+            ],
+          ),
+      ],
       selectedCount: widget.current.isEmpty ? 0 : 1,
       onSelectAll: () {},
       onInvert: () {},
@@ -183,19 +220,6 @@ class _TargetPickerSheetState extends State<_TargetPickerSheet> {
       emptyHint: '没有匹配的目标',
       footer: Row(
         children: [
-          if (widget.otherOptions.isNotEmpty)
-            TextButton.icon(
-              onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
-              icon: Icon(
-                _showAdvanced ? Icons.expand_less : Icons.expand_more,
-                size: 18,
-              ),
-              label: Text(
-                _showAdvanced
-                    ? '收起高级内置'
-                    : '高级内置（${widget.otherOptions.length}）',
-              ),
-            ),
           const Spacer(),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),

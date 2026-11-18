@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
+import './app_ink.dart';
 
 /// 可选行：整行点击切换，选中态 = 高亮底 + 描边 + 行尾 ✓。
 ///
@@ -54,7 +55,7 @@ class SelectableTile extends StatelessWidget {
           ),
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
+        child: AppInkWell(
           onTap: enabled ? onTap : null,
           child: Opacity(
             opacity: enabled ? 1 : 0.55,

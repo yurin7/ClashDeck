@@ -71,7 +71,7 @@ void main() {
         .getSize(find.byKey(const ValueKey('edit-dialog')))
         .width;
     final ruleFieldHeight = tester.getSize(find.byType(TextField).first).height;
-    await tester.tap(find.text('取消'));
+    await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
 
     final expected = dialogWidthOf(tester.element(find.byType(RulesTab)));

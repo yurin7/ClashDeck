@@ -9,8 +9,11 @@ import '../rule_edit_dialog.dart';
 import '../rule_picker_sheet.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../widgets/target_selector_field.dart';
 import '../chips.dart';
 import 'rule_row_card.dart';
+import '../widgets/app_ink.dart';
+import '../widgets/edit_dialog.dart';
 
 /// 组卡与系统策略卡共用的「规则区块」。
 ///
@@ -48,6 +51,9 @@ class GroupRulesBlock extends StatefulWidget {
 
 class _GroupRulesBlockState extends State<GroupRulesBlock> {
   bool _expanded = false;
+
+  /// 当前左滑露出「删除」的规则 index。
+  int? _swipedRule;
 
   List<RuleEntry> get _rules => [
     for (final rule in widget.state.profile.rules)
@@ -91,33 +97,48 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
     );
   }
 
+  /// 行尾换组图标：直接开目标选择面板，选完即改。
+  Future<void> _moveRule(RuleEntry rule) async {
+    final targets = ruleTargetsFor(
+      widget.state.profile,
+      preferred: rule.target,
+    ).primary;
+    final picked = await showTargetPickerSheet(
+      context,
+      title: '换到别的组',
+      subtitle: rule.raw,
+      options: targets,
+      current: rule.target,
+    );
+    if (picked == null || picked == rule.target || !mounted) return;
+    if (!widget.state.apply(
+      (doc) =>
+          ConfigOps.updateRule(doc, rule.index, ruleWithTarget(rule, picked)),
+    )) {
+      _fail();
+      return;
+    }
+    if (!mounted) return;
+    setState(() {});
+    showToast(context, '已把这条规则挂到「$picked」');
+  }
+
   Future<void> _edit({RuleEntry? initial}) async {
     final targets = ruleTargetsFor(
       widget.state.profile,
       preferred: initial?.target ?? widget.target,
     );
-
-    final result = await showAppDialog<Object>(
+    final draft = await showRuleEditDialog(
       context,
-      builder: (_) => RuleEditDialog(
-        initialType: initial?.type,
-        initialPayload: initial?.payload,
-        initialTarget: initial?.target ?? widget.target,
-        initialNoResolve: initial?.noResolve ?? false,
-        targets: targets.primary,
-        otherBuiltins: targets.otherBuiltins,
-        isNew: initial == null,
-      ),
+      initialType: initial?.type,
+      initialPayload: initial?.payload,
+      initialTarget: initial?.target ?? widget.target,
+      initialNoResolve: initial?.noResolve ?? false,
+      targets: targets.primary,
+      otherBuiltins: targets.otherBuiltins,
+      isNew: initial == null,
     );
-    if (result == null) return;
-
-    if (result == 'delete') {
-      if (initial == null) return;
-      await _delete(initial);
-      return;
-    }
-
-    final draft = result as RuleDraft;
+    if (draft == null || !mounted) return;
     final parts = <String>[
       draft.type,
       if (!kTerminalRuleTypes.contains(draft.type)) draft.payload,
@@ -139,28 +160,12 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
   }
 
   Future<void> _delete(RuleEntry rule) async {
-    final confirmed = await showAppDialog<bool>(
+    final confirmed = await showConfirmDialog(
       context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除这条规则？'),
-        content: Text(
-          '这条规则会从当前配置里移除，删掉后只能重新添加。',
-          style: Theme.of(ctx).textTheme.bodySmall,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除这条规则？',
+      message: '这条规则会从当前配置里移除，删掉后只能重新添加。',
+      confirmLabel: '删除',
+      danger: true,
     );
     if (confirmed != true) return;
     if (!widget.state.deleteRule(rule.index)) {
@@ -179,7 +184,7 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
       children: [
         const SizedBox(height: Insets.md),
         const Hairline(),
-        InkWell(
+        AppInkWell(
           borderRadius: BorderRadius.circular(Radiuses.xs),
           onTap: rules.isEmpty
               ? null
@@ -222,16 +227,32 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
             Padding(
               key: ValueKey('group-rule-${rule.index}'),
               padding: const EdgeInsets.only(bottom: Insets.xs),
-              child: LongPressDraggable<RuleDragData>(
-                data: RuleDragData(rule),
-                feedback: Material(
-                  color: Colors.transparent,
-                  child: SizedBox(width: 240, child: RuleChip(rule: rule)),
-                ),
-                child: RuleChip(
-                  rule: rule,
-                  onTap: () => _edit(initial: rule),
-                  onDelete: () => _delete(rule),
+              child: SlidableRow(
+                open: _swipedRule == rule.index,
+                onOpenChanged: (open) =>
+                    setState(() => _swipedRule = open ? rule.index : null),
+                actionLabel: '删除',
+                onAction: () => _delete(rule),
+                child: LongPressDraggable<RuleDragData>(
+                  data: RuleDragData(rule),
+                  feedback: Material(
+                    color: Colors.transparent,
+                    child: SizedBox(width: 240, child: RuleChip(rule: rule)),
+                  ),
+                  child: RuleChip(
+                    rule: rule,
+                    onTap: () => _edit(initial: rule),
+                    trailing: IconButton(
+                      tooltip: '换到别的组',
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      onPressed: () => _moveRule(rule),
+                      icon: const Icon(Icons.swap_horiz, size: 16),
+                    ),
+                  ),
                 ),
               ),
             ),

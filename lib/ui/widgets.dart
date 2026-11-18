@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
+import './widgets/app_ink.dart';
 
 export 'app_dialog.dart';
 export 'toast.dart';
@@ -64,7 +65,7 @@ class AppCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: (onTap == null && onLongPress == null)
           ? content
-          : InkWell(onTap: onTap, onLongPress: onLongPress, child: content),
+          : AppInkWell(onTap: onTap, onLongPress: onLongPress, child: content),
     );
   }
 }
@@ -216,7 +217,7 @@ class Pill extends StatelessWidget {
       ),
     );
     if (onTap == null) return child;
-    return InkWell(
+    return AppInkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(7),
       child: child,
@@ -524,7 +525,7 @@ class AccentButton extends StatelessWidget {
       width: expand ? double.infinity : null,
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
+        child: AppInkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(Radiuses.md),
           child: child,
@@ -737,7 +738,7 @@ class _SlidableRowState extends State<SlidableRow>
                         width: widget.actionWidth,
                         child: Material(
                           color: scheme.error,
-                          child: InkWell(
+                          child: AppInkWell(
                             onTap: widget.onAction,
                             child: Center(
                               child: Text(

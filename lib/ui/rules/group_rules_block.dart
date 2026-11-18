@@ -16,6 +16,13 @@ import 'rule_row_card.dart';
 ///
 /// 按 `rule.target == target` 反查规则：计数头 + 展开 + 「添加已有规则 /
 /// 新建一条」，行本身复用 [RuleRowCard] 的紧凑模式，点开即编辑。
+/// 拖拽「本组规则」里的胶囊时携带的数据；组卡用 [DragTarget] 接住它。
+class RuleDragData {
+  const RuleDragData(this.rule);
+
+  final RuleEntry rule;
+}
+
 class GroupRulesBlock extends StatefulWidget {
   const GroupRulesBlock({
     super.key,
@@ -215,10 +222,17 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
             Padding(
               key: ValueKey('group-rule-${rule.index}'),
               padding: const EdgeInsets.only(bottom: Insets.xs),
-              child: RuleChip(
-                rule: rule,
-                onTap: () => _edit(initial: rule),
-                onDelete: () => _delete(rule),
+              child: LongPressDraggable<RuleDragData>(
+                data: RuleDragData(rule),
+                feedback: Material(
+                  color: Colors.transparent,
+                  child: SizedBox(width: 240, child: RuleChip(rule: rule)),
+                ),
+                child: RuleChip(
+                  rule: rule,
+                  onTap: () => _edit(initial: rule),
+                  onDelete: () => _delete(rule),
+                ),
               ),
             ),
         ],

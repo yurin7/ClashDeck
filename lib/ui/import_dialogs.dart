@@ -6,7 +6,7 @@ import '../core/yaml/yaml_doc.dart';
 import 'theme.dart';
 import 'fields.dart';
 import 'widgets.dart';
-import 'widgets/target_selector_field.dart';
+import 'widgets/edit_dialog.dart';
 
 /// 「粘贴分享链接」对话框：多行输入，返回原文；取消返回 null。
 Future<String?> showPasteLinksDialog(
@@ -56,168 +56,6 @@ Future<String?> showPasteLinksDialog(
       ],
     ),
   );
-}
-
-/// 「导入规则」对话框的返回值。
-class RuleImportInput {
-  const RuleImportInput({
-    required this.text,
-    required this.group,
-    this.preset = false,
-  });
-
-  /// 规则行 / 配置片段 / 规则集地址。
-  final String text;
-
-  /// 目标组名：留空表示「用规则集自己的名字」（如 direct.txt → direct）。
-  final String group;
-
-  /// 用户点的是「常用规则集」，不是粘贴内容。
-  final bool preset;
-}
-
-/// 「导入规则」对话框：粘贴规则行 / 配置片段 / 规则集地址。
-///
-/// 目标组用统一的下拉控件选：默认「用规则集名称」（direct.txt → direct），
-/// 也可以直接挑一个已有组，或者选「自定义…」现写一个名字。弹窗只留一行提示，
-/// 具体怎么解析交给导入逻辑，不再在对话框里堆说明。
-Future<RuleImportInput?> showRuleImportDialog(
-  BuildContext context, {
-  String? initial,
-  List<String> groups = const [],
-}) {
-  return showAppDialog<RuleImportInput>(
-    context,
-    width: dialogWidthOf(context),
-    builder: (ctx) => _RuleImportDialog(initial: initial, groups: groups),
-  );
-}
-
-class _RuleImportDialog extends StatefulWidget {
-  const _RuleImportDialog({this.initial, required this.groups});
-
-  final String? initial;
-  final List<String> groups;
-
-  @override
-  State<_RuleImportDialog> createState() => _RuleImportDialogState();
-}
-
-class _RuleImportDialogState extends State<_RuleImportDialog> {
-  late final TextEditingController _ctrl = TextEditingController(
-    text: widget.initial ?? '',
-  );
-  final TextEditingController _customCtrl = TextEditingController();
-  String _group = '';
-
-  bool _isCustom = false;
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _customCtrl.dispose();
-    super.dispose();
-  }
-
-  String get _groupValue => _isCustom ? _customCtrl.text.trim() : _group;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
-
-    return AlertDialog(
-      title: Row(
-        children: [
-          const Expanded(child: Text('导入规则')),
-          IconButton(
-            tooltip: '常用规则集',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => Navigator.pop(
-              context,
-              const RuleImportInput(text: '', group: '', preset: true),
-            ),
-            icon: const Icon(Icons.auto_awesome, size: 20),
-          ),
-        ],
-      ),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppTextField(
-                controller: _ctrl,
-                minLines: 5,
-                maxLines: 8,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                label: '规则行、配置片段，或规则集地址',
-                hint: 'DOMAIN-SUFFIX,google.com,PROXY\nhttps://…/direct.txt',
-                helper: '支持规则行、YAML 片段、规则集 URL',
-                alignLabelWithHint: true,
-              ),
-              const SizedBox(height: 12),
-              TargetSelectorField(
-                value: _isCustom ? _customCtrl.text.trim() : _group,
-                label: '目标组',
-                emptyLabel: '（默认）用规则集名称',
-                options: <String>{
-                  '',
-                  for (final name in widget.groups) name,
-                  if (_isCustom && _customCtrl.text.trim().isNotEmpty)
-                    _customCtrl.text.trim(),
-                }.toList(),
-                enabled: !_isCustom,
-                onChanged: (value) => setState(() => _group = value),
-              ),
-              if (_isCustom) ...[
-                const SizedBox(height: 8),
-                AppTextField(
-                  controller: _customCtrl,
-                  autofocus: true,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                  label: '自定义组名',
-                  onChanged: (_) => setState(() {}),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => setState(() {
-                    _isCustom = !_isCustom;
-                    _customCtrl.clear();
-                  }),
-                  child: Text(
-                    _isCustom ? '用已有组' : '自定义组名',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.primary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            RuleImportInput(text: _ctrl.text, group: _groupValue),
-          ),
-          child: const Text('导入'),
-        ),
-      ],
-    );
-  }
 }
 
 /// 「从订阅链接导入」对话框的返回值。
@@ -311,120 +149,112 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final result = _result;
-    return AlertDialog(
-      title: const Text('从订阅链接导入'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AppTextField(
-              controller: _url,
-              keyboardType: TextInputType.url,
-              enabled: !_busy,
-              label: '订阅地址',
-              hint: 'https://example.com/api/v1/client/subscribe?token=…',
-              alignLabelWithHint: true,
+    return EditDialog(
+      title: '从订阅链接导入',
+      confirmLabel: _result == null ? '拉取' : '导入',
+      onConfirm: () {
+        final result = _result;
+        if (result == null) {
+          _fetch();
+          return;
+        }
+        Navigator.pop(
+          context,
+          SubscriptionInput(url: _url.text.trim(), result: result),
+        );
+      },
+      onCancel: () => Navigator.pop(context),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            controller: _url,
+            keyboardType: TextInputType.url,
+            enabled: !_busy,
+            label: '订阅地址',
+            hint: 'https://example.com/api/v1/client/subscribe?token=…',
+            alignLabelWithHint: true,
+          ),
+          const SizedBox(height: Insets.md),
+          if (_busy)
+            const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text('正在拉取…'),
+              ],
             ),
-            const SizedBox(height: Insets.md),
-            if (_busy)
-              const Row(
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 10),
-                  Text('正在拉取…'),
-                ],
+          if (_error != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(Insets.md),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(Radiuses.sm),
               ),
-            if (_error != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(Insets.md),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(Radiuses.sm),
-                ),
-                child: Text(
-                  _error!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
+              child: Text(
+                _error!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
                 ),
               ),
-            if (result != null) ...[
-              Row(
-                children: [
-                  Pill(
-                    label: '${result.count} 个节点',
-                    icon: Icons.check,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: Insets.sm),
-                  Expanded(
-                    child: Text(
-                      result.title ?? '订阅内容已解析',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+            ),
+          if (result != null) ...[
+            Row(
+              children: [
+                Pill(
+                  label: '${result.count} 个节点',
+                  icon: Icons.check,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: Insets.sm),
+                Expanded(
+                  child: Text(
+                    result.title ?? '订阅内容已解析',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ],
-              ),
-              if (result.usage != null && result.usage!.label.isNotEmpty) ...[
-                const SizedBox(height: Insets.sm),
-                Text(result.usage!.label, style: theme.textTheme.bodySmall),
-              ],
-              if (result.yamlConfig != null) ...[
-                const SizedBox(height: Insets.sm),
-                Text(
-                  '这是一份完整配置，导入时只取其中的 proxies（组和规则不动）。',
-                  style: theme.textTheme.bodySmall,
                 ),
               ],
+            ),
+            if (result.usage != null && result.usage!.label.isNotEmpty) ...[
+              const SizedBox(height: Insets.sm),
+              Text(result.usage!.label, style: theme.textTheme.bodySmall),
+            ],
+            if (result.yamlConfig != null) ...[
+              const SizedBox(height: Insets.sm),
+              Text(
+                '这是一份完整配置，导入时只取其中的 proxies（组和规则不动）。',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ],
-        ),
+          if (widget.allowSaveOnly)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _busy
+                    ? null
+                    : () {
+                        final url = _url.text.trim();
+                        if (url.isEmpty) {
+                          setState(() => _error = '先填订阅地址');
+                          return;
+                        }
+                        Navigator.pop(context, SubscriptionInput(url: url));
+                      },
+                child: const Text('只保存地址'),
+              ),
+            ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        if (widget.allowSaveOnly)
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () {
-                    final url = _url.text.trim();
-                    if (url.isEmpty) {
-                      setState(() => _error = '先填订阅地址');
-                      return;
-                    }
-                    Navigator.pop(context, SubscriptionInput(url: url));
-                  },
-            child: const Text('只保存地址'),
-          ),
-        FilledButton(
-          onPressed: _busy
-              ? null
-              : () {
-                  final result = _result;
-                  if (result == null) {
-                    _fetch();
-                    return;
-                  }
-                  Navigator.pop(
-                    context,
-                    SubscriptionInput(url: _url.text.trim(), result: result),
-                  );
-                },
-          child: Text(_result == null ? '拉取' : '导入'),
-        ),
-      ],
     );
   }
 }

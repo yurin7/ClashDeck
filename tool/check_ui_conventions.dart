@@ -34,6 +34,9 @@ class Violation implements Comparable<Violation> {
 }
 
 /// `AlertDialog(` 允许出现的共享封装文件。
+///
+/// allowlist = 共享封装文件（`lib/ui/app_dialog.dart`、`lib/ui/widgets/edit_dialog.dart`、
+/// `lib/ui/sheets.dart`、`lib/ui/widgets/selectable_tile.dart`），业务文件不得加入。
 const Set<String> alertAllowlist = <String>{
   'lib/ui/app_dialog.dart',
   'lib/ui/widgets/edit_dialog.dart',

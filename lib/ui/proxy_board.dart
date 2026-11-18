@@ -11,6 +11,7 @@ import 'import_dialogs.dart';
 import 'dropdown.dart';
 import 'fields.dart';
 import 'rules/group_rules_block.dart';
+import 'rule_picker_sheet.dart';
 import 'chips.dart';
 import 'sheets.dart';
 import 'sheets/node_picker_sheet.dart';
@@ -54,6 +55,9 @@ class ProxyBoard extends StatefulWidget {
 
 class _ProxyBoardState extends State<ProxyBoard> {
   EditorState get s => widget.state;
+
+  /// 当前左滑露出「删除」的组名。
+  String? _swipedGroup;
 
   void _fail() {
     final msg = s.lastError;
@@ -402,6 +406,19 @@ class _ProxyBoardState extends State<ProxyBoard> {
     if (ok != true) return;
     if (!s.apply((d) => ConfigOps.deleteGroup(d, group.name))) _fail();
   }
+
+  /// 把一条规则改挂到 [target]（「本组规则」拖到组卡时用）。
+  Future<void> _retargetRule(RuleEntry rule, String target) async {
+    if (rule.target == target) return;
+    final ok = s.apply(
+      (d) => ConfigOps.updateRule(d, rule.index, ruleWithTarget(rule, target)),
+    );
+    if (!ok) {
+      _fail();
+      return;
+    }
+    _toast('已把这条规则挂到「$target」');
+  }
   // ---------------------------------------------------------------- UI
 
   @override
@@ -471,50 +488,58 @@ class _ProxyBoardState extends State<ProxyBoard> {
         for (final group in groups)
           Padding(
             padding: const EdgeInsets.only(top: Insets.md),
-            child: _GroupCard(
-              group: group,
-              isAuto: group.name == kAutoGroupName,
-              state: s,
-              onOpenNode: _editNode,
-              onMove: (n, from) => _moveDialog(n, from),
-              onDeleteNode: _deleteNode,
-              onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
-              selectedName: group.name == kAutoGroupName
-                  ? null
-                  : selection[group.name],
-              onSelectNode: group.name == kAutoGroupName
-                  ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
-                  : widget.runtime == null && widget.onGroupSelection == null
-                  ? null
-                  : (n) => _selectNodeForGroup(group.name, n),
-              onEdit: () => _editGroup(group),
-              onDelete: () => _deleteGroup(group),
-              onAddMember: () async {
-                final picked = await _pickMembers(profile, group);
-                if (picked == null || picked.isEmpty) return;
-                var added = 0;
-                for (final name in picked) {
-                  if (s.addGroupMember(group.name, name)) added++;
-                }
-                if (added == 0) {
-                  _fail();
-                  return;
-                }
-                // 组头计数直接读 state，刷新一次就能看到新成员。
-                if (mounted) {
-                  setState(() {});
-                  _toast('已加入 $added 个');
-                }
-              },
-              onDrop: (data) {
-                final ok = data.fromGroup == null
-                    ? s.addGroupMember(group.name, data.node)
-                    : s.moveMember(data.node, data.fromGroup!, group.name);
-                if (!ok) _fail();
-              },
-              onRemove: (name) {
-                if (!s.removeGroupMember(group.name, name)) _fail();
-              },
+            child: SlidableRow(
+              open: _swipedGroup == group.name,
+              onOpenChanged: (open) =>
+                  setState(() => _swipedGroup = open ? group.name : null),
+              actionLabel: '删除',
+              onAction: () => _deleteGroup(group),
+              child: _GroupCard(
+                group: group,
+                isAuto: group.name == kAutoGroupName,
+                state: s,
+                onOpenNode: _editNode,
+                onMove: (n, from) => _moveDialog(n, from),
+                onDeleteNode: _deleteNode,
+                onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
+                selectedName: group.name == kAutoGroupName
+                    ? null
+                    : selection[group.name],
+                onSelectNode: group.name == kAutoGroupName
+                    ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
+                    : widget.runtime == null && widget.onGroupSelection == null
+                    ? null
+                    : (n) => _selectNodeForGroup(group.name, n),
+                onEdit: () => _editGroup(group),
+                onDelete: () => _deleteGroup(group),
+                onAddMember: () async {
+                  final picked = await _pickMembers(profile, group);
+                  if (picked == null || picked.isEmpty) return;
+                  var added = 0;
+                  for (final name in picked) {
+                    if (s.addGroupMember(group.name, name)) added++;
+                  }
+                  if (added == 0) {
+                    _fail();
+                    return;
+                  }
+                  // 组头计数直接读 state，刷新一次就能看到新成员。
+                  if (mounted) {
+                    setState(() {});
+                    _toast('已加入 $added 个');
+                  }
+                },
+                onDrop: (data) {
+                  final ok = data.fromGroup == null
+                      ? s.addGroupMember(group.name, data.node)
+                      : s.moveMember(data.node, data.fromGroup!, group.name);
+                  if (!ok) _fail();
+                },
+                onRemove: (name) {
+                  if (!s.removeGroupMember(group.name, name)) _fail();
+                },
+                onDropRule: (rule) => _retargetRule(rule, group.name),
+              ),
             ),
           ),
         // 系统策略：不进 YAML 建同名组，只在这里只读展示，但可以挂规则。
@@ -723,6 +748,7 @@ class _GroupCard extends StatelessWidget {
     required this.onAddMember,
     required this.onDrop,
     required this.onRemove,
+    this.onDropRule,
     this.onMenuNode,
     this.selectedName,
     this.onSelectNode,
@@ -753,14 +779,29 @@ class _GroupCard extends StatelessWidget {
   final void Function(DragNodeData) onDrop;
   final void Function(String) onRemove;
 
+  /// 从「本组规则」拖过来的规则：直接把 target 改成这个组。
+  final void Function(RuleEntry)? onDropRule;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final profile = state.profile;
-    return DragTarget<DragNodeData>(
-      onWillAcceptWithDetails: (d) => d.data.fromGroup != group.name,
-      onAcceptWithDetails: (d) => onDrop(d.data),
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (d) {
+        final data = d.data;
+        if (data is DragNodeData) return data.fromGroup != group.name;
+        if (data is RuleDragData) return data.rule.target != group.name;
+        return false;
+      },
+      onAcceptWithDetails: (d) {
+        final data = d.data;
+        if (data is DragNodeData) {
+          onDrop(data);
+        } else if (data is RuleDragData) {
+          onDropRule?.call(data.rule);
+        }
+      },
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
         return AppCard(
@@ -861,20 +902,10 @@ class _GroupCard extends StatelessWidget {
                       icon: const Icon(Icons.add_circle_outline, size: 20),
                     ),
                   if (!isAuto)
-                    PopupMenuButton<String>(
+                    IconButton(
                       tooltip: '组设置',
-                      onSelected: (v) {
-                        switch (v) {
-                          case 'edit':
-                            onEdit();
-                          case 'delete':
-                            onDelete();
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('编辑组')),
-                        PopupMenuItem(value: 'delete', child: Text('删除组')),
-                      ],
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.more_vert, size: 20),
                     ),
                 ],
               ),
@@ -1160,7 +1191,6 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
   late final TextEditingController _urlCtrl;
   late final TextEditingController _intervalCtrl;
   late String _type;
-  late bool _hidden;
 
   @override
   void initState() {
@@ -1172,7 +1202,6 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
       text: '${group.raw['interval'] ?? ''}',
     );
     _type = group.type;
-    _hidden = group.raw['hidden'] == true;
   }
 
   @override
@@ -1219,12 +1248,6 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
               label: '间隔（秒）',
             ),
           ],
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('在面板中隐藏'),
-            value: _hidden,
-            onChanged: (v) => setState(() => _hidden = v),
-          ),
         ],
       ),
       onConfirm: () => Navigator.pop(
@@ -1234,7 +1257,7 @@ class _EditGroupDialogState extends State<_EditGroupDialog> {
           type: _type,
           url: _urlCtrl.text,
           interval: _intervalCtrl.text,
-          hidden: _hidden,
+          hidden: widget.group.raw['hidden'] == true,
         ),
       ),
       onCancel: () => Navigator.pop(context),

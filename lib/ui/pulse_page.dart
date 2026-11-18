@@ -372,7 +372,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     ];
     return Scaffold(
       // 叠加层：下层主界面仍可见（被 barrier 压暗），这里不能铺不透明底色。
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF05060A),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd: (details) {
@@ -427,7 +427,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
                   Insets.lg,
                   Insets.sm,
                   Insets.lg,
-                  Insets.xl,
+                  56,
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -533,6 +533,8 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
       for (final name in _results.keys)
         if (_results[name] == null && _allNodes.contains(name)) name,
     ];
+    final hasCache = _lastAt != null || _results.isNotEmpty;
+    final showList = running || hasCache;
     final maxMs = measured.isEmpty
         ? 1
         : math.max(1, measured.map((e) => e.value!).reduce(math.max));
@@ -544,62 +546,64 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
             children: [
               const Expanded(child: SectionTitle(title: '节点测速')),
               if (_lastAt != null)
-                Text('上次测速 · ${_stamp(_lastAt!)}', style: hintStyle(context)),
+                Text('上次结果 · ${_stamp(_lastAt!)}', style: hintStyle(context)),
             ],
           ),
-          const SizedBox(height: Insets.sm),
-          Row(
-            children: [
-              AppInkWell(
-                onTap: _measuring ? null : _pickGroup,
-                borderRadius: BorderRadius.circular(Radiuses.sm),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.filter_alt_outlined,
-                        size: 15,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _groupFilter ?? '全部节点',
-                        style: monoStyle(context, size: 11),
-                      ),
-                      Icon(
-                        Icons.expand_more,
-                        size: 15,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ],
+          if (showList) ...[
+            const SizedBox(height: Insets.sm),
+            Row(
+              children: [
+                AppInkWell(
+                  onTap: _measuring ? null : _pickGroup,
+                  borderRadius: BorderRadius.circular(Radiuses.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.filter_alt_outlined,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _groupFilter ?? '全部节点',
+                          style: monoStyle(context, size: 11),
+                        ),
+                        Icon(
+                          Icons.expand_more,
+                          size: 15,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _measuring
-                    ? null
-                    : () {
-                        setState(() {
-                          if (selected.length == visible.length) {
-                            _selected.removeAll(visible);
-                          } else {
-                            _selected.addAll(visible);
-                          }
-                        });
-                      },
-                child: Text(
-                  selected.length == visible.length
-                      ? '全选 ${visible.length} 个'
-                      : '已选 ${selected.length} 个',
+                const Spacer(),
+                TextButton(
+                  onPressed: _measuring
+                      ? null
+                      : () {
+                          setState(() {
+                            if (selected.length == visible.length) {
+                              _selected.removeAll(visible);
+                            } else {
+                              _selected.addAll(visible);
+                            }
+                          });
+                        },
+                  child: Text(
+                    selected.length == visible.length
+                        ? '全选 ${visible.length} 个'
+                        : '已选 ${selected.length} 个',
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           const SizedBox(height: Insets.sm),
           if (!running)
             Padding(
@@ -764,42 +768,19 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: Insets.sm),
-          Row(
-            children: [
-              Expanded(
-                child: _Kv(label: '内核状态', value: phaseText, color: color),
-              ),
-              Expanded(
-                child: _Kv(label: '运行时长', value: _uptimeText()),
-              ),
-            ],
+          _Kv(label: '内核状态', value: phaseText, color: color),
+          _Kv(label: '运行时长', value: _uptimeText()),
+          _Kv(
+            label: '连接数',
+            value: _connections?.toString() ?? '—',
+            leading: _BreathingDot(
+              animation: _radar,
+              enabled: phase == RuntimePhase.running,
+              color: scheme.primary,
+            ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: _Kv(
-                  label: '连接数',
-                  value: _connections?.toString() ?? '—',
-                  leading: _BreathingDot(
-                    animation: _radar,
-                    enabled: phase == RuntimePhase.running,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: _Kv(label: '当前配置', value: widget.profileName),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _Kv(label: '全局出口', value: exit),
-              ),
-              const Spacer(),
-            ],
-          ),
+          _Kv(label: '当前配置', value: widget.profileName),
+          _Kv(label: '全局出口', value: exit),
           if (phase == RuntimePhase.error && runtime?.lastError != null)
             Padding(
               padding: const EdgeInsets.only(top: Insets.sm),
@@ -1061,8 +1042,8 @@ class _BackdropPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0x1A05060A), Color(0x4705060A), Color(0x6105060A)],
-        stops: [0.0, 0.55, 1.0],
+        colors: [Color(0xB405060A), Color(0xE605060A), Color(0xFA05060A)],
+        stops: [0.0, 0.45, 1.0],
       ).createShader(rect);
     canvas.drawRect(rect, scrim);
 
@@ -1506,19 +1487,28 @@ class _Kv extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 5)],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+          SizedBox(
+            width: 72,
+            child: Row(
+              children: [
+                if (leading != null) ...[leading!, const SizedBox(width: 5)],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 6),
-          Flexible(
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
               value,
               maxLines: 1,

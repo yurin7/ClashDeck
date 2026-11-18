@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('pulseRoute 是透明叠加层，点页面外边距关闭', (tester) async {
+  testWidgets('pulseRoute 铺满整屏，下层 UI 不可见，返回可关闭', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -32,13 +32,12 @@ void main() {
     expect(find.text('pulse'), findsOneWidget);
 
     final route = ModalRoute.of(tester.element(find.text('pulse')))!;
-    expect(route.opaque, isFalse);
-    expect(route.barrierDismissible, isTrue);
+    expect(route.opaque, isTrue);
     expect(route.barrierColor, const Color(0x99000000));
     expect(find.byType(ModalBarrier), findsWidgets);
 
-    // 点遮罩（页面中央以外）收起叠加层，下层主界面仍在。
-    await tester.tapAt(const Offset(6, 6));
+    // 页面占满整屏，因此不靠点遮罩关闭；用返回 / 右滑 / 下滑收起。
+    Navigator.of(tester.element(find.text('pulse'))).pop();
     await tester.pumpAndSettle();
     expect(find.text('pulse'), findsNothing);
     expect(find.text('open'), findsOneWidget);

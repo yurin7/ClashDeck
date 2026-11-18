@@ -6,7 +6,7 @@ import 'motion.dart';
 /// （被 barrier 压暗），形成一层浮起来的负一屏，而不是又一个页面。
 Route<T> pulseRoute<T>(WidgetBuilder builder) {
   return PageRouteBuilder<T>(
-    opaque: false,
+    opaque: true,
     barrierColor: const Color(0x99000000),
     barrierDismissible: true,
     barrierLabel: '关闭 Pulse',

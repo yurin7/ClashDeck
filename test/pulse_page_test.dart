@@ -101,6 +101,9 @@ void main() {
     expect(find.text('运行状态'), findsOneWidget);
     expect(find.text('当前配置'), findsOneWidget);
     expect(find.text('demo'), findsWidgets);
+    // 内核未运行且没有缓存：不给选择器/节点列表，只留说明和启动按钮。
+    expect(find.textContaining('全选'), findsNothing);
+    expect(find.text('HK-01'), findsNothing);
   });
 
   testWidgets('缓存里的延迟按升序排列，超时排在最后', (tester) async {
@@ -116,7 +119,8 @@ void main() {
 
     expect(find.text('320 ms'), findsOneWidget);
     expect(find.text('超时'), findsOneWidget);
-    expect(find.textContaining('上次测速'), findsOneWidget);
+    expect(find.textContaining('上次结果'), findsOneWidget);
+    expect(find.text('全选 2 个'), findsOneWidget);
 
     final slow = tester.getTopLeft(find.text('320 ms')).dy;
     final timeout = tester.getTopLeft(find.text('超时')).dy;

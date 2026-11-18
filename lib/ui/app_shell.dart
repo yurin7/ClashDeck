@@ -417,6 +417,8 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  bool _pulseOpen = false;
+
   Future<void> _openPulse() async {
     final settings = _settings;
     final fileName = _activeFileName;
@@ -426,6 +428,7 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     final profile = Profile.from(settings.doc);
+    setState(() => _pulseOpen = true);
     await Navigator.of(context).push(
       pulseRoute<void>(
         (_) => PulsePage(
@@ -447,6 +450,7 @@ class _AppShellState extends State<AppShell> {
     );
     if (!mounted) return;
     setState(() {
+      _pulseOpen = false;
       _latencyCache = prefs.latenciesOf(fileName);
     });
   }
@@ -612,72 +616,79 @@ class _AppShellState extends State<AppShell> {
       );
     }
     return Scaffold(
+      backgroundColor: _pulseOpen ? const Color(0xFF05060A) : null,
       body: Stack(
         children: [
           Positioned.fill(
-            child: PageView(
-              controller: _pager,
-              onPageChanged: (i) => setState(() => _index = i),
-              children: [
-                _KeepAlivePage(
-                  child: SafeArea(
-                    bottom: false,
-                    child: OverviewPage(
+            child: Visibility(
+              visible: !_pulseOpen,
+              child: PageView(
+                controller: _pager,
+                onPageChanged: (i) => setState(() => _index = i),
+                children: [
+                  _KeepAlivePage(
+                    child: SafeArea(
+                      bottom: false,
+                      child: OverviewPage(
+                        runtime: _runtime,
+                        settings: _settings,
+                        activeProfile: _activeFileName,
+                        profileName: _activeName,
+                        profileCount: _profiles.length,
+                        onOpenEditor: _openEditor,
+                        onPickProfile: _pickProfile,
+                        onRefreshProfiles: _reloadProfiles,
+                        onOpenPulse: _openPulse,
+                        bottomInset: _bottomInset,
+                      ),
+                    ),
+                  ),
+                  _KeepAlivePage(
+                    child: HomePage(
+                      activeFileName: _activeFileName,
+                      switchingFileName: _switchingFileName,
+                      onSetActive: _setActive,
+                      onProfilesChanged: _reloadProfiles,
+                      onDeleteProfile: _deleteProfile,
                       runtime: _runtime,
-                      settings: _settings,
-                      activeProfile: _activeFileName,
-                      profileName: _activeName,
-                      profileCount: _profiles.length,
-                      onOpenEditor: _openEditor,
-                      onPickProfile: _pickProfile,
-                      onRefreshProfiles: _reloadProfiles,
-                      onOpenPulse: _openPulse,
+                      autoSave: _settings?.autoSave ?? false,
                       bottomInset: _bottomInset,
                     ),
                   ),
-                ),
-                _KeepAlivePage(
-                  child: HomePage(
-                    activeFileName: _activeFileName,
-                    switchingFileName: _switchingFileName,
-                    onSetActive: _setActive,
-                    onProfilesChanged: _reloadProfiles,
-                    onDeleteProfile: _deleteProfile,
-                    runtime: _runtime,
-                    autoSave: _settings?.autoSave ?? false,
-                    bottomInset: _bottomInset,
-                  ),
-                ),
-                _KeepAlivePage(
-                  child: SafeArea(
-                    bottom: false,
-                    child: SettingsPage(
-                      settings: _settings,
-                      runtime: _runtime,
-                      lastSubscriptionUpdate: _lastSubscriptionUpdate,
-                      onUpdateSubscription: _updateSubscription,
-                      onImportText: _importText,
-                      onImportUrl: _importUrl,
-                      onOpenSubscription: _openSubscription,
-                      activeName: _profileName(_activeFileName ?? ''),
-                      bottomInset: _bottomInset,
-                      appVersion: _appVersion,
-                      prefs: _prefs,
+                  _KeepAlivePage(
+                    child: SafeArea(
+                      bottom: false,
+                      child: SettingsPage(
+                        settings: _settings,
+                        runtime: _runtime,
+                        lastSubscriptionUpdate: _lastSubscriptionUpdate,
+                        onUpdateSubscription: _updateSubscription,
+                        onImportText: _importText,
+                        onImportUrl: _importUrl,
+                        onOpenSubscription: _openSubscription,
+                        activeName: _profileName(_activeFileName ?? ''),
+                        bottomInset: _bottomInset,
+                        appVersion: _appVersion,
+                        prefs: _prefs,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           Positioned(
             left: Insets.xl,
             right: Insets.xl,
             bottom: Insets.lg,
-            child: _FloatingIsland(
-              height: _islandHeight,
-              index: _index,
-              page: _page,
-              onChanged: (i) => unawaited(_goTo(i)),
+            child: Visibility(
+              visible: !_pulseOpen,
+              child: _FloatingIsland(
+                height: _islandHeight,
+                index: _index,
+                page: _page,
+                onChanged: (i) => unawaited(_goTo(i)),
+              ),
             ),
           ),
         ],

@@ -1,200 +1,61 @@
 # ClashDeck
 
-**Android 上的 mihomo（Clash.Meta）图形客户端：把 YAML 当数据库来编辑。**
+Android 上的 mihomo（Clash.Meta）图形客户端：把 YAML 配置变成可以点按、拖拽的界面，同时保留原文的注释与键顺序。
 
-Clash 系客户端大多只让你旁路改 YAML 文本——加一个 vless 节点、把节点挪进某个策略组、
-调一下规则顺序，都得开编辑器手写，还要记住内核那一堆字段名。ClashDeck 做的是把这件事
-变成点按：
+## 功能
 
-- **可视化加节点**：13 种协议的字段表内建，表单按协议动态生成，TLS / 传输层
-  （ws / grpc / h2 / http / reality / ech）分组折叠
-- **跨组拖拽**：长按节点芯片拖到别的策略组；拖到顶部「节点列表」= 从当前组移除。
-  节点列表默认折叠，展开后能看到全部节点（不管在不在组里）
-- **规则可视化**：拖动排序、点选改目标、`no-resolve` 勾选、`MATCH` 兜底检查，
-  还能整段导入别人给的规则片段（规则 + 策略组 + provider 一起合并）
-- **导入一条龙**：`vless://` `vmess://` `ss://` `trojan://` … 分享链接、base64 订阅、
-  整份 YAML，一个输入框全接；可以导入到已有配置，并直接选进哪个策略组
-- **订阅链接**：填机场订阅地址就能一次把节点拉进来（明文 / base64 / 整份 YAML 都认，
-  顺带读流量信息），地址会记住，下次打开预填、可以再拉一次（同名节点跳过）
-- **无损编辑**：所有改动都在原文件上做局部替换，注释、空行、键顺序与内核私有字段全部保留
-- **内置内核**：随包带 mihomo，点一下就用 VpnService 启 TUN；跑着改配置会热重载不掉线
+- **节点**：13 种协议的动态表单，TLS 与传输层（ws / grpc / h2 / reality / ech 等）分组折叠。
+- **策略组**：可视化新建、改名、加成员；组内点胶囊切换出口，长按节点拖进别的组即切换。
+- **规则**：本地 / 在线 / GEO / 兜底四区，拖动排序、点行编辑、胶囊换组；500+ 条也流畅。
+- **在线规则集**：Loyalsoldier / ACL4SSR 预置勾选，或填自定义地址；导入前先给「新建 / 更新 / 跳过」预览。
+- **GEO 规则**：按分类浏览 GEOIP / GEOSITE，搜索或直接输入 code，一次批量写入。
+- **导入**：分享链接（vless / vmess / ss / trojan …）、base64 订阅、整份 YAML 都能接；订阅地址会记住。
+- **无损编辑**：所有改动都落在原文件上，注释、空行、键顺序与内核私有字段保持不变。
+- **运行**：随包内置 mihomo，支持 TUN 与「仅代理端口」，分应用代理，DNS / fake-ip，订阅自动更新。
+- **备份**：YAML 页可整段复制，导入导出走同一套解析，换机不丢配置。
 
 ## 下载安装
 
-预编译安装包在 Releases：**https://github.com/yurin7/ClashDeck/releases/latest**
+安装包在 [Releases](https://github.com/yurin7/ClashDeck/releases)：
 
-| 文件 | ABI | 适用 |
-| --- | --- | --- |
-| `ClashDeck-0.1.0-arm64-v8a.apk` | arm64-v8a | 绝大多数手机（33.1 MB，推荐） |
-| `ClashDeck-0.1.0-x86_64.apk` | x86_64 | 模拟器 / x86 平板（35.2 MB） |
+| 版本 | 说明 |
+| --- | --- |
+| 正式版 `ClashDeck-<版本>-<abi>.apk` | 打 `v*` 标签发布，稳定可用 |
+| 开发版 `ClashDeck-dev-<abi>.apk` | 跟随 `main` 每次 push 自动更新，尝鲜用 |
 
-- `minSdk 24`（Android 7.0+），`targetSdk 36`；APK 内已带内核与 GEOIP/GEOSITE 数据，装完即用
-- 发布包由**固定的一把自签名 key** 签名，所以新版本能直接覆盖安装、升级不丢配置；
-  这把 key 只在两个地方：你自己电脑的仓库外目录，和 CI 的 Actions Secrets——仓库里不保存
-- 首次「启动内核」会请求 VPN 授权；不想接管全局流量，可在设置里切「仅代理端口」
+| ABI | 适用 |
+| --- | --- |
+| `arm64-v8a` | 绝大多数手机，推荐 |
+| `x86_64` | 模拟器 / x86 平板 |
 
-包名 `dev.clashdeck`，许可证 **GPL-3.0**（与 mihomo 一致）。完整条款见 [LICENSE](LICENSE)；
-随包分发的 mihomo 二进制、GEOIP/GEOSITE 数据与所做的构建补丁见 [NOTICE.md](NOTICE.md)。
+- `minSdk 24`（Android 7.0+），APK 已带内核与 GEOIP / GEOSITE 数据，装完即用。
+- 发布包用固定自签名 key 签名，新版本可直接覆盖安装、配置不丢。
+- 首次「启动内核」会请求 VPN 授权；不想接管全局流量，可在设置里切「仅代理端口」。
+
+![概览页](docs/screenshots/01-overview.png)
 
 ## 快速上手
 
-1. 「配置」页点「导入」：贴一份 YAML、几条分享链接，或一个订阅地址；也可以「新建配置」
-   从模板开始
-2. 进配置 →「代理」Tab：点「添加节点」（手填 / 粘链接 / 订阅三选一），芯片长按可拖到别的组
-3. 「规则」Tab：拖动手柄排序、点一行编辑；「导入规则」可以吞整段 Clash 片段
-4. 「YAML」Tab：随时核对原文，注释与键顺序都在
-5. 「概览」页点「启动内核」：TUN 接管流量；设置页里能开分应用代理、DNS、分流模式、
-   订阅自动更新等（见下表）
+1. 「配置」页点「导入」：粘贴 YAML、分享链接或订阅地址；也可以「新建配置」从模板开始。
+2. 进配置 →「代理」：点「添加节点」（手填 / 粘链接 / 订阅），长按节点胶囊可拖到别的策略组。
+3. 「规则」：拖动排序、点行编辑；「在线」「GEO」两个 ＋ 分别导入规则集与 GEO 规则。
+4. 「YAML」：核对原文；注释与键顺序都会保留，可直接整段粘贴替换。
+5. 回「概览」点「启动内核」；设置页可开分应用代理、DNS、分流模式与订阅自动更新。
 
-## 界面
+## 常见问题
 
-图是在 x86_64 模拟器（Android 16）上真实截的，配置为 demo（4 个组、9 个节点、7 条规则）。
+**覆盖安装会丢配置吗？**
+同一签名的版本直接覆盖即可，配置在应用私有目录，升级不丢。只有早期 0.1.0–0.1.2（debug 签名）需要卸载一次，卸载前先在「YAML」页备份配置。
 
-| | |
-| --- | --- |
-| ![概览](docs/screenshots/01-overview.png) | ![配置](docs/screenshots/02-profiles.png) |
-| 概览：状态英雄卡（速率 / 迷你折线 / PID）+ 代理模式与分流模式分段开关 + 当前配置 + 内核日志 | 配置：三项统计 + 行式配置列表，每行显示节点/组/规则数与校验状态 |
-| ![设置](docs/screenshots/03-settings.png) | ![代理板](docs/screenshots/04-proxy-board.png) |
-| 设置：运行 / 分流 / DNS / 订阅 / 导入 / 其它六个分区 | 代理板：组面板 + 节点芯片，长按跨组拖拽；组套组显示为策略组芯片 |
-| ![规则](docs/screenshots/05-rules.png) | ![YAML](docs/screenshots/06-yaml.png) |
-| 规则：等宽类型 + 序号 + `payload → 目标`，拖动排序，MATCH 带旗标 | YAML：等宽字体，注释/空行/键顺序原样保留，可直接整段编辑 |
-| ![运行](docs/screenshots/07-runtime.png) | ![添加节点](docs/screenshots/08-add-node-sheet.png) |
-| 运行页：状态 + 大号速率 + 策略组当前选择，点一行即可切节点 | 添加节点：手填 / 粘链接 / 订阅三路入口 |
-| ![订阅](docs/screenshots/09-subscription.png) | ![节点表单](docs/screenshots/10-node-form.png) |
-| 订阅：拉取后显示节点数与标题，地址记在配置旁边，下次预填 | 节点表单：按协议 schema 渲染，只显示这个协议真的有的字段 |
+**启动后连上了却没网？**
+代理模式确认是 TUN，TUN 协议栈用默认的 `gvisor`。`system` / `mixed` 在部分机型上缺少系统级转发权限，表现为「已连接但打不开网页」，切回 `gvisor` 即可。
 
-## 设置里能开哪些开关
-
-属于内核配置的项写进 YAML（无损改，注释与键序不动），属于客户端行为的项写进
-`<配置>.yaml.meta.json` 的 `app` 段——这样把 YAML 交给别的客户端用也不会多出未知键。
-
-| 分区 | 开关 | 落到哪里 |
-| --- | --- | --- |
-| 运行 | 代理模式：TUN 模式 / 仅代理端口 | meta `app.proxyMode`；决定起不起 VPN 与 TUN |
-| 运行 | 分应用代理：全部应用 / 仅选中的 / 排除选中的 + 选择应用 | meta `app.routeMode` + `app.routePackages` |
-| 运行 | TUN 协议栈：gvisor / system / mixed（默认 gvisor） | YAML `tun.stack` |
-| 运行 | TUN MTU：1500 / 4064 / 9000 | YAML `tun.mtu` |
-| 分流 | 模式：规则 / 全局 / 直连 | YAML `mode` |
-| 分流 | 允许局域网 | YAML `allow-lan`（开启后同 Wi-Fi 可用本机 7890） |
-| 分流 | IPv6 | YAML `ipv6` |
-| 分流 | 日志级别：silent…debug | YAML `log-level` |
-| DNS | 启用、fake-ip / redir-host、fake-ip 范围、名称服务器 | YAML `dns.*` |
-| 订阅 | 订阅地址、自动更新周期（关/6/12/24/72 小时）、上次更新、立即更新 | meta `subscriptionUrl` + prefs `lastSubscriptionUpdate` |
-| 导入 | 粘贴 YAML / 链接 / 订阅地址 | 写盘并打开编辑器 |
-| 其它 | 开机自启、内核版本与许可 | meta `app.launchOnBoot` |
-
-TUN 默认使用 `gvisor` 协议栈，这也是推荐设置。`system` / `mixed` 虽然能选，但在手机上
-一般只能解析 DNS、网页依旧打不开（它们需要系统级转发权限），换成这两个大概率是「连上了却
-没网」，遇到这种情况切回 `gvisor` 即可。
-
-## 支持的协议
-
-vless / vmess / trojan / shadowsocks / shadowsocksr / socks5 / http(s) / hysteria2 /
-tuic / wireguard / snell / ssh / anytls，含 reality、ws、grpc、h2、ech 等传输层选项。
+**订阅或规则集拉取失败？**
+先确认地址在当前网络可达，再重试；规则集已做本地缓存，失败时界面会提示缺少哪一条，补齐后重新导入即可。
 
 ## 开发
 
-```powershell
-cd E:\project\Agents\ClashAndroid
-flutter test              # 单测（Windows 上直接跑，不用设备）
-flutter analyze
-flutter build apk --debug # 产物 build\app\outputs\flutter-apk\app-debug.apk
-```
+开发环境、内核编译、CI 发布与签名说明见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)；
+界面规范见 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)，架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-只打 64 位包（体积从 ~130 MB 降到 ~99 MB）：
-
-```powershell
-flutter clean   # 换 ABI 组合必须先 clean，否则会留旧 ABI 的残余 .so
-flutter build apk --debug --target-platform android-arm64,android-x64
-```
-
-### 内核二进制不在仓库里
-
-`android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libmihomo.so` 是预编译的 mihomo 内核，
-两个加起来 118 MB、单文件也超过 GitHub 的 100 MB 上限，所以没有入库。**克隆后直接构建能
-通过，但运行时内核启动会提示找不到文件**，先补一步：
-
-```powershell
-git clone --depth 1 -b Alpha https://github.com/MetaCubeX/mihomo D:\dev\_downloads\mihomo-src\mihomo-Alpha
-.\tool\build_core.ps1        # 复制源码 → 打构建约束补丁 → 交叉编译两个 ABI
-```
-
-产物会直接写进 `jniLibs/<abi>/libmihomo.so`。armeabi-v7a 没有内核，32 位设备上无法启动。
-
-## 发布
-
-全自动，本地不用打包：
-
-- **每次 push 到 `main`**：自动构建开发版，覆盖更新到 Release「开发版（跟随 main）」——它是一个
-  预发布（prerelease），始终指向最新的 main 代码，资源名固定为 `ClashDeck-dev-<abi>.apk`，
-  所以下载链接不会变。
-- **push `v*` 标签**：自动构建正式版，发到该标签的 Release。
-
-```powershell
-git tag -a v0.1.3 -m "ClashDeck v0.1.3"
-git push origin v0.1.3
-```
-
-每次构建都会：
-
-1. 在 runner 上用 `tool/build_core.sh` 现编 mihomo 内核（arm64-v8a / x86_64，含 anet 构建约束补丁）；
-2. `flutter analyze` + `flutter test`；
-3. `flutter build apk --release --split-per-abi`，只产出有内核的两个 ABI；
-4. 上传到对应的 Release（正式版生成变更说明），同时也作为 Actions 产物保存 14 天。
-
-流水线页面：<https://github.com/yurin7/ClashDeck/actions>
-
-### 签名与覆盖升级
-
-安装包用同一把自签名 key 签名（自用/测试，不上架应用商店）。好处很直接：**新版本可以直接覆盖安装，
-配置和节点都不会丢。**
-
-只有一种情况需要卸载一次：之前装的是早期"每次构建换一把签名"的版本（0.1.0–0.1.2 和早期 nightly），
-它们的证书与现在不同，无法覆盖安装。卸载前先在「YAML」页把配置复制备份，重装后「导入」粘回来即可。
-
-想确认手上的包是不是同一个签名，可以用本机 apksigner 验一下：
-
-```bash
-apksigner verify --print-certs ClashDeck-*.apk
-# Signer #1 certificate SHA-256 digest: a6db4e7e…c1433be1
-```
-
-当前证书指纹（`Show signer` 步骤每次构建也会打印）：
-
-```
-A6:DB:4E:7E:E0:28:85:9D:4F:D6:86:3E:61:94:C3:3F:8C:D7:2F:DD:C1:6A:9F:0D:1F:69:B2:16:C1:43:3B:E1
-```
-
-#### 维护者：签名材料放在哪
-
-一句话：key 只放在**你自己电脑的仓库外目录**和**CI 的 Actions Secrets**里，仓库里不保存。
-
-| 位置 | 放什么 |
-| --- | --- |
-| 本机（仓库外） | `%USERPROFILE%\.clashdeck\` 里的 keystore；`android/key.properties` 指过去（已被 git 忽略） |
-| CI | Actions Secrets 四个：`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` |
-| 仓库 | 不保存任何签名材料（`.gitignore` 已排除 `*.jks`、`*.keystore`、`key.properties`） |
-
-- 通过私聊或私人网盘发给自己、备份到自己设备，都是正常做法；要避免的是**公开**：公开仓库、issue、
-  PR、截图、公开群聊。
-- `tool\setup_signing.ps1` 只在**换新 key** 时用一次：它把 keystore 生成到仓库外，并在仓库外输出 4 个
-  Secret 的值。已经有可用 key 时不要重跑。
-- 换 key 等于换 App 身份：要更新 4 个 Secrets，且用户需要卸载重装一次——非必要不换。
-
-本地打 release 包（可选）：`flutter build apk --release --split-per-abi` 会自动读
-`android/key.properties`；手动构建时 `--build-number` 不要小于已安装版本，否则会报降级
-（`INSTALL_FAILED_VERSION_DOWNGRADE`）。
-
-## 目录
-
-```
-lib/core/     纯 Dart：yaml / model / edit / schema / parse / validate（无 Flutter 依赖，可单测）
-lib/data/     配置与偏好落盘（tmp+rename 原子写）
-lib/state/    编辑器状态、设置状态
-lib/ui/       概览 / 配置 / 设置三页 + 编辑页（代理·规则·YAML）+ 动态表单
-lib/runtime/  mihomo REST 客户端、运行配置生成、子进程控制器、GEOIP/GEOSITE 落盘
-android/app/src/main/kotlin/dev/clashdeck/   VpnService、内核进程、MethodChannel 桥
-assets/geo/   随包携带的 GEOIP/GEOSITE 数据，首启铺到内核工作目录
-```
-
-架构与内核启动细节见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+许可证 GPL-3.0；随包分发的 mihomo 二进制与数据见 [NOTICE.md](NOTICE.md)。

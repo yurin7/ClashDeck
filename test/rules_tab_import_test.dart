@@ -64,7 +64,7 @@ void main() {
     // 区头顺序：本地 / 在线 / GEO / 兜底，GEO 是第三个「+」。
     await tester.tap(find.byTooltip('添加…').at(2));
     await tester.pumpAndSettle();
-    expect(find.text('GEOSITE 离线命中；目标统一写入 DEFAULT 组'), findsOneWidget);
+    expect(find.text('GEOSITE 离线命中 · 目标统一写入 DEFAULT'), findsOneWidget);
 
     await tester.tap(find.text('AI'));
     await tester.pumpAndSettle();
@@ -103,7 +103,7 @@ void main() {
 
     await tester.tap(find.byTooltip('添加…').at(1));
     await tester.pumpAndSettle();
-    expect(find.text('按整包匹配；目标统一写入 DEFAULT 组'), findsOneWidget);
+    expect(find.text('按整包匹配 · 目标统一写入 DEFAULT'), findsOneWidget);
     expect(find.text('导入 0 个'), findsOneWidget);
 
     await tester.tap(find.text('全部'));

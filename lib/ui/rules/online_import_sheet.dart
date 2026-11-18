@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'import_sheet_style.dart';
 
 /// 在线面板的返回值：要么勾选了一组预置规则集，要么填了一个自定义地址。
 sealed class OnlineImportRequest {
@@ -141,7 +142,6 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -154,8 +154,8 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
           color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(Insets.xl),
           clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SizedBox(
+            height: importSheetMaxHeight(context),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,21 +189,23 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
                             Text('在线规则集', style: display(17, weight: 700)),
                             const SizedBox(height: 2),
                             Text(
-                              '按整包匹配；目标统一写入 DEFAULT 组',
+                              '按整包匹配 · 目标统一写入 DEFAULT',
                               style: hintStyle(context),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      TextButton(
+                      importSheetAction(
+                        label: '全部',
                         onPressed: () => _setGroup(_all, selected: true),
-                        child: const Text('全部'),
                       ),
-                      TextButton(
+                      importSheetAction(
+                        label: '清空全部',
                         onPressed: _picked.isEmpty
                             ? null
                             : () => _setGroup(_all, selected: false),
-                        child: const Text('清空全部'),
                       ),
                     ],
                   ),
@@ -257,13 +259,8 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
         .length;
     return Padding(
       padding: const EdgeInsets.only(bottom: Insets.md),
-      child: Material(
-        color: scheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Radiuses.md),
-          side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
-        ),
-        clipBehavior: Clip.antiAlias,
+      child: importSheetCard(
+        context,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -367,50 +364,51 @@ class _OnlineImportSheetState extends State<_OnlineImportSheet> {
   }
 
   Widget _buildCustomUrl(BuildContext context, ColorScheme scheme) {
-    return Container(
-      padding: const EdgeInsets.all(Insets.md),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(Radiuses.md),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.link, size: 16, color: scheme.onSurfaceVariant),
-              const SizedBox(width: Insets.xs),
-              Text('自定义地址', style: display(13.5, weight: 700)),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text('任意 http/https 规则集地址，目标同样是 DEFAULT', style: hintStyle(context)),
-          const SizedBox(height: Insets.sm),
-          TextField(
-            controller: _urlCtrl,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            style: mono(12.5),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: 'https://example.com/rules.txt',
-              errorText: _urlError,
+    return importSheetCard(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.all(Insets.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.link, size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: Insets.xs),
+                Text('自定义地址', style: display(13.5, weight: 700)),
+              ],
             ),
-            onChanged: (_) {
-              if (_urlError != null) setState(() => _urlError = null);
-            },
-          ),
-          const SizedBox(height: Insets.sm),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _submitUrl,
-              icon: const Icon(Icons.download_outlined, size: 18),
-              label: const Text('导入这个地址'),
+            const SizedBox(height: 2),
+            Text(
+              '任意 http/https 规则集地址，目标同样是 DEFAULT',
+              style: hintStyle(context),
             ),
-          ),
-        ],
+            const SizedBox(height: Insets.sm),
+            TextField(
+              controller: _urlCtrl,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              style: mono(12.5),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'https://example.com/rules.txt',
+                errorText: _urlError,
+              ),
+              onChanged: (_) {
+                if (_urlError != null) setState(() => _urlError = null);
+              },
+            ),
+            const SizedBox(height: Insets.sm),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _submitUrl,
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('导入这个地址'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

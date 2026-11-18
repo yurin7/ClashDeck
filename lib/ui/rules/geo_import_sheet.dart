@@ -5,6 +5,7 @@ import '../../core/edit/import_plan.dart';
 import '../../core/edit/rule_presets.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'import_sheet_style.dart';
 
 /// 一个可勾选的 GEO 词库。
 class _GeoItem {
@@ -24,6 +25,9 @@ class _GeoItem {
 /// 预置列表来自 [kGeositePicks]（有中文名、有分类），再补上
 /// [kGeositeLabels] 里没进精选的词库；配置里已有的 code 显示「已添加」
 /// 且不可再选，避免重复写 `GEOSITE` 行。
+///
+/// 分类用 PageView 承载：点 chip 切页、左右滑列表也能切页，内容区高度
+/// 固定，切分类不会让面板忽高忽低。
 Future<List<String>?> showGeoImportSheet(
   BuildContext context, {
   Set<String> existingCodes = const {},
@@ -67,10 +71,13 @@ class _GeoImportSheet extends StatefulWidget {
 class _GeoImportSheetState extends State<_GeoImportSheet> {
   final List<String> _picked = <String>[];
   final TextEditingController _searchCtrl = TextEditingController();
+  final PageController _pageController = PageController();
+  final Map<int, GlobalKey> _chipKeys = <int, GlobalKey>{};
   late final List<_GeoItem> _items;
   late final List<String> _groups;
+  late final Map<String, List<_GeoItem>> _byGroup;
   late final Set<String> _existing;
-  late String _group;
+  int _index = 0;
   String _query = '';
 
   @override
@@ -78,12 +85,16 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
     super.initState();
     _existing = {for (final code in widget.existingCodes) code.toLowerCase()};
     _items = _buildItems();
-    _groups = <String>{for (final item in _items) item.group}.toList();
-    _group = _groups.isEmpty ? '' : _groups.first;
+    _byGroup = <String, List<_GeoItem>>{};
+    for (final item in _items) {
+      (_byGroup[item.group] ??= <_GeoItem>[]).add(item);
+    }
+    _groups = _byGroup.keys.toList();
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     disposeAfterDialog(_searchCtrl);
     super.dispose();
   }
@@ -112,20 +123,19 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
       !_existing.contains(_searching) &&
       !_items.any((item) => item.code == _searching);
 
-  List<_GeoItem> get _visible {
-    if (_searching.isNotEmpty) {
-      return [
-        for (final item in _items)
-          if (item.code.contains(_searching) ||
-              item.label.toLowerCase().contains(_searching))
-            item,
-      ];
-    }
+  List<_GeoItem> get _searchMatches {
+    if (_searching.isEmpty) return const <_GeoItem>[];
     return [
       for (final item in _items)
-        if (item.group == _group) item,
+        if (item.code.contains(_searching) ||
+            item.label.toLowerCase().contains(_searching))
+          item,
     ];
   }
+
+  List<_GeoItem> _itemsOf(int index) => index >= 0 && index < _groups.length
+      ? _byGroup[_groups[index]]!
+      : const [];
 
   void _toggle(String code, bool? value) {
     setState(() {
@@ -137,11 +147,54 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
     });
   }
 
+  /// 勾选 / 取消一整批词库（跳过已在配置里的）。
+  void _setAll(Iterable<_GeoItem> items, {required bool selected}) {
+    setState(() {
+      for (final item in items) {
+        if (_existing.contains(item.code)) continue;
+        if (selected) {
+          if (!_picked.contains(item.code)) _picked.add(item.code);
+        } else {
+          _picked.remove(item.code);
+        }
+      }
+    });
+  }
+
+  void _goToCategory(int index) {
+    if (index < 0 || index >= _groups.length) return;
+    setState(() => _index = index);
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    _centerChip(index);
+  }
+
+  /// 只把「当前这个 chip」滚到中间，避免整条 chip 条抖动。
+  void _centerChip(int index) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _chipKeys[index]?.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
-    final visible = _visible;
+    final current = _itemsOf(_index);
+    final selectedHere = current
+        .where((item) => _picked.contains(item.code))
+        .length;
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -154,10 +207,10 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
           color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(Insets.xl),
           clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SizedBox(
+            key: const ValueKey('geo-import-sheet'),
+            height: importSheetMaxHeight(context),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
@@ -177,17 +230,35 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                   padding: const EdgeInsets.fromLTRB(
                     Insets.xl,
                     Insets.md,
-                    Insets.xl,
+                    Insets.lg,
                     Insets.xs,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text('GEO 数据', style: display(17, weight: 700)),
-                      const SizedBox(height: 2),
-                      Text(
-                        'GEOSITE 离线命中；目标统一写入 DEFAULT 组',
-                        style: hintStyle(context),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('GEO 数据', style: display(17, weight: 700)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'GEOSITE 离线命中 · 目标统一写入 DEFAULT',
+                              style: hintStyle(context),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      importSheetAction(
+                        label: '全部',
+                        onPressed: () => _setAll(_items, selected: true),
+                      ),
+                      importSheetAction(
+                        label: '清空全部',
+                        onPressed: _picked.isEmpty
+                            ? null
+                            : () => _setAll(_items, selected: false),
                       ),
                     ],
                   ),
@@ -220,52 +291,76 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
                         horizontal: Insets.lg,
                       ),
                       children: [
-                        for (final group in _groups)
+                        for (var i = 0; i < _groups.length; i++)
                           Padding(
                             padding: const EdgeInsets.only(right: Insets.xs),
                             child: ChoiceChip(
+                              key: _chipKeys.putIfAbsent(i, GlobalKey.new),
                               label: Text(
-                                group,
+                                _groups[i],
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              selected: group == _group,
+                              selected: i == _index,
                               showCheckmark: false,
                               visualDensity: VisualDensity.compact,
-                              onSelected: (_) => setState(() => _group = group),
+                              onSelected: (_) => _goToCategory(i),
                             ),
                           ),
                       ],
                     ),
                   ),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
+                Expanded(
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(
-                      Insets.sm,
+                      Insets.lg,
                       Insets.xs,
-                      Insets.sm,
-                      Insets.sm,
+                      Insets.lg,
+                      0,
                     ),
-                    children: [
-                      if (_hasFreeInput) _buildFreeInput(context, _searching),
-                      for (final item in visible) _buildRow(context, item),
-                      if (visible.isEmpty && !_hasFreeInput)
-                        Padding(
-                          padding: const EdgeInsets.all(Insets.lg),
-                          child: Text(
-                            _searching.isEmpty
-                                ? '这个分类暂时没有词库'
-                                : '没有匹配的词库；输入纯小写代码可以直接用',
-                            style: hintStyle(context),
+                    child: importSheetCard(
+                      context,
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              Insets.sm,
+                              0,
+                              Insets.sm,
+                              0,
+                            ),
+                            child: Row(
+                              children: [
+                                importSheetAction(
+                                  label: '全选',
+                                  onPressed: current.isEmpty
+                                      ? null
+                                      : () => _setAll(current, selected: true),
+                                ),
+                                Text(
+                                  '已选 $selectedHere',
+                                  style: hintStyle(context)
+                                      ?.copyWith(fontSize: 11),
+                                ),
+                                const Spacer(),
+                                importSheetAction(
+                                  label: '清空',
+                                  onPressed: selectedHere == 0
+                                      ? null
+                                      : () => _setAll(current, selected: false),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                    ],
+                          Expanded(child: _buildContent(context)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     Insets.lg,
-                    0,
+                    Insets.md,
                     Insets.lg,
                     Insets.md,
                   ),
@@ -287,6 +382,51 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
     );
   }
 
+  Widget _buildContent(BuildContext context) {
+    if (_searching.isNotEmpty) return _buildSearchResults(context);
+    if (_groups.isEmpty) {
+      return Center(child: Text('这个分类暂时没有词库', style: hintStyle(context)));
+    }
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: _groups.length,
+      onPageChanged: (index) {
+        setState(() => _index = index);
+        _centerChip(index);
+      },
+      itemBuilder: (context, index) => _GeoPage(
+        key: PageStorageKey<String>(_groups[index]),
+        items: _itemsOf(index),
+        existing: _existing,
+        picked: _picked,
+        onToggle: _toggle,
+        emptyText: '该分类暂无数据',
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(BuildContext context) {
+    final matches = _searchMatches;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Insets.xs, 0, Insets.xs, Insets.sm),
+      children: [
+        if (_hasFreeInput) _buildFreeInput(context, _searching),
+        for (final item in matches)
+          _GeoRow(
+            item: item,
+            existing: _existing,
+            picked: _picked,
+            onToggle: _toggle,
+          ),
+        if (matches.isEmpty && !_hasFreeInput)
+          Padding(
+            padding: const EdgeInsets.all(Insets.lg),
+            child: Text('没有匹配的词库；输入纯小写代码可以直接用', style: hintStyle(context)),
+          ),
+      ],
+    );
+  }
+
   Widget _buildFreeInput(BuildContext context, String code) {
     final scheme = Theme.of(context).colorScheme;
     return CheckboxListTile(
@@ -305,12 +445,72 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
       subtitle: Text('不在预置列表里，内核认识就能用', style: hintStyle(context)),
     );
   }
+}
 
-  Widget _buildRow(BuildContext context, _GeoItem item) {
-    final already = _existing.contains(item.code);
+/// 一个分类页：自己保持滚动位置（切分类回来还在原处）。
+class _GeoPage extends StatefulWidget {
+  const _GeoPage({
+    super.key,
+    required this.items,
+    required this.existing,
+    required this.picked,
+    required this.onToggle,
+    required this.emptyText,
+  });
+
+  final List<_GeoItem> items;
+  final Set<String> existing;
+  final List<String> picked;
+  final void Function(String code, bool? value) onToggle;
+  final String emptyText;
+
+  @override
+  State<_GeoPage> createState() => _GeoPageState();
+}
+
+class _GeoPageState extends State<_GeoPage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    if (widget.items.isEmpty) {
+      return Center(child: Text(widget.emptyText, style: hintStyle(context)));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(Insets.xs, 0, Insets.xs, Insets.sm),
+      itemCount: widget.items.length,
+      itemBuilder: (context, index) => _GeoRow(
+        item: widget.items[index],
+        existing: widget.existing,
+        picked: widget.picked,
+        onToggle: widget.onToggle,
+      ),
+    );
+  }
+}
+
+/// 一行可勾选的词库。
+class _GeoRow extends StatelessWidget {
+  const _GeoRow({
+    required this.item,
+    required this.existing,
+    required this.picked,
+    required this.onToggle,
+  });
+
+  final _GeoItem item;
+  final Set<String> existing;
+  final List<String> picked;
+  final void Function(String code, bool? value) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final already = existing.contains(item.code);
     return CheckboxListTile(
-      value: already || _picked.contains(item.code),
-      onChanged: already ? null : (value) => _toggle(item.code, value),
+      value: already || picked.contains(item.code),
+      onChanged: already ? null : (value) => onToggle(item.code, value),
       dense: true,
       controlAffinity: ListTileControlAffinity.leading,
       contentPadding: const EdgeInsets.only(left: Insets.sm, right: Insets.sm),

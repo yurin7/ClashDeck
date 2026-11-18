@@ -460,22 +460,49 @@ class _GlobalExitRow extends StatelessWidget {
 
   /// 内核的 `GLOBAL` 组能选的范围：内置出站 + 本配置里的所有节点和策略组。
   List<String> _candidates() {
+    return [for (final entry in _kinds().keys) entry];
+  }
+
+  /// 名字 → 类型：1 内置出站，2 节点，3 策略组。胶囊左侧小方块的图标用它。
+  Map<String, int> _kinds() {
     final doc = settings.doc;
-    final names = <String>['DIRECT', 'REJECT'];
-    for (final list in [
-      doc.plainAt(['proxies']),
-      doc.plainAt(['proxy-groups']),
-    ]) {
-      if (list is! List) continue;
-      for (final item in list) {
-        if (item is! Map) continue;
-        final name = item['name'];
-        if (name is String && name.isNotEmpty && !names.contains(name)) {
-          names.add(name);
-        }
-      }
+    final kinds = <String, int>{'DIRECT': 1, 'REJECT': 1};
+    for (final item in _asMapList(doc.plainAt(['proxies']))) {
+      final name = item['name'];
+      if (name is String && name.isNotEmpty) kinds[name] = 2;
     }
-    return names;
+    for (final item in _asMapList(doc.plainAt(['proxy-groups']))) {
+      final name = item['name'];
+      if (name is String && name.isNotEmpty) kinds[name] = 3;
+    }
+    return kinds;
+  }
+
+  List<Map<Object?, Object?>> _asMapList(Object? value) => [
+    if (value is List)
+      for (final item in value)
+        if (item is Map) item,
+  ];
+
+  IconData _iconOf(String name) {
+    switch (name) {
+      case 'DIRECT':
+        return Icons.arrow_outward;
+      case 'REJECT':
+        return Icons.block;
+      case 'REJECT-DROP':
+        return Icons.block;
+      case 'PASS':
+        return Icons.chevron_right;
+      case 'COMPATIBLE':
+        return Icons.verified_outlined;
+      case 'GLOBAL':
+        return Icons.public;
+    }
+    final kind = _kinds()[name];
+    if (kind == 3) return Icons.account_tree_outlined;
+    if (kind == 2) return Icons.dns_outlined;
+    return Icons.bolt_outlined;
   }
 
   /// 某个策略组的成员；不是组就返回空。
@@ -501,14 +528,17 @@ class _GlobalExitRow extends StatelessWidget {
     final picked = await showPickerSheet<String>(
       context,
       title: 'GLOBAL 走哪个节点',
+      // 一屏十几个名字，胶囊比整行列表更好扫。
+      chipMode: true,
       options: [
         for (final name in candidates)
           PickerOption<String>(
             name,
             name,
+            icon: _iconOf(name),
             subtitle: _membersOf(name).isEmpty
                 ? null
-                : '策略组 · ${_membersOf(name).length} 个成员',
+                : '组 · ${_membersOf(name).length}',
           ),
       ],
       current: settings.globalNode,
@@ -523,9 +553,11 @@ class _GlobalExitRow extends StatelessWidget {
       final choice = await showPickerSheet<String>(
         context,
         title: '「$picked」里用哪个节点',
+        chipMode: true,
         options: [
-          const PickerOption<String>('', '跟着组自己的选择走'),
-          for (final name in members) PickerOption<String>(name, name),
+          const PickerOption<String>('', '跟着组自己的选择走', icon: Icons.link),
+          for (final name in members)
+            PickerOption<String>(name, name, icon: _iconOf(name)),
         ],
         current: settings.groupNodes[picked] ?? '',
       );
@@ -548,26 +580,53 @@ class _GlobalExitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final running = runtime.phase == RuntimePhase.running;
     final current =
         (running ? runtime.selected['GLOBAL'] : null) ?? settings.globalNode;
+    final label = current ?? '跟随内核默认（DIRECT）';
     return Row(
       children: [
-        Expanded(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: '全局出口  ', style: hintStyle(context)),
-                TextSpan(
-                  text: current ?? '跟随内核默认（DIRECT）',
-                  style: mono(12, color: Theme.of(context).colorScheme.primary),
+        Text('全局出口', style: hintStyle(context)),
+        const SizedBox(width: Insets.sm),
+        Flexible(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Radiuses.sm),
+            onTap: () => _pick(context),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(Insets.sm, 4, Insets.sm, 4),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(Radiuses.sm),
+                border: Border.all(
+                  color: scheme.primary.withValues(alpha: 0.45),
                 ),
-              ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _iconOf(current ?? 'DIRECT'),
+                    size: 13,
+                    color: scheme.primary,
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: mono(11.5, color: scheme.primary, weight: 600),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(Icons.expand_more, size: 14, color: scheme.primary),
+                ],
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
+        const Spacer(),
         TextButton(onPressed: () => _pick(context), child: const Text('切换')),
       ],
     );

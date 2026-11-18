@@ -4,10 +4,9 @@ import '../../core/edit/rule_targets.dart';
 import '../../core/model/profile.dart';
 import '../chips.dart';
 import '../fields.dart';
-import '../sheets/picker_sheet.dart';
+import '../sheets/sectioned_picker.dart';
 import '../theme.dart';
-import 'select_sheet.dart';
-import './app_ink.dart';
+import 'app_ink.dart';
 
 /// 所有「目标组」输入的唯一组件：点开 = 选择面板（分类 + 胶囊 + 高亮行）。
 ///
@@ -86,139 +85,73 @@ Future<String?> showTargetPickerSheet(
   String? emptyLabel,
   Map<String, String?> subtitles = const <String, String?>{},
 }) {
-  return showSelectSheet<String>(
+  final advanced = otherOptions;
+  final primary = [
+    for (final name in options)
+      if (name.isNotEmpty && !advanced.contains(name)) name,
+  ];
+  final groups = [
+    for (final name in primary)
+      if (!Profile.systemPolicyTargets.contains(name)) name,
+  ];
+  final policies = [
+    for (final name in primary)
+      if (Profile.systemPolicyTargets.contains(name)) name,
+  ];
+
+  String? subtitleOf(String name) {
+    if (subtitles.containsKey(name)) return subtitles[name];
+    if (advanced.contains(name)) return kAdvancedBuiltinNotes[name] ?? '高级内置';
+    if (Profile.builtinTargets.contains(name)) return '系统策略';
+    return null;
+  }
+
+  Widget chipOf(String name) =>
+      NameChip(name: name, subtitle: subtitleOf(name));
+
+  SectionedPickerItem<String> itemOf(String name) => SectionedPickerItem(
+    value: name,
+    chip: chipOf(name),
+    searchText: name,
+    selected: name == current,
+  );
+
+  return showSectionedPicker<String>(
     context,
     title: title,
     subtitle: subtitle,
-    body: (_) => _TargetPickerSheet(
-      options: options,
-      otherOptions: otherOptions,
-      current: current,
-      emptyLabel: emptyLabel,
-      subtitles: subtitles,
-    ),
-  );
-}
-
-class _TargetPickerSheet extends StatefulWidget {
-  const _TargetPickerSheet({
-    required this.options,
-    required this.otherOptions,
-    required this.current,
-    this.emptyLabel,
-    this.subtitles = const <String, String?>{},
-  });
-
-  final List<String> options;
-  final List<String> otherOptions;
-  final String current;
-  final String? emptyLabel;
-
-  /// 调用方额外补充的副标题（例如策略组的「组 · 3」）。
-  final Map<String, String?> subtitles;
-
-  @override
-  State<_TargetPickerSheet> createState() => _TargetPickerSheetState();
-}
-
-class _TargetPickerSheetState extends State<_TargetPickerSheet> {
-  bool _showAdvanced = false;
-
-  Widget _chip(String name) => NameChip(
-    name: name,
-    subtitle: widget.subtitles.containsKey(name)
-        ? widget.subtitles[name]
-        : widget.otherOptions.contains(name)
-        ? kAdvancedBuiltinNotes[name] ?? '高级内置'
-        : Profile.builtinTargets.contains(name)
-        ? '系统策略'
-        : null,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final advanced = widget.otherOptions;
-    final primary = [
-      for (final name in widget.options)
-        if (name.isNotEmpty && !advanced.contains(name)) name,
-    ];
-    final groups = [
-      for (final name in primary)
-        if (!Profile.systemPolicyTargets.contains(name)) name,
-    ];
-    final policies = [
-      for (final name in primary)
-        if (Profile.systemPolicyTargets.contains(name)) name,
-    ];
-
-    PickerSheetRow row(String name) => PickerSheetRow(
-      searchText: name,
-      title: _chip(name),
-      selected: name == widget.current,
-      onTap: () => Navigator.of(context).pop(name),
-    );
-
-    return PickerSheetScaffold(
-      searchHint: '搜索目标组或节点',
-      toolbar: false,
-      sections: [
-        if (widget.emptyLabel != null)
-          PickerSheetSection(
-            rows: [
-              PickerSheetRow(
-                searchText: widget.emptyLabel!,
-                title: Text(widget.emptyLabel!, style: hintStyle(context)),
-                selected: widget.current.isEmpty,
-                onTap: () => Navigator.of(context).pop(''),
-              ),
-            ],
-          ),
-        // 顺序固定：策略组 -> 系统策略 -> 高级内置（折叠头在行之上）。
-        if (groups.isNotEmpty)
-          PickerSheetSection(
-            label: '策略组',
-            rows: [for (final name in groups) row(name)],
-          ),
-        if (policies.isNotEmpty)
-          PickerSheetSection(
-            label: '系统策略',
-            rows: [for (final name in policies) row(name)],
-          ),
-        if (advanced.isNotEmpty)
-          PickerSheetSection(
-            header: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => setState(() => _showAdvanced = !_showAdvanced),
-                icon: Icon(
-                  _showAdvanced ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                ),
-                label: Text(
-                  _showAdvanced ? '收起高级内置' : '高级内置（不常用）（${advanced.length}）',
-                ),
-              ),
+    searchHint: '搜索目标组或节点',
+    emptyHint: '没有匹配的目标',
+    sections: [
+      if (emptyLabel != null)
+        SectionedPickerSection<String>(
+          items: [
+            SectionedPickerItem(
+              value: '',
+              chip: Text(emptyLabel, style: hintStyle(context)),
+              searchText: emptyLabel,
+              selected: current.isEmpty,
             ),
-            rows: [
-              if (_showAdvanced)
-                for (final name in advanced) row(name),
-            ],
-          ),
-      ],
-      selectedCount: widget.current.isEmpty ? 0 : 1,
-      onSelectAll: () {},
-      onInvert: () {},
-      onClear: () {},
-      emptyHint: '没有匹配的目标',
-      footer: Row(
-        children: [
-          const Spacer(),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      // 顺序固定：策略组 -> 系统策略 -> 高级内置（折叠头在行之上、默认收起）。
+      if (groups.isNotEmpty)
+        SectionedPickerSection<String>(
+          label: '策略组',
+          items: [for (final name in groups) itemOf(name)],
+        ),
+      if (policies.isNotEmpty)
+        SectionedPickerSection<String>(
+          label: '系统策略',
+          items: [for (final name in policies) itemOf(name)],
+        ),
+      if (advanced.isNotEmpty)
+        SectionedPickerSection<String>(
+          collapsible: true,
+          collapsedLabel: '高级内置（不常用）',
+          expandedLabel: '收起高级内置',
+          items: [for (final name in advanced) itemOf(name)],
+        ),
+    ],
+  );
 }

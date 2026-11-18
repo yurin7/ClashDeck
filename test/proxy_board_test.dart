@@ -1,4 +1,5 @@
 import 'package:clashdeck/state/editor_state.dart';
+import 'package:clashdeck/ui/chips.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -78,19 +79,21 @@ rules:
     expect(find.byTooltip('内置出站「DIRECT」：由内核直接处理，不是配置里的节点'), findsNWidgets(2));
     expect(find.byTooltip('内置出站「REJECT」：由内核直接处理，不是配置里的节点'), findsNWidgets(2));
     expect(find.byIcon(Icons.help_outline), findsNothing);
+    // 内置成员现在用共享的系统策略胶囊：两张胶囊里各一个同名图标，
+    // 系统策略卡卡头的图标不在胶囊内，用 descendant 限定范围。
+    // PROXY 与自动补建的 DEFAULT 各有一张内置胶囊，共 4 张。
+    expect(find.byType(SystemPolicyChip), findsNWidgets(4));
     expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Icon &&
-            widget.icon == Icons.arrow_outward &&
-            widget.size == 15,
+      find.descendant(
+        of: find.byType(SystemPolicyChip),
+        matching: find.byIcon(Icons.arrow_outward),
       ),
       findsNWidgets(2),
     );
     expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Icon && widget.icon == Icons.block && widget.size == 15,
+      find.descendant(
+        of: find.byType(SystemPolicyChip),
+        matching: find.byIcon(Icons.block),
       ),
       findsNWidgets(2),
     );

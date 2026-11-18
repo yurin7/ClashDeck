@@ -1,4 +1,5 @@
 import 'package:clashdeck/state/editor_state.dart';
+import 'package:clashdeck/ui/chips.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';

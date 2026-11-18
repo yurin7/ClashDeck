@@ -12,6 +12,7 @@ import 'import_dialogs.dart';
 import 'dropdown.dart';
 import 'fields.dart';
 import 'rules/group_rules_block.dart';
+import 'chips.dart';
 import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -19,15 +20,6 @@ import 'node_form_page.dart';
 
 /// 「添加节点」的三种入口。
 enum _AddMode { manual, links, subscription }
-
-/// 拖拽时携带的数据。
-class _DragData {
-  const _DragData(this.node, this.fromGroup);
-  final String node;
-
-  /// null 表示从"未归类节点"拖出。
-  final String? fromGroup;
-}
 
 /// 按策略组组织的节点面板：跨组拖拽、增删节点、改组成员。
 class ProxyBoard extends StatefulWidget {
@@ -554,33 +546,6 @@ class _ProxyBoardState extends State<ProxyBoard> {
   }
 }
 
-/// 组类型 → 图标，用来在卡片头上代替文字说明。
-IconData groupIcon(String type) => switch (type) {
-  'select' => Icons.radio_button_checked,
-  'url-test' => Icons.speed,
-  'fallback' => Icons.alt_route,
-  'load-balance' => Icons.shuffle,
-  'relay' => Icons.link,
-  _ => Icons.account_tree_outlined,
-};
-
-/// 内置出站（DIRECT / REJECT / PASS…）用的小图标。
-IconData _builtinIcon(String name) => switch (name) {
-  'DIRECT' => Icons.arrow_outward,
-  'REJECT' => Icons.block,
-  'REJECT-DROP' => Icons.bolt,
-  'PASS' => Icons.subdirectory_arrow_right,
-  _ => Icons.public,
-};
-
-/// 内置出站的颜色语义：DIRECT 绿、REJECT 红、REJECT-DROP 灰。
-Color _systemPolicyColor(String name, ColorScheme scheme) => switch (name) {
-  'DIRECT' => scheme.tertiary,
-  'REJECT' => scheme.error,
-  'REJECT-DROP' => scheme.onSurfaceVariant,
-  _ => scheme.tertiary,
-};
-
 /// 拖拽高亮时的边框色。
 Color _dropBorder(ColorScheme scheme, bool active) =>
     active ? scheme.primary : scheme.outlineVariant.withValues(alpha: 0.7);
@@ -604,7 +569,7 @@ class _NodeListCard extends StatefulWidget {
   final void Function(ProxyEntry) onOpen;
   final void Function(ProxyEntry) onMove;
   final void Function(ProxyEntry) onDelete;
-  final void Function(_DragData) onDrop;
+  final void Function(DragNodeData) onDrop;
 
   /// 区头的「添加节点」入口，和底部「新建组」并列。
   final VoidCallback onAdd;
@@ -623,7 +588,7 @@ class _NodeListCardState extends State<_NodeListCard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final count = widget.nodes.length;
-    return DragTarget<_DragData>(
+    return DragTarget<DragNodeData>(
       onWillAcceptWithDetails: (d) => d.data.fromGroup != null,
       onAcceptWithDetails: (d) => widget.onDrop(d.data),
       builder: (context, candidate, _) {
@@ -781,7 +746,7 @@ class _GroupCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onAddMember;
-  final void Function(_DragData) onDrop;
+  final void Function(DragNodeData) onDrop;
   final void Function(String) onRemove;
 
   @override
@@ -789,7 +754,7 @@ class _GroupCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final profile = state.profile;
-    return DragTarget<_DragData>(
+    return DragTarget<DragNodeData>(
       onWillAcceptWithDetails: (d) => d.data.fromGroup != group.name,
       onAcceptWithDetails: (d) => onDrop(d.data),
       builder: (context, candidate, _) {
@@ -949,37 +914,20 @@ class _GroupCard extends StatelessWidget {
                                 ? null
                                 : () => onMenuNode!(node, group.name),
                           )
-                        else if (profile.groupByName.containsKey(name))
-                          Tooltip(
-                            message: '策略组「$name」：组里套组，内核按它的类型再选一次',
-                            child: InputChip(
-                              avatar: Icon(
-                                Icons.account_tree_outlined,
-                                size: 15,
-                                color: scheme.primary,
-                              ),
-                              label: Text(name),
-                              onDeleted: () => onRemove(name),
-                              deleteButtonTooltipMessage: '从组里移除',
-                            ),
+                        else if (profile.groupByName[name] case final nested?)
+                          GroupChip(
+                            name: name,
+                            members: nested.members.length,
+                            type: nested.type,
+                            tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
+                            onRemove: () => onRemove(name),
                           )
                         else if (Profile.builtinTargets.contains(name))
-                          Tooltip(
-                            message: '内置出站「$name」：由内核直接处理，不是配置里的节点',
-                            child: InputChip(
-                              avatar: Icon(
-                                _builtinIcon(name),
-                                size: 15,
-                                color: _systemPolicyColor(name, scheme),
-                              ),
-                              label: Text(name),
-                              labelStyle: mono(
-                                12,
-                                color: _systemPolicyColor(name, scheme),
-                              ),
-                              onDeleted: () => onRemove(name),
-                              deleteButtonTooltipMessage: '从组里移除',
-                            ),
+                          SystemPolicyChip(
+                            name: name,
+                            note: name == 'REJECT-DROP' ? '不常用' : null,
+                            tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
+                            onRemove: () => onRemove(name),
                           )
                         else
                           InputChip(
@@ -1046,7 +994,7 @@ class _SystemPolicyCard extends StatelessWidget {
                   ),
                 ),
                 child: Icon(
-                  _builtinIcon(target),
+                  builtinIcon(target),
                   size: 17,
                   color: scheme.tertiary,
                 ),
@@ -1072,182 +1020,6 @@ class _SystemPolicyCard extends StatelessWidget {
           ),
           GroupRulesBlock(state: state, target: target, newRuleLabel: '添加规则'),
         ],
-      ),
-    );
-  }
-}
-
-/// 一个可长按拖拽的节点芯片。
-class NodeChip extends StatelessWidget {
-  const NodeChip({
-    super.key,
-    required this.node,
-    required this.fromGroup,
-    required this.onOpen,
-    required this.onMove,
-    required this.onDelete,
-    required this.onRemove,
-    this.onMenu,
-    this.onSelect,
-    this.selected = false,
-  });
-
-  final ProxyEntry node;
-  final String? fromGroup;
-  final VoidCallback onOpen;
-  final VoidCallback onMove;
-  final VoidCallback onDelete;
-
-  /// 非空表示"从当前组移除"；未归类节点为 null。
-  final VoidCallback? onRemove;
-
-  /// 手机上没有右键，点这个 ⋮ 打开「编辑 / 移动 / 删除」操作表。
-  final VoidCallback? onMenu;
-
-  /// 组内芯片：点按 = 让这个组改用该节点（不打开编辑页）。
-  final VoidCallback? onSelect;
-
-  /// 该节点是否正是所属组当前选中的那个。
-  final bool selected;
-
-  static String _typeBadge(String type) => switch (type) {
-    'vless' => 'V',
-    'vmess' => 'M',
-    'trojan' => 'T',
-    'ss' => 'S',
-    'ssr' => 'R',
-    'hysteria2' || 'hy2' => 'H2',
-    'tuic' => 'U',
-    'wireguard' => 'WG',
-    'socks5' => '5',
-    'http' => 'H',
-    'snell' => 'SN',
-    'ssh' => 'SH',
-    'anytls' => 'A',
-    _ => '?',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final chip = Container(
-      decoration: BoxDecoration(
-        color: selected
-            ? scheme.primary.withValues(alpha: 0.16)
-            : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: selected ? scheme.primary : scheme.outlineVariant,
-          width: selected ? 1.4 : 1,
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(5, 3, 3, 3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (selected)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Icon(Icons.check_circle, size: 13, color: scheme.primary),
-            ),
-          Container(
-            width: 18,
-            height: 18,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: scheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: scheme.primary.withValues(alpha: 0.20)),
-            ),
-            child: Text(
-              _typeBadge(node.type),
-              style: mono(8.5, color: scheme.primary, weight: 700),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(node.name, style: display(13, weight: 500)),
-          if (onMenu != null)
-            InkWell(
-              onTap: onMenu,
-              customBorder: const CircleBorder(),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Icon(
-                  Icons.more_vert,
-                  size: 14,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          if (onRemove != null)
-            InkWell(
-              onTap: onRemove,
-              customBorder: const CircleBorder(),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(
-                  Icons.close,
-                  size: 14,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            )
-          else if (onMenu == null)
-            const SizedBox(width: 4),
-        ],
-      ),
-    );
-
-    return LongPressDraggable<_DragData>(
-      data: _DragData(node.name, fromGroup),
-      // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
-      delay: const Duration(milliseconds: 300),
-      hapticFeedbackOnStart: true,
-      dragAnchorStrategy: childDragAnchorStrategy,
-      feedback: Material(
-        color: Colors.transparent,
-        child: Opacity(opacity: 0.92, child: chip),
-      ),
-      childWhenDragging: Opacity(opacity: 0.3, child: chip),
-      child: GestureDetector(
-        onSecondaryTapDown: (details) async {
-          final choice = await showMenu<String>(
-            context: context,
-            position: RelativeRect.fromLTRB(
-              details.globalPosition.dx,
-              details.globalPosition.dy,
-              details.globalPosition.dx,
-              details.globalPosition.dy,
-            ),
-            items: const [
-              PopupMenuItem(value: 'edit', child: Text('编辑节点')),
-              PopupMenuItem(value: 'move', child: Text('移动到…')),
-              PopupMenuItem(value: 'delete', child: Text('删除节点')),
-            ],
-          );
-          switch (choice) {
-            case 'edit':
-              onOpen();
-            case 'move':
-              onMove();
-            case 'delete':
-              onDelete();
-          }
-        },
-        child: Tooltip(
-          message: onSelect != null
-              ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
-              : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
-          // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
-          // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
-          triggerMode: TooltipTriggerMode.manual,
-          child: InkWell(
-            onTap: onSelect ?? onOpen,
-            borderRadius: BorderRadius.circular(10),
-            child: chip,
-          ),
-        ),
       ),
     );
   }
@@ -1688,39 +1460,42 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
     MemberCandidate candidate,
   ) {
     final inside = candidate.inGroup;
-    return CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      value: inside || _picked.contains(candidate.name),
-      onChanged: inside
-          ? null
-          : (value) => _toggle(candidate.name, value ?? false),
-      title: Text(
-        candidate.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: hintStyle(
-          context,
-        )?.copyWith(color: inside ? scheme.onSurfaceVariant : scheme.onSurface),
+    final checked = inside || _picked.contains(candidate.name);
+    final note = inside
+        ? '已在组内'
+        : candidate.note ?? (candidate.isBuiltin ? '系统策略' : null);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Checkbox(
+            value: checked,
+            onChanged: inside
+                ? null
+                : (value) => _toggle(candidate.name, value ?? false),
+          ),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: inside ? null : () => _toggle(candidate.name, !checked),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: NameChip(
+                  name: candidate.name,
+                  icon: candidate.isBuiltin
+                      ? builtinIcon(candidate.name)
+                      : candidate.isGroup
+                      ? Icons.account_tree_outlined
+                      : Icons.dns_outlined,
+                  selected: _picked.contains(candidate.name),
+                  enabled: !inside,
+                  subtitle: note,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      secondary: Icon(
-        candidate.isBuiltin
-            ? _builtinIcon(candidate.name)
-            : candidate.isGroup
-            ? Icons.account_tree_outlined
-            : Icons.dns_outlined,
-        size: 18,
-        color: candidate.isBuiltin
-            ? _systemPolicyColor(candidate.name, scheme)
-            : scheme.onSurfaceVariant,
-      ),
-      subtitle: inside
-          ? Text('已在组内', style: hintStyle(context))
-          : candidate.note != null
-          ? Text(candidate.note!, style: hintStyle(context))
-          : candidate.isBuiltin
-          ? Text('系统策略', style: hintStyle(context))
-          : null,
     );
   }
 

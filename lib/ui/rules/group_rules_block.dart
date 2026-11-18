@@ -9,6 +9,7 @@ import '../rule_edit_dialog.dart';
 import '../rule_picker_sheet.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../chips.dart';
 import 'rule_row_card.dart';
 
 /// 组卡与系统策略卡共用的「规则区块」。
@@ -214,11 +215,9 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
             Padding(
               key: ValueKey('group-rule-${rule.index}'),
               padding: const EdgeInsets.only(bottom: Insets.xs),
-              child: RuleRowCard(
+              child: RuleChip(
                 rule: rule,
-                compact: true,
                 onTap: () => _edit(initial: rule),
-                onEdit: () => _edit(initial: rule),
                 onDelete: () => _delete(rule),
               ),
             ),

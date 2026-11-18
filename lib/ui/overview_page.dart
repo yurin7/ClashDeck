@@ -7,6 +7,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'picker_sheet.dart';
 import 'theme.dart';
+import 'chips.dart';
 import 'widgets.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
@@ -580,50 +581,24 @@ class _GlobalExitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final running = runtime.phase == RuntimePhase.running;
     final current =
         (running ? runtime.selected['GLOBAL'] : null) ?? settings.globalNode;
-    final label = current ?? '跟随内核默认（DIRECT）';
     return Row(
       children: [
         Text('全局出口', style: hintStyle(context)),
         const SizedBox(width: Insets.sm),
         Flexible(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(Radiuses.sm),
+          child: NameChip(
+            name: current ?? 'DIRECT',
+            icon: _iconOf(current ?? 'DIRECT'),
+            subtitle: current == null
+                ? '跟随内核默认'
+                : _membersOf(current).isNotEmpty
+                ? '组 · ${_membersOf(current).length}'
+                : null,
+            selected: current != null,
             onTap: () => _pick(context),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(Insets.sm, 4, Insets.sm, 4),
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(Radiuses.sm),
-                border: Border.all(
-                  color: scheme.primary.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _iconOf(current ?? 'DIRECT'),
-                    size: 13,
-                    color: scheme.primary,
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: mono(11.5, color: scheme.primary, weight: 600),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(Icons.expand_more, size: 14, color: scheme.primary),
-                ],
-              ),
-            ),
           ),
         ),
         const Spacer(),

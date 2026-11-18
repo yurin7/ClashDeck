@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'sheets.dart';
+import 'chips.dart';
 import 'theme.dart';
 
 /// 底部上滑选择面板里的一个选项。
@@ -219,7 +220,7 @@ class _PickerSheet<T> extends StatelessWidget {
   }
 }
 
-/// 胶囊模式的选项：左侧类型小方块 + 名称 + 选中勾，和组内成员 chip 一致。
+/// 胶囊模式的选项：直接复用共享的 NameChip，和「全局出口」行同一外观。
 class _PickerChip<T> extends StatelessWidget {
   const _PickerChip({required this.option, required this.selected, this.onTap});
 
@@ -229,69 +230,13 @@ class _PickerChip<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final enabled = onTap != null;
-    final accent = selected ? scheme.primary : scheme.onSurfaceVariant;
-    return InkWell(
-      borderRadius: BorderRadius.circular(Radiuses.sm),
+    return NameChip(
+      name: option.label,
+      icon: option.icon,
+      subtitle: option.subtitle,
+      selected: selected,
+      enabled: onTap != null,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.fromLTRB(Insets.sm, 5, Insets.md, 5),
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.16)
-              : scheme.surfaceContainerHigh.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(Radiuses.sm),
-          border: Border.all(
-            color: selected ? scheme.primary : scheme.outlineVariant,
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: selected
-                    ? scheme.primary.withValues(alpha: 0.18)
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Icon(
-                option.icon ?? Icons.bolt_outlined,
-                size: 12,
-                color: accent,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              option.label,
-              style: mono(
-                12,
-                weight: selected ? 600 : 500,
-                color: enabled
-                    ? (selected ? scheme.primary : scheme.onSurface)
-                    : scheme.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
-            ),
-            if (option.subtitle != null) ...[
-              const SizedBox(width: 4),
-              Text(
-                option.subtitle!,
-                style: hintStyle(context)?.copyWith(fontSize: 10),
-              ),
-            ],
-            if (selected) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.check, size: 14, color: scheme.primary),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }
@@ -307,7 +252,6 @@ class _PickerRow<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final enabled = onTap != null;
-    final fg = enabled ? scheme.onSurface : scheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Insets.lg, vertical: 2),
       child: InkWell(
@@ -317,8 +261,8 @@ class _PickerRow<T> extends StatelessWidget {
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(
-            horizontal: Insets.md,
-            vertical: Insets.sm + 2,
+            horizontal: Insets.sm,
+            vertical: 3,
           ),
           decoration: BoxDecoration(
             color: selected ? scheme.primary.withValues(alpha: 0.12) : null,
@@ -326,43 +270,16 @@ class _PickerRow<T> extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (option.icon != null) ...[
-                Icon(
-                  option.icon,
-                  size: 18,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: Insets.sm),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: fg,
-                      ),
-                    ),
-                    if (option.subtitle != null) ...[
-                      const SizedBox(height: 1),
-                      Text(
-                        option.subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: hintStyle(context),
-                      ),
-                    ],
-                  ],
+              Flexible(
+                child: NameChip(
+                  name: option.label,
+                  icon: option.icon,
+                  subtitle: option.subtitle,
+                  selected: selected,
+                  enabled: enabled,
                 ),
               ),
-              if (selected) Icon(Icons.check, size: 20, color: scheme.primary),
+              const Spacer(),
             ],
           ),
         ),

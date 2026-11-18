@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'theme.dart';
 import './widgets/app_ink.dart';
+import 'motion.dart';
 
 export 'app_dialog.dart';
 export 'toast.dart';
@@ -382,7 +383,7 @@ class _StatusDotState extends State<StatusDot>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: kStatusPulseDuration,
   );
 
   /// 呼吸用往返曲线：0 → 1 → 0，循环回起点时不会硬跳。
@@ -682,7 +683,7 @@ class _SlidableRowState extends State<SlidableRow>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 220),
+    duration: Motion.normal.expand,
     value: widget.open ? 1 : 0,
   );
 

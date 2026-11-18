@@ -12,7 +12,11 @@
 /// 7. 只允许 `lib/ui/sheets.dart` 直接调 `showModalBottomSheet(`；
 /// 8. 禁止 `showDialog<`；
 /// 9. `showAppDialog(` 必须带 `width:`；
-/// 10. 目标组输入不得用 `AppDropdown(label: '目标…')`，统一 `TargetSelectorField`。
+/// 10. 目标组输入不得用 `AppDropdown(label: '目标…')`，统一 `TargetSelectorField`；
+/// 11. `Dismissible(` → `SlidableRow`；
+/// 12. 裸 `maxLines: null` → `AppTextArea` / `AppTextField(expands: true)`；
+/// 13. `duration: const Duration(…)` → `Motion` token（`lib/ui/motion.dart`）；
+/// 14. `PickerSheetScaffold(` 只允许在 `lib/ui/sheets/` 的共享面板里。
 ///
 /// allowlist 只放共享封装文件，业务文件不得加入。
 ///
@@ -139,6 +143,37 @@ bannedPatterns =
         rule: 'no-checkbox',
         message: '多选改用 SelectableTile',
         allow: <String>{},
+      ),
+      (
+        pattern: 'Dismissible(',
+        rule: 'no-dismissible',
+        message: '左滑统一用 SlidableRow（lib/ui/widgets.dart）',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'maxLines: null',
+        rule: 'no-raw-multiline',
+        message: '多行文本统一用 AppTextArea / AppTextField(expands: true)',
+        allow: <String>{'lib/ui/fields.dart'},
+      ),
+      (
+        pattern: 'duration: const Duration(',
+        rule: 'no-inline-duration',
+        message: '动画时长统一用 Motion token（lib/ui/motion.dart）',
+        allow: <String>{'lib/ui/motion.dart'},
+      ),
+      (
+        pattern: 'PickerSheetScaffold(',
+        rule: 'no-raw-picker-scaffold',
+        message:
+            '业务面板走 showSectionedPicker / showSelectSheet，'
+            '不在页面里直接拼 PickerSheetScaffold',
+        allow: <String>{
+          'lib/ui/sheets/picker_sheet.dart',
+          'lib/ui/sheets/sectioned_picker.dart',
+          'lib/ui/rule_picker_sheet.dart',
+          'lib/ui/sheets/node_picker_sheet.dart',
+        },
       ),
     ];
 

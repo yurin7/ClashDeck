@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
+import '../motion.dart';
 
 /// 统一的点击反馈：去掉 Material 默认的水波纹与残留高亮。
 ///
@@ -74,7 +75,7 @@ class _AppInkWellState extends State<AppInkWell> {
     final child = interactive
         ? AnimatedScale(
             scale: _pressed ? 0.985 : 1,
-            duration: const Duration(milliseconds: 120),
+            duration: Motion.of(context).fast,
             curve: Curves.easeOutCubic,
             child: Material(
               type: MaterialType.transparency,

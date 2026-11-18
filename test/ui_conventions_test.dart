@@ -162,6 +162,80 @@ Widget build(BuildContext context) {
         hasLength(1),
       );
     });
+    test('Dismissible 命中', () {
+      final violations = scanSource('lib/ui/example.dart', '''
+Widget build() => Dismissible(key: const Key('a'), child: const SizedBox());
+''');
+      expect(violations.where((v) => v.rule == 'no-dismissible'), hasLength(1));
+    });
+
+    test('裸 maxLines: null 命中，共享文本域里放行', () {
+      const source = '''
+Widget build() => AppTextField(maxLines: null);
+''';
+      expect(
+        scanSource(
+          'lib/ui/example.dart',
+          source,
+        ).where((v) => v.rule == 'no-raw-multiline'),
+        hasLength(1),
+      );
+      expect(
+        scanSource(
+          'lib/ui/fields.dart',
+          source,
+        ).where((v) => v.rule == 'no-raw-multiline'),
+        isEmpty,
+      );
+    });
+
+    test('散写 duration 命中，motion.dart 里放行', () {
+      const source = '''
+Widget build() => AnimatedSize(duration: const Duration(milliseconds: 220));
+''';
+      expect(
+        scanSource(
+          'lib/ui/example.dart',
+          source,
+        ).where((v) => v.rule == 'no-inline-duration'),
+        hasLength(1),
+      );
+      expect(
+        scanSource(
+          'lib/ui/motion.dart',
+          source,
+        ).where((v) => v.rule == 'no-inline-duration'),
+        isEmpty,
+      );
+    });
+
+    test('页面里直接拼 PickerSheetScaffold 命中，共享面板放行', () {
+      const source = '''
+Widget build() => const PickerSheetScaffold(title: 'x', sections: []);
+''';
+      expect(
+        scanSource(
+          'lib/ui/example.dart',
+          source,
+        ).where((v) => v.rule == 'no-raw-picker-scaffold'),
+        hasLength(1),
+      );
+      for (final allowed in <String>[
+        'lib/ui/sheets/picker_sheet.dart',
+        'lib/ui/rule_picker_sheet.dart',
+        'lib/ui/sheets/node_picker_sheet.dart',
+        'lib/ui/sheets/sectioned_picker.dart',
+      ]) {
+        expect(
+          scanSource(
+            allowed,
+            source,
+          ).where((v) => v.rule == 'no-raw-picker-scaffold'),
+          isEmpty,
+          reason: allowed,
+        );
+      }
+    });
   });
 
   test('lib/ui 当前 0 违规', () {

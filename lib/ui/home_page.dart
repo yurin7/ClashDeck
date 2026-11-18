@@ -18,6 +18,7 @@ import './widgets/app_ink.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'widgets/edit_dialog.dart';
+import 'motion.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -683,7 +684,7 @@ class _AnimatedStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
+      duration: Motion.of(context).expand,
       transitionBuilder: (child, animation) =>
           FadeTransition(opacity: animation, child: child),
       child: StatTile(
@@ -751,7 +752,7 @@ class _ProfileRow extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
+        duration: Motion.of(context).expand,
         curve: Curves.easeOutCubic,
         // 运行中的行铺一层很淡的主色底，切换完成时是渐变而不是闪一下。
         color: active
@@ -768,7 +769,7 @@ class _ProfileRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
+                duration: Motion.of(context).expand,
                 curve: Curves.easeOutCubic,
                 width: 36,
                 height: 36,
@@ -782,7 +783,7 @@ class _ProfileRow extends StatelessWidget {
                   ),
                 ),
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
+                  duration: Motion.of(context).expand,
                   child: Icon(
                     switching
                         ? Icons.sync
@@ -827,7 +828,7 @@ class _ProfileRow extends StatelessWidget {
                         ),
                         const SizedBox(width: Insets.sm),
                         AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
+                          duration: Motion.of(context).expand,
                           transitionBuilder: (child, animation) =>
                               FadeTransition(opacity: animation, child: child),
                           child: switching

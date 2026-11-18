@@ -11,6 +11,7 @@ import 'chips.dart';
 import 'sheets/sectioned_picker.dart';
 import 'widgets.dart';
 import 'widgets/start_stop_button.dart';
+import 'motion.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
 class OverviewPage extends StatefulWidget {
@@ -217,11 +218,11 @@ class _StatusCard extends StatelessWidget {
               // 状态文字用 AnimatedSwitcher 淡入淡出 + 尺寸过渡：
               // starting/stopping 这类中间态连续切换时不闪、不抖。
               AnimatedSize(
-                duration: const Duration(milliseconds: 220),
+                duration: Motion.of(context).expand,
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.centerLeft,
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
+                  duration: Motion.of(context).expand,
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeOutCubic,
                   transitionBuilder: (child, animation) => FadeTransition(
@@ -345,7 +346,7 @@ class _QuickControls extends StatelessWidget {
           const SizedBox(height: Insets.sm),
           Text(state.app.proxyMode.description, style: hintStyle(context)),
           AnimatedSize(
-            duration: const Duration(milliseconds: 180),
+            duration: Motion.of(context).arrow,
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             child: state.app.proxyMode == ProxyMode.tun
@@ -401,7 +402,7 @@ class _QuickControls extends StatelessWidget {
             },
           ),
           AnimatedSize(
-            duration: const Duration(milliseconds: 180),
+            duration: Motion.of(context).arrow,
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             child: state.mode == 'global'
@@ -860,7 +861,7 @@ class _Segmented<T> extends StatelessWidget {
               children: [
                 // 选中底板用 AnimatedPositioned 滑过去，模仿 iOS 分段控件的拇指。
                 AnimatedPositioned(
-                  duration: const Duration(milliseconds: 220),
+                  duration: Motion.of(context).expand,
                   curve: Curves.easeOutCubic,
                   left: segmentWidth * index,
                   top: 0,
@@ -898,7 +899,7 @@ class _Segmented<T> extends StatelessWidget {
                                       ? scheme.primary
                                       : scheme.onSurfaceVariant,
                                 ),
-                                duration: const Duration(milliseconds: 220),
+                                duration: Motion.of(context).expand,
                                 curve: Curves.easeOutCubic,
                                 builder: (context, color, _) => Text(
                                   labelOf(value),

@@ -8,6 +8,7 @@ import '../widgets/selectable_tile.dart';
 import '../widgets.dart';
 import '../fields.dart';
 import 'import_sheet_style.dart';
+import '../motion.dart';
 
 /// 一个可勾选的 GEO 词库。
 class _GeoItem {
@@ -169,7 +170,7 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
     if (_pageController.hasClients) {
       _pageController.animateToPage(
         index,
-        duration: const Duration(milliseconds: 220),
+        duration: Motion.normal.expand,
         curve: Curves.easeOutCubic,
       );
     }
@@ -184,7 +185,7 @@ class _GeoImportSheetState extends State<_GeoImportSheet> {
       Scrollable.ensureVisible(
         ctx,
         alignment: 0.5,
-        duration: const Duration(milliseconds: 220),
+        duration: Motion.normal.expand,
         curve: Curves.easeOutCubic,
       );
     });

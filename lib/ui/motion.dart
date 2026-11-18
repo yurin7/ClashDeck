@@ -97,3 +97,6 @@ class MotionEntrance extends StatelessWidget {
     );
   }
 }
+
+/// 循环状态灯（启动中呼吸）用的周期，独立于转场时长上限。
+const Duration kStatusPulseDuration = Duration(milliseconds: 1600);

@@ -101,6 +101,10 @@
 | `DropdownButton(` / `DropdownButton<` | `AppDropdown` | `lib/ui/dropdown.dart` |
 | `Checkbox(` / `Checkbox.adaptive(` / `CheckboxListTile(` / `CheckboxListTile.adaptive(` | 高亮行 `SelectableTile` / `NameChip` | — |
 | `showDialog<` | `showAppDialog` | — |
+| `Dismissible(` | `SlidableRow`（左滑） | — |
+| `maxLines: null` | `AppTextArea` / `AppTextField(expands: true)` | `lib/ui/fields.dart` |
+| `duration: const Duration(` | `Motion` token（`lib/ui/motion.dart`） | `lib/ui/motion.dart` |
+| `PickerSheetScaffold(` | `showSectionedPicker` / `showSelectSheet` | `lib/ui/sheets/` 与 `lib/ui/rule_picker_sheet.dart` |
 | `showModalBottomSheet(` | `showAppSheet` / `showSelectSheet` | `lib/ui/sheets.dart` |
 | `showAppDialog(` 缺 `width:` | 传 `dialogWidthOf(context)` 或 `confirmDialogWidth(context)` | — |
 | `AppDropdown(label: '目标…')` | `TargetSelectorField` + `showTargetPickerSheet` | — |

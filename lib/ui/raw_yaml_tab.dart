@@ -24,7 +24,6 @@ class RawYamlTab extends StatelessWidget {
           height: 420,
           child: AppTextField(
             controller: ctrl,
-            maxLines: null,
             expands: true,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             decoration: const InputDecoration(

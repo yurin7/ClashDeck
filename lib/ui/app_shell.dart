@@ -21,6 +21,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
+import 'motion.dart';
 
 /// 三页壳：概览 / 配置 / 设置，底部悬浮岛切换。
 ///
@@ -95,7 +96,7 @@ class _AppShellState extends State<AppShell> {
     try {
       await _pager.animateToPage(
         target,
-        duration: const Duration(milliseconds: 260),
+        duration: Motion.of(context).page,
         curve: Curves.easeOutCubic,
       );
       if (mounted && _index != target) setState(() => _index = target);

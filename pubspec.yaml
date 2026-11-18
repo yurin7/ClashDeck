@@ -35,6 +35,8 @@ flutter:
     - assets/geo/geosite.dat
     # 上面 dat 里有哪些名字，构建期扫成 JSON（tool/build_geosite_index.dart）。
     - assets/geo/geosite_index.json
+    # Pulse 顶部信息卡的小猫图标（与桌面图标同一份像素画）。
+    - assets/icon/app_icon.png
   fonts:
     # 显示字体：标题、大号数值、状态标签。变量字体，字重通过 fontVariations 指定。
     - family: SpaceGrotesk

@@ -28,6 +28,7 @@ class EditorPage extends StatefulWidget {
     this.displayName,
     this.runtime,
     this.autoSave = true,
+    this.cachedDelays = const <String, int?>{},
   });
 
   final ProfileStore store;
@@ -42,6 +43,9 @@ class EditorPage extends StatefulWidget {
 
   /// 返回上一级时，配置没有校验错误就自动保存（设置里的「自动保存」）。
   final bool autoSave;
+
+  /// 上次测速缓存（毫秒；null 表示超时），给代理页节点行显示延迟。
+  final Map<String, int?> cachedDelays;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -491,6 +495,7 @@ class _EditorPageState extends State<EditorPage> {
                       ProxyBoard(
                         state: state,
                         runtime: widget.runtime,
+                        cachedDelays: widget.cachedDelays,
                         onSubscriptionSaved: _rememberSubscription,
                         groupSelection: _groupSelection,
                         onGroupSelection: _rememberGroupSelection,

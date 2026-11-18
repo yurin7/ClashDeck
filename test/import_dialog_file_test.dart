@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 「导入配置」对话框里的「从文件」：选完回填名称/文本，用户可编辑后再导入。
+/// 「导入配置」对话框里的「从文件导入」：选完回填名称/文本，用户可编辑后再导入。
 ///
 /// 文件选择器通过 `HomePage.pickYamlFile` 注入，不依赖平台通道。
 void main() {
@@ -72,7 +72,7 @@ void main() {
   }
 
   Future<void> pickFile(WidgetTester tester) async {
-    await tester.tap(find.widgetWithText(TextButton, '从文件'));
+    await tester.tap(find.widgetWithText(TextButton, '从文件导入'));
     await tester.pumpAndSettle();
   }
 
@@ -103,7 +103,7 @@ rules:
     await openImportDialog(tester);
     await pickFile(tester);
 
-    expect(find.text('从文件'), findsWidgets);
+    expect(find.text('从文件导入'), findsWidgets);
     expect(find.textContaining('fill.example'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, '导入'));

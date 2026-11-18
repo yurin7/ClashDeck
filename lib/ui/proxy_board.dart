@@ -38,6 +38,7 @@ class ProxyBoard extends StatefulWidget {
     this.runtime,
     this.groupSelection = const <String, String>{},
     this.onGroupSelection,
+    this.cachedDelays = const <String, int?>{},
   });
 
   final EditorState state;
@@ -53,6 +54,9 @@ class ProxyBoard extends StatefulWidget {
 
   /// 点组内节点时回调：把这次选择记进当前配置的 sidecar，重开仍在。
   final Future<void> Function(String group, String node)? onGroupSelection;
+
+  /// 上次测速缓存（毫秒；null 表示超时），用于节点行副标题。
+  final Map<String, int?> cachedDelays;
 
   @override
   State<ProxyBoard> createState() => _ProxyBoardState();
@@ -495,7 +499,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
         ),
         _NodeListCard(
           nodes: profile.proxies,
-          delays: widget.runtime?.delays ?? const <String, int?>{},
+          delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
           currentName: selection[kDefaultGroupName],
           onOpen: _editNode,
           onDelete: _deleteNode,

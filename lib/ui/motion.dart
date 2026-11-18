@@ -100,3 +100,29 @@ class MotionEntrance extends StatelessWidget {
 
 /// 循环状态灯（启动中呼吸）用的周期，独立于转场时长上限。
 const Duration kStatusPulseDuration = Duration(milliseconds: 1600);
+
+/// Pulse 顶部小猫的浮动周期（往返一次），同样不属于转场时长。
+const Duration kMascotFloatDuration = Duration(milliseconds: 3200);
+
+/// Pulse 叠加层滑入/退出：比页面转场稍长，让下层主界面保持可见。
+const Duration kPulseEnterDuration = Duration(milliseconds: 360);
+const Duration kPulseExitDuration = Duration(milliseconds: 260);
+
+/// Pulse 背景层循环周期（mesh 漂移 + 粒子）。
+const Duration kPulseBackdropPeriod = Duration(seconds: 24);
+
+/// Pulse 内容卡片入场总时长（每张再按 40ms 阶梯错开）。
+const Duration kPulseContentEnterDuration = Duration(milliseconds: 600);
+
+/// Pulse 测速雷达的循环周期（脉冲环 / 呼吸光晕 / 底图扫掠）。
+const Duration kPulseRadarPeriod = Duration(milliseconds: 2400);
+
+/// 测速结果行的条形与数字动画时长。
+const Duration kLatencyBarDuration = Duration(milliseconds: 300);
+const Duration kLatencyCountDuration = Duration(milliseconds: 200);
+
+/// 失败行的一次性抖动时长。
+const Duration kLatencyShakeDuration = Duration(milliseconds: 120);
+
+/// 第一名结果行的一次性扫光时长。
+const Duration kSheenDuration = Duration(milliseconds: 200);

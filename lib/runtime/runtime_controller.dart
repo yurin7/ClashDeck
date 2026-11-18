@@ -72,6 +72,9 @@ class RuntimeController extends ChangeNotifier {
   int _down = 0;
 
   Timer? _pollTimer;
+
+  /// 本次启动时间；内核未运行时为 null。
+  DateTime? _startedAt;
   StreamSubscription<({int up, int down})>? _trafficSub;
   bool _disposed = false;
 
@@ -91,6 +94,9 @@ class RuntimeController extends ChangeNotifier {
 
   /// 延迟测试结果：节点名 → 毫秒（null 表示超时/失败）。
   Map<String, int?> get delays => _delays;
+
+  /// 本次启动时间；内核未运行时为 null。
+  DateTime? get startedAt => _startedAt;
 
   int get up => _up;
   int get down => _down;
@@ -302,6 +308,65 @@ class RuntimeController extends ChangeNotifier {
     }
   }
 
+  /// 并发测一批节点的延迟，返回 节点名 → 毫秒（超时/失败为 null）。
+  ///
+  /// [isCancelled] 返回 true 时停止派发新任务，已发出的请求会自然结束。
+  Future<Map<String, int?>> testDelays(
+    List<String> names, {
+    int concurrency = 4,
+    String url = 'http://www.gstatic.com/generate_204',
+    int timeoutMs = 5000,
+    void Function(int done, int total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final results = <String, int?>{};
+    final total = names.length;
+    var next = 0;
+    var done = 0;
+    final limit = concurrency < 1 ? 1 : concurrency;
+    Future<void> worker() async {
+      while (true) {
+        if (isCancelled?.call() ?? false) return;
+        final index = next++;
+        if (index >= total) return;
+        final name = names[index];
+        int? value;
+        final client = api;
+        try {
+          value = await client.delay(name, url: url, timeoutMs: timeoutMs);
+        } catch (_) {
+          value = null;
+        } finally {
+          client.close();
+        }
+        results[name] = value;
+        done += 1;
+        _delays = {..._delays, name: value};
+        if (!_disposed) notifyListeners();
+        onProgress?.call(done, total);
+      }
+    }
+
+    await Future.wait([for (var i = 0; i < limit && i < total; i++) worker()]);
+    return results;
+  }
+
+  /// 当前连接数（`/connections` 的条数）；内核没跑或请求失败返回 null。
+  Future<int?> fetchConnectionCount() async {
+    if (_phase != RuntimePhase.running) return null;
+    final client = api;
+    try {
+      final body = await client.connections();
+      final list = body['connections'];
+      if (list is List) return list.length;
+      return 0;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
   /// 测一个节点的延迟。
   Future<int?> testDelay(String name) async {
     final client = api;
@@ -493,6 +558,12 @@ class RuntimeController extends ChangeNotifier {
 
   void _setPhase(RuntimePhase phase) {
     if (_disposed) return;
+    final wasRunning = _phase == RuntimePhase.running;
+    if (phase == RuntimePhase.running && !wasRunning) {
+      _startedAt = DateTime.now();
+    } else if (phase != RuntimePhase.running) {
+      _startedAt = null;
+    }
     _phase = phase;
     notifyListeners();
   }
@@ -500,6 +571,7 @@ class RuntimeController extends ChangeNotifier {
   void _setError(String message) {
     if (_disposed) return;
     _lastError = message;
+    _startedAt = null;
     _phase = RuntimePhase.error;
     notifyListeners();
   }

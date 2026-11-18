@@ -82,6 +82,51 @@ class AppPrefs {
   Future<void> setLastNotifiedVersion(String? version) =>
       _put('lastNotifiedVersion', version);
 
+  // ------------------------------------------------------------ 节点测速缓存
+
+  static String _latencyKey(String profile, String node) =>
+      'latency_${profile}_$node';
+  static String _lastLatencyKey(String profile) => 'lastLatencyAt_$profile';
+
+  /// 某配置缓存下来的节点延迟（毫秒；`-1` 表示超时/失败）。
+  ///
+  /// 只用于界面展示，不写入 YAML。
+  Map<String, int?> latenciesOf(String profile) {
+    final prefix = 'latency_${profile}_';
+    final result = <String, int?>{};
+    for (final entry in _data.entries) {
+      if (!entry.key.startsWith(prefix)) continue;
+      final value = entry.value;
+      if (value is int) {
+        result[entry.key.substring(prefix.length)] = value < 0 ? null : value;
+      }
+    }
+    return result;
+  }
+
+  /// 上次测速时间（用于测速卡「上次测速 · 时间」与 NodeRow 状态）。
+  DateTime? lastLatencyAt(String profile) {
+    final raw = _data[_lastLatencyKey(profile)] as String?;
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
+  /// 覆盖写入一批延迟结果；`null` 记为 -1（超时）。
+  Future<void> setLatencies(
+    String profile,
+    Map<String, int?> values, {
+    DateTime? at,
+  }) async {
+    for (final entry in values.entries) {
+      _data[_latencyKey(profile, entry.key)] = entry.value ?? -1;
+    }
+    _data[_lastLatencyKey(profile)] = (at ?? DateTime.now()).toIso8601String();
+    try {
+      await _file.writeAsString(jsonEncode(_data), flush: true);
+    } catch (_) {
+      // 写失败只影响下次展示，不影响当前会话。
+    }
+  }
+
   Future<void> _put(String key, Object? value) async {
     if (value == null) {
       _data.remove(key);

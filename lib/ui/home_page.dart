@@ -1098,10 +1098,16 @@ class _ImportDialogState extends State<_ImportDialog> {
         ],
       ),
       actions: [
-        TextButton.icon(
-          onPressed: _pickFile,
-          icon: const Icon(Icons.folder_open, size: 18),
-          label: const Text('从文件'),
+        Flexible(
+          child: TextButton.icon(
+            onPressed: _pickFile,
+            icon: const Icon(Icons.folder_open, size: 18),
+            label: const Text(
+              '从文件导入',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
         const Spacer(),
         TextButton(

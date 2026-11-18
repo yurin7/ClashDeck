@@ -8,6 +8,7 @@ import '../core/update/semver.dart';
 import '../core/update/update_check.dart';
 import 'update_dialog.dart';
 import '../core/model/app_settings.dart';
+import '../core/model/profile.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../data/app_prefs.dart';
@@ -19,6 +20,8 @@ import 'home_page.dart';
 import '../core/edit/config_ops.dart';
 import 'import_dialogs.dart';
 import 'overview_page.dart';
+import 'pulse_route.dart';
+import 'pulse_page.dart';
 import 'settings_page.dart';
 import 'sheets.dart';
 import 'theme.dart';
@@ -56,6 +59,9 @@ class _AppShellState extends State<AppShell> {
   /// 正在做切页动画。此时禁止触发切换配置这类重操作，避免中途换内核。
   bool _pagerBusy = false;
   AppPrefs? _prefs;
+
+  /// 节点延迟缓存（来自 app_prefs，按当前配置文件区分），只用于界面展示。
+  Map<String, int?> _latencyCache = <String, int?>{};
   List<StoredProfile> _profiles = const [];
   String? _activeFileName;
 
@@ -188,6 +194,13 @@ class _AppShellState extends State<AppShell> {
     settings?.addListener(_onSettingsChanged);
     if (active != null && active != _prefs?.activeProfile) {
       await _prefs?.setActiveProfile(active);
+    }
+    if (mounted) {
+      setState(() {
+        _latencyCache = active == null
+            ? <String, int?>{}
+            : (_prefs?.latenciesOf(active) ?? <String, int?>{});
+      });
     }
     if (pickActive) return;
   }
@@ -347,6 +360,7 @@ class _AppShellState extends State<AppShell> {
           fileName: fileName,
           runtime: _runtime,
           autoSave: _settings?.autoSave ?? false,
+          cachedDelays: _latencyCache,
         ),
       ),
     );
@@ -403,6 +417,40 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _openPulse() async {
+    final settings = _settings;
+    final fileName = _activeFileName;
+    final prefs = _prefs;
+    if (settings == null || fileName == null || prefs == null) {
+      _toast('还没有配置');
+      return;
+    }
+    final profile = Profile.from(settings.doc);
+    await Navigator.of(context).push(
+      pulseRoute<void>(
+        (_) => PulsePage(
+          appVersion: _appVersion,
+          profileName: fileName,
+          profile: profile,
+          prefs: prefs,
+          runtime: _runtime,
+          globalExit: settings.globalNode,
+          startKernel: _runtime.start,
+          onLatencyCached: (name, values) {
+            if (!mounted) return;
+            setState(() {
+              _latencyCache = {..._latencyCache, ...values};
+            });
+          },
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _latencyCache = prefs.latenciesOf(fileName);
+    });
+  }
+
   Future<void> _openEditorFor(String fileName) async {
     await Navigator.of(context).push(
       appRoute<void>(
@@ -411,6 +459,7 @@ class _AppShellState extends State<AppShell> {
           fileName: fileName,
           runtime: _runtime,
           autoSave: _settings?.autoSave ?? false,
+          cachedDelays: _latencyCache,
         ),
       ),
     );
@@ -582,6 +631,7 @@ class _AppShellState extends State<AppShell> {
                       onOpenEditor: _openEditor,
                       onPickProfile: _pickProfile,
                       onRefreshProfiles: _reloadProfiles,
+                      onOpenPulse: _openPulse,
                       bottomInset: _bottomInset,
                     ),
                   ),

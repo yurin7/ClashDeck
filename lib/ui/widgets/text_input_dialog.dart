@@ -16,6 +16,9 @@ Future<String?> showTextInputDialog(
   String? hint,
   String? helper,
   bool monospace = false,
+
+  /// 多行链接/大段文本用多行文本域（宽度撑满、高度约 0.8×宽度、框内滚动）。
+  bool area = false,
   int minLines = 1,
   int? maxLines,
   String confirmLabel = '保存',
@@ -32,18 +35,27 @@ Future<String?> showTextInputDialog(
       cancelLabel: cancelLabel,
       onConfirm: () => Navigator.of(ctx).pop(controller.text.trim()),
       onCancel: () => Navigator.of(ctx).pop(),
-      content: AppTextField(
-        controller: controller,
-        autofocus: true,
-        label: label,
-        hint: hint,
-        helper: helper,
-        minLines: minLines,
-        maxLines: maxLines ?? (minLines > 1 ? minLines : 1),
-        style: monospace
-            ? const TextStyle(fontFamily: 'monospace', fontSize: 12)
-            : null,
-      ),
+      content: area
+          ? AppTextArea(
+              controller: controller,
+              autofocus: true,
+              label: label,
+              hint: hint,
+              helper: helper,
+              monospace: monospace,
+            )
+          : AppTextField(
+              controller: controller,
+              autofocus: true,
+              label: label,
+              hint: hint,
+              helper: helper,
+              minLines: minLines,
+              maxLines: maxLines ?? (minLines > 1 ? minLines : 1),
+              style: monospace
+                  ? const TextStyle(fontFamily: 'monospace', fontSize: 12)
+                  : null,
+            ),
     ),
   );
   disposeAfterDialog(controller);

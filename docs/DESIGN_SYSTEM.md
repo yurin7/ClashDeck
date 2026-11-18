@@ -103,6 +103,7 @@
 - **结构**：标题 `20sp / w600`；可选副标题 `13sp`、`60%` 不透明度；右上「关闭」图标（44dp 热区）；内容 padding `24 水平 / 20 垂直`；底部按钮区 padding `24 / 16`，与内容之间一条 `Divider(height: 1)`。
 - **按钮**：底部右对齐；主按钮 `FilledButton` 高 44、最小宽 96、圆角 12；次按钮 `TextButton` 在其左侧、间距 12；**最多两个按钮**（取消 / 保存）。编辑态**不放删除按钮**，删除统一走左滑；`EditDialog(showFooter: false)` 用于「点遮罩即保存」的轻量编辑（如规则编辑）。
 - **输入框**：统一 `fields.dart`（高 44、圆角 12、label 浮动、错误文本 12sp）。
+- **多行文本域**：粘贴多行链接、订阅地址、导入 YAML 等大段文本统一用 `AppTextArea`：宽度撑满内容区、高度约 `0.8 × 可用宽`（`110–320` 之间 clamp）、自动换行、内容超出在框内滚动；不要再用 `minLines/maxLines` 手写高度。`showTextInputDialog(area: true)` 是它的弹窗封装。
 - **关闭**：`barrierDismissible: true` 仅限非破坏性表单；有未保存改动时拦截并二次确认。规则编辑例外：`barrierDismissible: false` + `onBarrierTap`——内容合法时点遮罩直接保存并关闭，非法时 toast「请填写匹配内容」并保持打开。
 - **动画**：240ms fade + scale 0.96→1（`app_dialog.dart`）。
 
@@ -145,6 +146,8 @@
 | 新建组 | `showEditDialog` + `EditDialog` | 组名 + DIRECT/REJECT 高亮行 |
 | 单行输入 | `showTextInputDialog` | 宽 520；输入框撑满；helper 不截断 |
 | 导入（规则 / 规则集 / 订阅） | `showEditDialog` 或多行粘贴面板 | 目标统一 DEFAULT |
+| 订阅地址 | `showSubscriptionDialog` | 只收地址；取消 / 保存；保存后再问「是否立即同步此订阅？」 |
+| 多行文本（粘贴链接 / YAML） | `AppTextArea`（或 `showTextInputDialog(area: true)`） | 宽度撑满、高度 0.8×宽、框内滚动 |
 | 选择节点（加成员） | `showSelectSheet` + `NodePickerSheet` | 分区：系统策略 → 节点 → 策略组 |
 | 全局出口 | `showSelectSheet` + `SectionedPicker` | 分区：内核默认 → 系统策略 → 策略组 → 节点 |
 | 选择规则（挂到组） | `showSelectSheet` + `rule_picker_sheet` | 行内 `RuleChip` |

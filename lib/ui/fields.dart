@@ -189,6 +189,75 @@ class AppTextField extends StatelessWidget {
   }
 }
 
+/// 多行文本域：所有「粘贴多行链接 / 大段文本」的地方都用它。
+///
+/// 宽度撑满可用宽，高度约 `0.8 × 宽度`（上限 320），自动换行，
+/// 内容超出时在框内滚动；不再用 `minLines/maxLines` 手写高度，
+/// 否则不同弹窗里的文本域高矮不一。
+class AppTextArea extends StatelessWidget {
+  const AppTextArea({
+    super.key,
+    this.controller,
+    this.label,
+    this.hint,
+    this.helper,
+    this.error,
+    this.autofocus = false,
+    this.enabled = true,
+    this.monospace = false,
+    this.minHeight = 110,
+    this.maxHeight = 320,
+    this.onChanged,
+  });
+
+  final TextEditingController? controller;
+  final String? label;
+  final String? hint;
+  final String? helper;
+  final String? error;
+  final bool autofocus;
+  final bool enabled;
+
+  /// 等宽字体：YAML、多行链接、base64 之类。
+  final bool monospace;
+  final double minHeight;
+  final double maxHeight;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = (width * 0.8).clamp(minHeight, maxHeight).toDouble();
+        return SizedBox(
+          height: height,
+          child: AppTextField(
+            controller: controller,
+            label: label,
+            hint: hint,
+            helper: helper,
+            error: error,
+            enabled: enabled,
+            autofocus: autofocus,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: null,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            alignLabelWithHint: true,
+            style: monospace
+                ? const TextStyle(fontFamily: 'monospace', fontSize: 12)
+                : null,
+            onChanged: onChanged,
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// 搜索输入框：统一带放大镜图标与清空按钮。
 class AppSearchField extends StatelessWidget {
   const AppSearchField({

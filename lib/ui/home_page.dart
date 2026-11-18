@@ -1045,14 +1045,11 @@ class _ImportDialogState extends State<_ImportDialog> {
         children: [
           AppTextField(controller: _name, label: '配置名称'),
           const SizedBox(height: Insets.md),
-          AppTextField(
+          AppTextArea(
             controller: _text,
-            minLines: 6,
-            maxLines: 12,
-            style: monoStyle(context, size: 12),
+            monospace: true,
             label: 'YAML 配置 / 分享链接 / 订阅地址',
             hint: '整份 YAML，或 vless://…（可多行），或 https://… 订阅地址',
-            alignLabelWithHint: true,
           ),
         ],
       ),

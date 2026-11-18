@@ -364,7 +364,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _importUrl() async {
-    final input = await showSubscriptionDialog(context, allowSaveOnly: false);
+    final input = await showSubscriptionDialog(context);
     if (input == null || input.result == null) return;
     final result = input.result!;
     try {
@@ -413,8 +413,7 @@ class _AppShellState extends State<AppShell> {
       title: '粘贴导入',
       hint: 'YAML 配置，或一行/多行 vless、vmess、hy2 链接',
       monospace: true,
-      minLines: 6,
-      maxLines: 12,
+      area: true,
       confirmLabel: '导入',
     );
   }

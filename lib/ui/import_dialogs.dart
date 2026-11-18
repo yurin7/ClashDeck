@@ -26,15 +26,12 @@ Future<String?> showPasteLinksDialog(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppTextField(
+          AppTextArea(
             controller: ctrl,
-            minLines: 6,
-            maxLines: 12,
             autofocus: true,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            monospace: true,
             label: '一行一个链接，可以混着来',
             hint: 'vless://…\nvmess://…\nhysteria2://…',
-            alignLabelWithHint: true,
           ),
           const SizedBox(height: 8),
           Text(
@@ -56,36 +53,36 @@ class SubscriptionInput {
 
   final String url;
 
-  /// 点「拉取并导入」成功后的结果；只用「保存地址」时为 null。
+  /// 选择「同步」并拉取成功后的结果；选「稍后」只保存地址时为 null。
   final SubscriptionResult? result;
 }
 
-/// 订阅对话框：填 URL → 拉取 → 显示节点数与用量 → 确认。
+final RegExp _subscriptionUrlPattern = RegExp(r'^https?://\S+$');
+
+/// 订阅对话框：只收地址，点「保存」后再问要不要立即同步。
 ///
-/// 网络与解析错误就地显示在对话框里（不关窗、不丢用户已填的地址）。
+/// 选「稍后」只返回地址（由调用方保存，不联网）；选「同步」才拉取，
+/// 拉取失败就地显示错误、不关窗、不丢已填地址。
 Future<SubscriptionInput?> showSubscriptionDialog(
   BuildContext context, {
   String? initialUrl,
-  bool allowSaveOnly = true,
+  Future<SubscriptionResult> Function(String url)? fetch,
 }) {
   return showAppDialog<SubscriptionInput>(
     context,
     width: dialogWidthOf(context),
     builder: (_) => _SubscriptionDialog(
       initialUrl: initialUrl,
-      allowSaveOnly: allowSaveOnly,
+      fetch: fetch ?? fetchSubscription,
     ),
   );
 }
 
 class _SubscriptionDialog extends StatefulWidget {
-  const _SubscriptionDialog({
-    required this.initialUrl,
-    required this.allowSaveOnly,
-  });
+  const _SubscriptionDialog({required this.initialUrl, required this.fetch});
 
   final String? initialUrl;
-  final bool allowSaveOnly;
+  final Future<SubscriptionResult> Function(String url) fetch;
 
   @override
   State<_SubscriptionDialog> createState() => _SubscriptionDialogState();
@@ -97,7 +94,6 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   );
   bool _busy = false;
   String? _error;
-  SubscriptionResult? _result;
 
   @override
   void dispose() {
@@ -105,23 +101,36 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
     super.dispose();
   }
 
-  Future<void> _fetch() async {
+  Future<void> _save() async {
     final url = _url.text.trim();
     if (url.isEmpty) {
       setState(() => _error = '先填订阅地址');
       return;
     }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (!_subscriptionUrlPattern.hasMatch(url)) {
+      setState(() => _error = '地址需要以 http:// 或 https:// 开头');
+      return;
+    }
+    setState(() => _error = null);
+
+    final syncNow = await showConfirmDialog(
+      context,
+      title: '是否立即同步此订阅？',
+      message: '同步会立刻拉取节点写入配置；选「稍后」只保存地址，之后也能再同步。',
+      confirmLabel: '同步',
+      cancelLabel: '稍后',
+    );
+    if (!mounted) return;
+    if (syncNow != true) {
+      Navigator.pop(context, SubscriptionInput(url: url));
+      return;
+    }
+
+    setState(() => _busy = true);
     try {
-      final result = await fetchSubscription(url);
+      final result = await widget.fetch(url);
       if (!mounted) return;
-      setState(() {
-        _result = result;
-        _busy = false;
-      });
+      Navigator.pop(context, SubscriptionInput(url: url, result: result));
     } on ConfigEditException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -140,36 +149,26 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final result = _result;
     return EditDialog(
-      title: '从订阅链接导入',
-      confirmLabel: _result == null ? '拉取' : '导入',
+      title: '订阅链接',
+      confirmLabel: '保存',
       onConfirm: () {
-        final result = _result;
-        if (result == null) {
-          _fetch();
-          return;
-        }
-        Navigator.pop(
-          context,
-          SubscriptionInput(url: _url.text.trim(), result: result),
-        );
+        _save();
       },
       onCancel: () => Navigator.pop(context),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppTextField(
+          AppTextArea(
             controller: _url,
-            keyboardType: TextInputType.url,
+            autofocus: true,
             enabled: !_busy,
             label: '订阅地址',
             hint: 'https://example.com/api/v1/client/subscribe?token=…',
-            alignLabelWithHint: true,
           ),
-          const SizedBox(height: Insets.md),
-          if (_busy)
+          if (_busy) ...[
+            const SizedBox(height: Insets.md),
             const Row(
               children: [
                 SizedBox(
@@ -178,10 +177,12 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 SizedBox(width: 10),
-                Text('正在拉取…'),
+                Text('正在同步…'),
               ],
             ),
-          if (_error != null)
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: Insets.md),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(Insets.md),
@@ -196,55 +197,7 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
                 ),
               ),
             ),
-          if (result != null) ...[
-            Row(
-              children: [
-                Pill(
-                  label: '${result.count} 个节点',
-                  icon: Icons.check,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: Insets.sm),
-                Expanded(
-                  child: Text(
-                    result.title ?? '订阅内容已解析',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            if (result.usage != null && result.usage!.label.isNotEmpty) ...[
-              const SizedBox(height: Insets.sm),
-              Text(result.usage!.label, style: theme.textTheme.bodySmall),
-            ],
-            if (result.yamlConfig != null) ...[
-              const SizedBox(height: Insets.sm),
-              Text(
-                '这是一份完整配置，导入时只取其中的 proxies（组和规则不动）。',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
           ],
-          if (widget.allowSaveOnly)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _busy
-                    ? null
-                    : () {
-                        final url = _url.text.trim();
-                        if (url.isEmpty) {
-                          setState(() => _error = '先填订阅地址');
-                          return;
-                        }
-                        Navigator.pop(context, SubscriptionInput(url: url));
-                      },
-                child: const Text('只保存地址'),
-              ),
-            ),
         ],
       ),
     );

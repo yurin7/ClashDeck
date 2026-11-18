@@ -66,7 +66,7 @@ rules:
 
       // 节点被加入了默认组，且空 flow 列表已被展开成块状列表。
       final group = profile.groupByName[kDefaultGroupName]!;
-      expect(group.members, ['DIRECT', 'REJECT', '香港 01']);
+      expect(group.members, ['香港 01', 'DIRECT', 'REJECT']);
       expect(out.contains('proxies: []'), isFalse);
       // 风格：必须是块状列表，不能是 flow 风格 `proxies: [{...}]`。
       expect(out.contains('proxies: ['), isFalse);
@@ -95,10 +95,10 @@ vless://aaaa-bbbb@example.com:443?security=tls&sni=a.com#%E9%A6%99%E6%B8%AF%2001
       expect(profile.proxies, hasLength(2));
       expect(profile.proxies.map((p) => p.name), ['香港 01', '香港 01-2']);
       expect(profile.groupByName[kDefaultGroupName]!.members, [
-        'DIRECT',
-        'REJECT',
         '香港 01',
         '香港 01-2',
+        'DIRECT',
+        'REJECT',
       ]);
     });
 

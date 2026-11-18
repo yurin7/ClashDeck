@@ -12,6 +12,7 @@ class MemberCandidate {
     this.isGroup = false,
     this.inGroup = false,
     this.isBuiltin = false,
+    this.note,
   });
 
   /// 显示名，同时也是 YAML 里引用的名字。
@@ -23,15 +24,24 @@ class MemberCandidate {
   /// 已经在组里了：面板里置灰、不参与选择。
   final bool inGroup;
 
-  /// true = 系统策略（DIRECT / REJECT），由内核直接处理，不是节点也不是组。
+  /// true = 内置出站（DIRECT / REJECT / REJECT-DROP），由内核直接处理。
   final bool isBuiltin;
+
+  /// 附加说明，比如 REJECT-DROP 的「不常用」。
+  final String? note;
 
   @override
   String toString() =>
       'MemberCandidate($name, group=$isGroup, builtin=$isBuiltin, in=$inGroup)';
 }
 
-/// 生成组成员候选：节点 → 系统策略 → 其它策略组。
+/// 组成员面板顶部「内置」段的候选顺序：常用两个在前，REJECT-DROP 标「不常用」。
+const List<String> kMemberBuiltins = <String>[
+  ...Profile.systemPolicyTargets,
+  'REJECT-DROP',
+];
+
+/// 生成组成员候选：节点 → 内置出站 → 其它策略组。
 List<MemberCandidate> memberCandidates(
   Profile profile, {
   required String groupName,
@@ -41,11 +51,12 @@ List<MemberCandidate> memberCandidates(
   return <MemberCandidate>[
     for (final proxy in profile.proxies)
       MemberCandidate(name: proxy.name, inGroup: inside.contains(proxy.name)),
-    for (final name in Profile.systemPolicyTargets)
+    for (final name in kMemberBuiltins)
       MemberCandidate(
         name: name,
         isBuiltin: true,
         inGroup: inside.contains(name),
+        note: name == 'REJECT-DROP' ? '不常用' : null,
       ),
     for (final group in profile.groups)
       if (group.name != groupName)

@@ -67,6 +67,7 @@ void main() {
     expect(state.profile.rules.last.isTerminal, isTrue);
     // DEFAULT 组卡里 MATCH 记 1 条，DIRECT 卡里新规则也记 1 条。
     expect(find.text('本组规则 1'), findsNWidgets(2));
-    expect(find.text('本组规则 0'), findsOneWidget); // REJECT 卡还是空的
+    // REJECT 卡和「自动选择」虚拟卡都还是空的。
+    expect(find.text('本组规则 0'), findsNWidgets(2));
   });
 }

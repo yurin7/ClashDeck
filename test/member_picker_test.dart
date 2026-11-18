@@ -122,6 +122,7 @@ void main() {
         'n2',
         'DIRECT',
         'REJECT',
+        'REJECT-DROP',
         'DEFAULT',
       ]);
       expect(candidates.first.inGroup, isTrue);
@@ -135,16 +136,19 @@ void main() {
       expect(candidates.any((c) => c.name == 'OTHER'), isFalse);
     });
 
-    test('系统策略已在组内时置灰', () {
+    test('已在组内的内置出站置灰，REJECT-DROP 标「不常用」', () {
       final candidates = memberCandidates(
         profile(),
         groupName: 'DEFAULT',
         members: ['DIRECT', 'REJECT'],
       );
-      expect(
-        candidates.where((c) => c.isBuiltin).every((c) => c.inGroup),
-        isTrue,
-      );
+      final builtins = {
+        for (final c in candidates.where((c) => c.isBuiltin)) c.name: c,
+      };
+      expect(builtins['DIRECT']!.inGroup, isTrue);
+      expect(builtins['REJECT']!.inGroup, isTrue);
+      expect(builtins['REJECT-DROP']!.inGroup, isFalse);
+      expect(builtins['REJECT-DROP']!.note, '不常用');
     });
   });
 }

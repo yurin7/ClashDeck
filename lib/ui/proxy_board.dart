@@ -428,6 +428,22 @@ class _ProxyBoardState extends State<ProxyBoard> {
       ...groupSelectionSnapshot(profile, widget.groupSelection),
       ...?widget.runtime?.selected,
     };
+    // 「自动选择」在还没有节点时不会写进 YAML，这里用虚拟卡占位；
+    // 成员固定等于全部节点，由内核按 url-test 测速决定出口。
+    final groups = <GroupEntry>[...profile.groups];
+    if (profile.group(kAutoGroupName) == null) {
+      final at = groups.indexWhere((g) => g.name == kDefaultGroupName);
+      groups.insert(
+        at < 0 ? 0 : at + 1,
+        GroupEntry(
+          index: -1,
+          name: kAutoGroupName,
+          type: 'url-test',
+          members: [for (final proxy in profile.proxies) proxy.name],
+          raw: const <String, Object?>{},
+        ),
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
@@ -454,19 +470,23 @@ class _ProxyBoardState extends State<ProxyBoard> {
             if (!ok) _fail();
           },
         ),
-        for (final group in profile.groups)
+        for (final group in groups)
           Padding(
             padding: const EdgeInsets.only(top: Insets.md),
             child: _GroupCard(
               group: group,
+              isAuto: group.name == kAutoGroupName,
               state: s,
               onOpenNode: _editNode,
               onMove: (n, from) => _moveDialog(n, from),
               onDeleteNode: _deleteNode,
               onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
-              selectedName: selection[group.name],
-              onSelectNode:
-                  widget.runtime == null && widget.onGroupSelection == null
+              selectedName: group.name == kAutoGroupName
+                  ? null
+                  : selection[group.name],
+              onSelectNode: group.name == kAutoGroupName
+                  ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
+                  : widget.runtime == null && widget.onGroupSelection == null
                   ? null
                   : (n) => _selectNodeForGroup(group.name, n),
               onEdit: () => _editGroup(group),
@@ -562,6 +582,14 @@ IconData _builtinIcon(String name) => switch (name) {
   'REJECT-DROP' => Icons.bolt,
   'PASS' => Icons.subdirectory_arrow_right,
   _ => Icons.public,
+};
+
+/// 内置出站的颜色语义：DIRECT 绿、REJECT 红、REJECT-DROP 灰。
+Color _systemPolicyColor(String name, ColorScheme scheme) => switch (name) {
+  'DIRECT' => scheme.tertiary,
+  'REJECT' => scheme.error,
+  'REJECT-DROP' => scheme.onSurfaceVariant,
+  _ => scheme.tertiary,
 };
 
 /// 拖拽高亮时的边框色。
@@ -707,6 +735,7 @@ class _GroupCard extends StatelessWidget {
     this.onMenuNode,
     this.selectedName,
     this.onSelectNode,
+    this.isAuto = false,
   });
 
   final GroupEntry group;
@@ -723,6 +752,9 @@ class _GroupCard extends StatelessWidget {
 
   /// 非空时，点芯片 = 让这个组改用该节点。
   final void Function(ProxyEntry)? onSelectNode;
+
+  /// true = 「自动选择」卡：成员随节点同步、只读、按测速选出口。
+  final bool isAuto;
 
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -784,14 +816,21 @@ class _GroupCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Row(
                           children: [
-                            Text(
-                              group.typeLabel,
-                              style: mono(
-                                10.5,
-                                color: scheme.onSurfaceVariant,
-                                letterSpacing: 0.4,
+                            if (isAuto)
+                              Pill(
+                                label: '自动测速',
+                                color: scheme.tertiary,
+                                dense: true,
+                              )
+                            else
+                              Text(
+                                group.typeLabel,
+                                style: mono(
+                                  10.5,
+                                  color: scheme.onSurfaceVariant,
+                                  letterSpacing: 0.4,
+                                ),
                               ),
-                            ),
                             Text(
                               ' · ${group.members.length} 成员',
                               style: mono(10.5, color: scheme.onSurfaceVariant),
@@ -823,33 +862,37 @@ class _GroupCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: group.computedMembers ? '成员由 filter 决定' : '添加成员',
-                    onPressed: group.computedMembers ? null : onAddMember,
-                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: '组设置',
-                    onSelected: (v) {
-                      switch (v) {
-                        case 'edit':
-                          onEdit();
-                        case 'delete':
-                          onDelete();
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('编辑组')),
-                      PopupMenuItem(value: 'delete', child: Text('删除组')),
-                    ],
-                  ),
+                  if (!isAuto)
+                    IconButton(
+                      tooltip: group.computedMembers ? '成员由 filter 决定' : '添加成员',
+                      onPressed: group.computedMembers ? null : onAddMember,
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                    ),
+                  if (!isAuto)
+                    PopupMenuButton<String>(
+                      tooltip: '组设置',
+                      onSelected: (v) {
+                        switch (v) {
+                          case 'edit':
+                            onEdit();
+                          case 'delete':
+                            onDelete();
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('编辑组')),
+                        PopupMenuItem(value: 'delete', child: Text('删除组')),
+                      ],
+                    ),
                 ],
               ),
               if (group.members.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: Insets.md),
                   child: Text(
-                    group.computedMembers
+                    isAuto
+                        ? '还没有节点：添加节点后由内核按测速结果自动选择。'
+                        : group.computedMembers
                         ? '成员由 filter / include-all 在运行时决定，不在这里维护。'
                         : '还没有成员：点右上 ⊕ 添加，或把节点拖进来。',
                     style: hintStyle(context),
@@ -875,12 +918,12 @@ class _GroupCard extends StatelessWidget {
                             onOpen: () => onOpenNode(node),
                             onMove: () => onMove(node, group.name),
                             onDelete: () => onDeleteNode(node),
-                            onRemove: () => onRemove(name),
+                            onRemove: isAuto ? null : () => onRemove(name),
                             selected: selectedName == node.name,
                             onSelect: onSelectNode == null
                                 ? null
                                 : () => onSelectNode!(node),
-                            onMenu: onMenuNode == null
+                            onMenu: isAuto || onMenuNode == null
                                 ? null
                                 : () => onMenuNode!(node, group.name),
                           )
@@ -905,10 +948,13 @@ class _GroupCard extends StatelessWidget {
                               avatar: Icon(
                                 _builtinIcon(name),
                                 size: 15,
-                                color: scheme.tertiary,
+                                color: _systemPolicyColor(name, scheme),
                               ),
                               label: Text(name),
-                              labelStyle: mono(12, color: scheme.tertiary),
+                              labelStyle: mono(
+                                12,
+                                color: _systemPolicyColor(name, scheme),
+                              ),
                               onDeleted: () => onRemove(name),
                               deleteButtonTooltipMessage: '从组里移除',
                             ),
@@ -1546,7 +1592,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                                 bottom: 2,
                               ),
                               child: MicroLabel(
-                                '系统策略',
+                                '内置',
                                 color: scheme.onSurfaceVariant,
                               ),
                             ),
@@ -1630,10 +1676,14 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             ? Icons.account_tree_outlined
             : Icons.dns_outlined,
         size: 18,
-        color: candidate.isBuiltin ? scheme.tertiary : scheme.onSurfaceVariant,
+        color: candidate.isBuiltin
+            ? _systemPolicyColor(candidate.name, scheme)
+            : scheme.onSurfaceVariant,
       ),
       subtitle: inside
           ? Text('已在组内', style: hintStyle(context))
+          : candidate.note != null
+          ? Text(candidate.note!, style: hintStyle(context))
           : candidate.isBuiltin
           ? Text('系统策略', style: hintStyle(context))
           : null,

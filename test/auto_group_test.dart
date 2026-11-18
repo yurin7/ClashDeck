@@ -4,7 +4,7 @@ import 'package:clashdeck/core/yaml/yaml_doc.dart';
 import 'package:clashdeck/data/profile_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _withAutoGroup = r'''mixed-port: 7890
+const _withAutoGroup = '''mixed-port: 7890
 mode: rule
 proxies:
   - name: n1
@@ -26,90 +26,139 @@ rules:
   - MATCH,DEFAULT
 ''';
 
+const _withoutGroups = '''mixed-port: 7890
+proxies:
+  - name: n1
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+rules:
+  - MATCH,DIRECT
+''';
+
+const _noNodes = '''mixed-port: 7890
+proxies: []
+proxy-groups:
+  - name: DEFAULT
+    type: select
+    proxies:
+      - DIRECT
+rules:
+  - MATCH,DEFAULT
+''';
+
 YamlDoc _load(String text) {
   final doc = YamlDoc.parse(text);
   expect(doc.isValid, isTrue, reason: '${doc.error}');
   return doc;
 }
 
+Map<String, Object?> _node(String name, String host) => {
+  'name': name,
+  'type': 'vless',
+  'server': host,
+  'port': 443,
+  'uuid': '66666666-7777-8888-9999-000000000000',
+};
+
 void main() {
-  test('新模板自带「自动选择」组：url-test / generate_204 / 300 秒', () {
-    final profile = Profile.from(_load(ProfileStore.starterConfig(name: '模板')));
-    final groups = profile.groups.map((e) => e.name).toList();
-    expect(groups, [kDefaultGroupName, kAutoGroupName]);
+  test('新模板没有节点时先不写「自动选择」，打开编辑器也不落盘', () {
+    final starter = _load(ProfileStore.starterConfig(name: '模板'));
+    expect(Profile.from(starter).groups.map((e) => e.name), [
+      kDefaultGroupName,
+    ]);
+    expect(
+      identical(ConfigOps.ensureAutoGroup(starter).text, starter.text),
+      isTrue,
+    );
+  });
+
+  test('有节点的老配置补建：url-test / tolerance / 成员=全部节点', () {
+    final once = ConfigOps.ensureAutoGroup(_load(_withAutoGroup));
+    final profile = Profile.from(once);
+    expect(profile.groups.map((e) => e.name), [
+      kDefaultGroupName,
+      kAutoGroupName,
+      'OTHER',
+    ]);
 
     final auto = profile.group(kAutoGroupName)!;
     expect(auto.type, 'url-test');
     expect(auto.raw['url'], kAutoGroupTestUrl);
     expect(auto.raw['interval'], kAutoGroupInterval);
-    expect(auto.members, ['DIRECT']);
-    expect(profile.group(kDefaultGroupName)!.type, 'select');
-  });
-
-  test('老配置补建「自动选择」：插在 DEFAULT 之后，且幂等', () {
-    final doc = _load(_withAutoGroup);
-    final once = ConfigOps.ensureAutoGroup(doc);
-    final groups = Profile.from(once).groups.map((e) => e.name).toList();
-    expect(groups, [kDefaultGroupName, kAutoGroupName, 'OTHER']);
-
-    final auto = Profile.from(once).group(kAutoGroupName)!;
-    expect(auto.type, 'url-test');
-    expect(auto.members, ['n1', 'DIRECT']);
+    expect(auto.raw['tolerance'], kAutoGroupTolerance);
+    expect(auto.members, ['n1']);
 
     final twice = ConfigOps.ensureAutoGroup(once);
     expect(identical(twice.text, once.text), isTrue);
   });
 
-  test('没有任何组也能补建', () {
-    final doc = _load('mixed-port: 7890\nrules:\n  - MATCH,DIRECT\n');
-    final next = ConfigOps.ensureAutoGroup(doc);
-    final profile = Profile.from(next);
-    expect(profile.groups.map((e) => e.name), [kAutoGroupName]);
-    expect(profile.group(kAutoGroupName)!.members, ['DIRECT']);
-  });
-
-  test('新节点自动进「自动选择」，并插在 DIRECT 之前', () {
-    final doc = ConfigOps.ensureAutoGroup(_load(_withAutoGroup));
-    final before = Profile.from(doc);
-    expect(before.group(kAutoGroupName)!.members, ['n1', 'DIRECT']);
-
-    final next = ConfigOps.addProxy(doc, {
-      'name': 'n2',
-      'type': 'vless',
-      'server': 'b.example.com',
-      'port': 443,
-      'uuid': '66666666-7777-8888-9999-000000000000',
-    });
-    final profile = Profile.from(next);
-
-    // 先补齐 DEFAULT，再插到自动选择的 DIRECT 之前。
-    expect(
-      profile.group(kDefaultGroupName)!.members,
-      containsAll(<String>['DIRECT', 'REJECT', 'n2']),
+  test('没有节点但规则指向「自动选择」时也要建组（否则规则失效）', () {
+    final doc = _load(
+      _noNodes.replaceFirst('MATCH,DEFAULT', 'MATCH,$kAutoGroupName'),
     );
-    expect(profile.group(kAutoGroupName)!.members, ['n1', 'n2', 'DIRECT']);
+    final profile = Profile.from(ConfigOps.ensureAutoGroup(doc));
+    final auto = profile.group(kAutoGroupName);
+    expect(auto, isNotNull);
+    expect(auto!.members, isEmpty);
   });
 
-  test('没有「自动选择」组时，加节点保持原样', () {
-    final doc = _load('''mixed-port: 7890
+  test('没有任何组也能补建', () {
+    final profile = Profile.from(
+      ConfigOps.ensureAutoGroup(_load(_withoutGroups)),
+    );
+    expect(profile.groups.map((e) => e.name), [kAutoGroupName]);
+    expect(profile.group(kAutoGroupName)!.members, ['n1']);
+  });
+
+  test('新节点同时进 DEFAULT（内置之前）与「自动选择」（追加）', () {
+    final doc = ConfigOps.ensureAutoGroup(_load(_withAutoGroup));
+    final next = ConfigOps.addProxy(doc, _node('n2', 'b.example.com'));
+    final profile = Profile.from(next);
+    expect(profile.group(kDefaultGroupName)!.members, [
+      'n1',
+      'n2',
+      'DIRECT',
+      'REJECT',
+    ]);
+    expect(profile.group(kAutoGroupName)!.members, ['n1', 'n2']);
+  });
+
+  test('删节点后「自动选择」跟着少一个，空成员时不删组', () {
+    final doc = ConfigOps.ensureAutoGroup(_load(_withAutoGroup));
+    final next = ConfigOps.deleteProxy(doc, 'n1');
+    final profile = Profile.from(next);
+    expect(profile.group(kAutoGroupName)!.members, isEmpty);
+    // 已经有这个组就先留着，避免每次加删节点都重建、丢掉 tolerance 等设置。
+    expect(profile.group(kAutoGroupName), isNotNull);
+  });
+
+  test('旧版本「自动选择」里的 DIRECT 会被同步掉', () {
+    const legacy = '''mixed-port: 7890
+proxies:
+  - name: n1
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
 proxy-groups:
-  - name: ONLY
+  - name: DEFAULT
     type: select
     proxies:
+      - n1
+      - DIRECT
+  - name: 自动选择
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    proxies:
+      - n1
       - DIRECT
 rules:
-  - MATCH,ONLY
-''');
-    final next = ConfigOps.addProxy(doc, {
-      'name': 'n3',
-      'type': 'vless',
-      'server': 'c.example.com',
-      'port': 443,
-      'uuid': '77777777-7777-8888-9999-000000000000',
-    });
-    final profile = Profile.from(next);
-    expect(profile.group(kAutoGroupName), isNull);
-    expect(profile.group('ONLY')!.members, ['DIRECT']);
-    expect(profile.group(kDefaultGroupName)!.members, contains('n3'));
+  - MATCH,DEFAULT
+''';
+    final profile = Profile.from(ConfigOps.ensureAutoGroup(_load(legacy)));
+    expect(profile.group(kAutoGroupName)!.members, ['n1']);
   });
 }

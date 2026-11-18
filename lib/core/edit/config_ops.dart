@@ -14,6 +14,9 @@ const String kAutoGroupName = '自动选择';
 const String kAutoGroupTestUrl = 'http://www.gstatic.com/generate_204';
 const int kAutoGroupInterval = 300;
 
+/// url-test 的容差：延迟差在这个范围内就沿用当前节点，避免来回切。
+const int kAutoGroupTolerance = 50;
+
 /// 所有编辑操作：`旧文档 -> 新文档` 的纯函数，失败抛 [ConfigEditException]。
 ///
 /// 设计原则：
@@ -39,7 +42,10 @@ class ConfigOps {
     // 新节点一律进默认组：它带着全部节点 + DIRECT + REJECT，是规则的默认出口。
     next = addGroupMember(next, kDefaultGroupName, name, missingGroupOk: true);
     next = ensureDefaultGroup(next);
-    // 有「自动选择」组时把新节点插到 DIRECT 之前，别排在系统策略后面。
+    // 节点排在 DIRECT / REJECT 之前：规则默认命中的是节点，不是系统策略。
+    next = _placeBeforeBuiltins(next, kDefaultGroupName, name);
+    // 「自动选择」跟着节点走：还没有这个组时先建，成员始终等于全部节点。
+    next = ensureAutoGroup(next);
     return _insertIntoAutoGroup(next, name);
   }
 
@@ -67,11 +73,16 @@ class ConfigOps {
     var next = doc;
     for (final member in names) {
       if (existing.members.contains(member)) continue;
+      // 节点插在第一个内置出站之前：默认出口优先是节点，不是 DIRECT / REJECT。
+      final at = Profile.builtinTargets.contains(member)
+          ? null
+          : _firstBuiltinIndex(next, kDefaultGroupName);
       next = addGroupMember(
         next,
         kDefaultGroupName,
         member,
         missingGroupOk: true,
+        at: at,
       );
     }
     return next;
@@ -79,20 +90,28 @@ class ConfigOps {
 
   /// 保证配置里有「自动选择」组（url-test），排在 DEFAULT 之后。
   ///
-  /// 新模板自带；老配置打开编辑器时也走这里补建。只补建、不改已有组，返回的
-  /// 文档与原文相同的话调用方不会标脏。
+  /// 成员始终等于**全部节点**（不含 DIRECT / REJECT）。没有节点、也没有规则
+  /// 指向它时先不写：代理页用虚拟卡占位，等有节点再落盘。组已存在时每次调用
+  /// 都把成员同步成当前节点列表，所以加删节点不用另外维护。
   static YamlDoc ensureAutoGroup(YamlDoc doc) {
     final profile = Profile.from(doc);
-    if (profile.group(kAutoGroupName) != null) return doc;
+    final names = [for (final proxy in profile.proxies) proxy.name];
+    final existing = profile.group(kAutoGroupName);
+    if (existing != null) {
+      if (_sameMembers(existing.members, names)) return doc;
+      return setGroupMembers(doc, kAutoGroupName, names);
+    }
+    final referenced = profile.rules.any(
+      (rule) => rule.target == kAutoGroupName,
+    );
+    if (names.isEmpty && !referenced) return doc;
     final group = <String, Object?>{
       'name': kAutoGroupName,
       'type': 'url-test',
       'url': kAutoGroupTestUrl,
       'interval': kAutoGroupInterval,
-      'proxies': <Object?>[
-        for (final proxy in profile.proxies) proxy.name,
-        'DIRECT',
-      ],
+      'tolerance': kAutoGroupTolerance,
+      'proxies': <Object?>[...names],
     };
     final current = doc.plainAt(['proxy-groups']);
     if (current is! List || current.isEmpty) {
@@ -106,17 +125,43 @@ class ConfigOps {
     return doc.apply((e) => e.insertIntoList(['proxy-groups'], at, group));
   }
 
-  /// 把节点插进「自动选择」组的 DIRECT 之前；没有这个组就原样返回。
+  static bool _sameMembers(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// 把节点追加进「自动选择」组；没有这个组、或已经在里面时原样返回。
   static YamlDoc _insertIntoAutoGroup(YamlDoc doc, String name) {
     final auto = Profile.from(doc).group(kAutoGroupName);
     if (auto == null || auto.members.contains(name)) return doc;
-    final direct = auto.members.indexOf('DIRECT');
-    return addGroupMember(
-      doc,
-      kAutoGroupName,
-      name,
-      at: direct < 0 ? auto.members.length : direct,
-    );
+    return addGroupMember(doc, kAutoGroupName, name);
+  }
+
+  /// 把成员挪到第一个内置出站（DIRECT / REJECT …）之前；已经在前面就原样返回。
+  static YamlDoc _placeBeforeBuiltins(
+    YamlDoc doc,
+    String groupName,
+    String member,
+  ) {
+    final group = Profile.from(doc).group(groupName);
+    if (group == null) return doc;
+    final index = group.members.indexOf(member);
+    if (index < 0) return doc;
+    final builtinAt = _firstBuiltinIndex(doc, groupName);
+    if (builtinAt == null || index < builtinAt) return doc;
+    final next = removeGroupMember(doc, groupName, member);
+    return addGroupMember(next, groupName, member, at: builtinAt);
+  }
+
+  /// 组里第一个内置出站（DIRECT / REJECT …）的下标；没有就返回 null。
+  static int? _firstBuiltinIndex(YamlDoc doc, String groupName) {
+    final group = Profile.from(doc).group(groupName);
+    if (group == null) return null;
+    final at = group.members.indexWhere(Profile.builtinTargets.contains);
+    return at < 0 ? null : at;
   }
 
   /// 加载旧配置时的迁移：把上一批自动建的「默认」组并入 `DEFAULT`，或者补建。

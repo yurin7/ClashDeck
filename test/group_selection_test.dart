@@ -43,28 +43,59 @@ void main() {
     profile = Profile.from(YamlDoc.parse(_yaml));
   });
 
-  test('记住的选择优先于组内第一个成员', () {
-    expect(selectedInGroup({'PROXY': 'n2'}, _group(profile, 'PROXY')), 'n2');
+  test('记住的选择仍存在时优先', () {
+    expect(
+      selectedInGroup(
+        {'PROXY': 'n2'},
+        _group(profile, 'PROXY'),
+        proxyOrder: [for (final proxy in profile.proxies) proxy.name],
+      ),
+      'n2',
+    );
   });
 
-  test('没记住时回落到组内第一个成员', () {
+  test('没记住时优先节点（即使 DIRECT 排在前面）', () {
+    final doc = YamlDoc.parse('''
+proxies:
+  - name: n1
+    type: vless
+    server: a.example.com
+    port: 443
+    uuid: b831381d-6324-4d53-ad4f-8cda48b30811
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies: [DIRECT, n1]
+rules:
+  - MATCH,PROXY
+''');
+    final builtinsFirst = Profile.from(doc);
     expect(
-      selectedInGroup(const <String, String>{}, _group(profile, 'PROXY')),
+      selectedInGroup(
+        const <String, String>{},
+        _group(builtinsFirst, 'PROXY'),
+        proxyOrder: [for (final proxy in builtinsFirst.proxies) proxy.name],
+      ),
       'n1',
     );
   });
 
-  test('空组没有可选成员', () {
-    expect(selectedInGroup({'空组': 'n1'}, _group(profile, '空组')), 'n1');
+  test('记住的成员被删掉后回落到自动选择；空组没有可选成员', () {
+    // 旧 sidecar 里记着已被移除的 n1：不能再当成有效选择，否则删光成员后
+    // 重新加节点会没有任何 chip 高亮。
+    expect(selectedInGroup({'空组': 'n1'}, _group(profile, '空组')), isNull);
     expect(
       selectedInGroup(const <String, String>{}, _group(profile, '空组')),
       isNull,
     );
   });
 
-  test('快照覆盖所有有成员的组', () {
+  test('快照覆盖所有有成员的组，过期选择自动回落', () {
     expect(groupSelectionSnapshot(profile, const {'PROXY': 'n2'}), {
       'PROXY': 'n2',
+    });
+    expect(groupSelectionSnapshot(profile, const {'PROXY': '已删除'}), {
+      'PROXY': 'n1',
     });
   });
 

@@ -241,7 +241,7 @@ proxy-groups:
       );
       final p = Profile.from(next);
       expect(p.group('PROXY')!.members, ['JP-01']);
-      expect(p.group('AUTO')!.members, ['JP-01', 'HK-01']);
+      expect(p.group('AUTO')!.members, ['HK-01', 'JP-01']);
     });
 
     test('加入已存在的成员是幂等的', () {
@@ -258,12 +258,60 @@ proxy-groups:
       ]);
     });
 
-    test('setGroupMembers 整体重写', () {
+    test('setGroupMembers 整体重写并按节点声明顺序归一化', () {
       final next = ConfigOps.setGroupMembers(load(), 'PROXY', [
         'JP-01',
         'HK-01',
       ]);
-      expect(Profile.from(next).group('PROXY')!.members, ['JP-01', 'HK-01']);
+      expect(Profile.from(next).group('PROXY')!.members, ['HK-01', 'JP-01']);
+    });
+
+    test('加入节点后内置出站自动沉到底部', () {
+      var next = ConfigOps.setGroupMembers(load(), 'PROXY', [
+        'DIRECT',
+        'HK-01',
+      ]);
+      // 旧配置把 DIRECT 写在前面，写回时先归一化。
+      expect(Profile.from(next).group('PROXY')!.members, ['HK-01', 'DIRECT']);
+
+      next = ConfigOps.addGroupMember(next, 'PROXY', 'JP-01');
+      expect(Profile.from(next).group('PROXY')!.members, [
+        'HK-01',
+        'JP-01',
+        'DIRECT',
+      ]);
+      // YAML 文本顺序与 UI 一致：DIRECT 必须在节点后面。
+      expect(
+        next.text.indexOf('DIRECT'),
+        greaterThan(next.text.indexOf('HK-01')),
+      );
+    });
+
+    test('组内顺序固定：节点 → 策略组 → DIRECT → REJECT', () {
+      final next = ConfigOps.setGroupMembers(load(), 'PROXY', [
+        'REJECT',
+        'HK-01',
+        'AUTO',
+        'DIRECT',
+        'JP-01',
+      ]);
+      expect(Profile.from(next).group('PROXY')!.members, [
+        'HK-01',
+        'JP-01',
+        'AUTO',
+        'DIRECT',
+        'REJECT',
+      ]);
+    });
+
+    test('删除成员后剩余顺序保持规范', () {
+      var next = ConfigOps.setGroupMembers(load(), 'PROXY', [
+        'HK-01',
+        'JP-01',
+        'DIRECT',
+      ]);
+      next = ConfigOps.removeGroupMember(next, 'PROXY', 'HK-01');
+      expect(Profile.from(next).group('PROXY')!.members, ['JP-01', 'DIRECT']);
     });
 
     test('新建与删除策略组', () {

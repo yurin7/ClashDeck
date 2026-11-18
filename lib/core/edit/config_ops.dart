@@ -1,5 +1,6 @@
 import '../model/profile.dart';
 import '../yaml/yaml_doc.dart';
+import 'member_order.dart';
 
 /// 默认 select 组的名字：规则默认指向它，新节点也自动加入。
 const String kDefaultGroupName = 'DEFAULT';
@@ -73,16 +74,12 @@ class ConfigOps {
     var next = doc;
     for (final member in names) {
       if (existing.members.contains(member)) continue;
-      // 节点插在第一个内置出站之前：默认出口优先是节点，不是 DIRECT / REJECT。
-      final at = Profile.builtinTargets.contains(member)
-          ? null
-          : _firstBuiltinIndex(next, kDefaultGroupName);
+      // 插入后由 addGroupMember 统一归一化：节点按 proxies 顺序排在内置之前。
       next = addGroupMember(
         next,
         kDefaultGroupName,
         member,
         missingGroupOk: true,
-        at: at,
       );
     }
     return next;
@@ -132,6 +129,10 @@ class ConfigOps {
     }
     return true;
   }
+
+  static List<String> _proxyOrder(Profile profile) => [
+    for (final proxy in profile.proxies) proxy.name,
+  ];
 
   /// 把节点追加进「自动选择」组；没有这个组、或已经在里面时原样返回。
   static YamlDoc _insertIntoAutoGroup(YamlDoc doc, String name) {
@@ -337,6 +338,9 @@ class ConfigOps {
   }
 
   /// 整体重写某个组的显式成员列表（顺序即最终顺序）。
+  ///
+  /// 写回前统一归一化为「代理节点 → 其它成员 → DIRECT → REJECT」，
+  /// 与 UI、mihomo 的 select 语义保持一致。
   static YamlDoc setGroupMembers(
     YamlDoc doc,
     String groupName,
@@ -345,16 +349,39 @@ class ConfigOps {
     final profile = Profile.from(doc);
     final group = profile.group(groupName);
     if (group == null) throw ConfigEditException('找不到策略组：$groupName');
+    final ordered = normalizeMemberOrder(
+      members,
+      proxyOrder: _proxyOrder(profile),
+    );
+    return _writeMembers(doc, group, ordered);
+  }
+
+  static YamlDoc _writeMembers(
+    YamlDoc doc,
+    GroupEntry group,
+    List<String> members,
+  ) {
     final value = <Object?>[...members];
-    if (group.raw.containsKey('proxies')) {
+    if (group.raw.containsKey('proxies') || value.isNotEmpty) {
       return doc.apply(
         (e) => e.update(['proxy-groups', group.index, 'proxies'], value),
       );
     }
-    if (value.isEmpty) return doc;
-    return doc.apply(
-      (e) => e.update(['proxy-groups', group.index, 'proxies'], value),
+    return doc;
+  }
+
+  /// 成员增删后若顺序不符合规范（例如旧配置把 DIRECT 放在节点前面），
+  /// 就地重写一次；顺序已正确时不产生任何 YAML 改动。
+  static YamlDoc _normalizeMembers(YamlDoc doc, String groupName) {
+    final profile = Profile.from(doc);
+    final group = profile.group(groupName);
+    if (group == null || group.members.length < 2) return doc;
+    final ordered = normalizeMemberOrder(
+      group.members,
+      proxyOrder: _proxyOrder(profile),
     );
+    if (_sameMembers(ordered, group.members)) return doc;
+    return _writeMembers(doc, group, ordered);
   }
 
   static YamlDoc addGroupMember(
@@ -370,23 +397,34 @@ class ConfigOps {
       if (missingGroupOk) return doc;
       throw ConfigEditException('找不到策略组：$groupName');
     }
-    if (group.members.contains(member)) return doc;
+    if (group.members.contains(member)) {
+      return _normalizeMembers(doc, groupName);
+    }
     if (group.members.isNotEmpty && group.raw.containsKey('proxies')) {
-      final index = at ?? group.members.length;
-      return doc.apply(
+      final memberAt =
+          at ??
+          normalizeMemberOrder(<String>[
+            ...group.members,
+            member,
+          ], proxyOrder: _proxyOrder(profile)).indexOf(member);
+      final next = doc.apply(
         (e) => e.insertIntoList(
           ['proxy-groups', group.index, 'proxies'],
-          index,
+          memberAt,
           member,
         ),
       );
+      // `at` 是调用方明确指定的位置（如「插到内置出站之前」），保留其语义；
+      // 其余插入才按规范把内置出站压到末尾。
+      return at == null ? _normalizeMembers(next, groupName) : next;
     }
     // 组里还没有成员（或没写 proxies 键）：整体写一次，保持块状风格；
     // 空 flow 列表插入单项会被 yaml_edit 写成 `proxies: [NAME]`。
-    return doc.apply(
+    final next = doc.apply(
       (e) =>
           e.update(['proxy-groups', group.index, 'proxies'], <Object?>[member]),
     );
+    return _normalizeMembers(next, groupName);
   }
 
   static YamlDoc removeGroupMember(
@@ -399,9 +437,10 @@ class ConfigOps {
     if (group == null) throw ConfigEditException('找不到策略组：$groupName');
     final index = group.members.indexOf(member);
     if (index < 0) return doc;
-    return doc.apply(
+    final next = doc.apply(
       (e) => e.remove(['proxy-groups', group.index, 'proxies', index]),
     );
+    return _normalizeMembers(next, groupName);
   }
 
   /// 把节点从 A 组挪到 B 组（核心交互：跨组拖拽）。

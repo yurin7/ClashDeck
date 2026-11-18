@@ -128,7 +128,7 @@ rules:
 
       final profile = Profile.from(out.doc);
       expect(profile.group('媒体')?.members, ['n1', 'n2']);
-      expect(profile.group('PROXY')?.members, ['n1', 'DIRECT', 'n2']);
+      // 合并后同样归一化：节点按 proxies 顺序，DIRECT 沉底。\n      expect(profile.group('PROXY')?.members, ['n1', 'n2', 'DIRECT']);
       // 两条 DOMAIN-SUFFIX 属本地精确规则，排在 GEOIP（在线区）之前。
       expect(profile.rules.map((r) => r.target), [
         '媒体',

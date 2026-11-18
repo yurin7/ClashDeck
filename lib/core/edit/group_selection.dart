@@ -1,14 +1,21 @@
 import '../model/profile.dart';
+import 'member_order.dart';
 
 /// 组内「当前选中的节点」的判定规则。
 ///
-/// 顺序：sidecar 里记住的选择 → 组内第一个成员 → 无成员时为 null。
-/// 记住的选择可能已经被删掉（节点移除、组改名），所以这里不做存在性校验，
-/// 只保证「有就优先用」，由调用方决定找不到时怎么回落。
-String? selectedInGroup(Map<String, String> saved, GroupEntry group) {
-  final picked = saved[group.name];
-  if (picked != null && picked.isNotEmpty) return picked;
-  return group.members.isEmpty ? null : group.members.first;
+/// 记住的选择只有在**仍是组内成员**时才有效（成员删掉后必须自动回落，
+/// 否则删光再加节点会没有任何高亮）；否则按 [defaultGroupSelection] 规范
+/// 自动选一个：代理节点优先，其次 DIRECT，再 REJECT。
+String? selectedInGroup(
+  Map<String, String> saved,
+  GroupEntry group, {
+  List<String> proxyOrder = const <String>[],
+}) {
+  return defaultGroupSelection(
+    group.members,
+    proxyOrder: proxyOrder,
+    saved: saved[group.name],
+  );
 }
 
 /// 按 [selectedInGroup] 规则取出一份选择的快照，供渲染用。
@@ -19,9 +26,11 @@ Map<String, String> groupSelectionSnapshot(
   Profile profile,
   Map<String, String> saved,
 ) {
+  final proxyOrder = [for (final proxy in profile.proxies) proxy.name];
   return <String, String>{
     for (final group in profile.groups)
-      if (selectedInGroup(saved, group) case final String name)
+      if (selectedInGroup(saved, group, proxyOrder: proxyOrder)
+          case final String name)
         group.name: name,
   };
 }

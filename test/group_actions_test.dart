@@ -37,12 +37,15 @@ rules:
   - MATCH,PROXY
 ''';
 
-Future<EditorState> _pumpBoard(WidgetTester tester) async {
+Future<EditorState> _pumpBoard(
+  WidgetTester tester, {
+  String yaml = _yaml,
+}) async {
   tester.view.physicalSize = const Size(1080, 4800);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
 
-  final state = EditorState.fromText(_yaml, fileName: 't.yaml');
+  final state = EditorState.fromText(yaml, fileName: 't.yaml');
   await tester.pumpWidget(
     MaterialApp(
       theme: ClashDeckTheme.dark(),
@@ -116,6 +119,49 @@ void main() {
 
     final rule = state.profile.rules.firstWhere((r) => r.payload == 'a.com');
     expect(rule.target, 'OTHER');
+  });
+
+  testWidgets('节点拖进只有 DIRECT 的组：DIRECT 沉底且自动切到节点', (tester) async {
+    const yaml = '''
+mixed-port: 7890
+proxies:
+  - name: 香港 01
+    type: vless
+    server: example.com
+    port: 443
+    uuid: 11111111-2222-3333-4444-555555555555
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - 香港 01
+      - DIRECT
+  - name: ONLYDIRECT
+    type: select
+    proxies:
+      - DIRECT
+rules:
+  - MATCH,PROXY
+''';
+    final state = await _pumpBoard(tester, yaml: yaml);
+    expect(state.profile.group('ONLYDIRECT')!.members, ['DIRECT']);
+
+    final chip = find.widgetWithText(NodeChip, '香港 01').first;
+    await tester.ensureVisible(chip);
+    final from = tester.getCenter(chip);
+    final to = tester.getCenter(find.text('ONLYDIRECT'));
+
+    final gesture = await tester.startGesture(from);
+    await tester.pump(const Duration(milliseconds: 700));
+    await gesture.moveTo(to);
+    await tester.pump(const Duration(milliseconds: 200));
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // 成员归一化：节点在前、DIRECT 沉底；并顺手把本组出口切到新节点。
+    expect(state.profile.group('ONLYDIRECT')!.members, ['香港 01', 'DIRECT']);
+    expect(find.textContaining('已加入并切换到'), findsOneWidget);
   });
 
   test('端到端：新建组加入 DIRECT，写盘后重开仍在', () async {

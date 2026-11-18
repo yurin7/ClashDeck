@@ -431,11 +431,6 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Widget _buildBody(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final profile = s.profile;
-    // 高亮用的选择：sidecar 里记的优先，运行中的实际选择覆盖它（会话内切换不回写）。
-    final selection = <String, String>{
-      ...groupSelectionSnapshot(profile, widget.groupSelection),
-      ...?widget.runtime?.selected,
-    };
     // 「自动选择」在还没有节点时不会写进 YAML，这里用虚拟卡占位；
     // 成员固定等于全部节点，由内核按 url-test 测速决定出口。
     final groups = <GroupEntry>[...profile.groups];
@@ -452,6 +447,18 @@ class _ProxyBoardState extends State<ProxyBoard> {
         ),
       );
     }
+    // 高亮用的选择：sidecar 里记的优先，运行中的实际选择覆盖它（会话内切换不回写）。
+    // 两路都可能过期（成员被删、组被重命名），所以只在成员仍在组里时才采用，
+    // 否则交给 selectedInGroup 按规范自动回落。
+    final merged = <String, String>{
+      ...groupSelectionSnapshot(profile, widget.groupSelection),
+      ...?widget.runtime?.selected,
+    };
+    final selection = <String, String>{
+      for (final group in groups)
+        if (merged[group.name] case final String name)
+          if (group.members.contains(name)) group.name: name,
+    };
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
@@ -521,11 +528,20 @@ class _ProxyBoardState extends State<ProxyBoard> {
                   _toast('已加入 $added 个');
                 }
               },
-              onDrop: (data) {
+              onDrop: (data) async {
                 final ok = data.fromGroup == null
                     ? s.addGroupMember(group.name, data.node)
                     : s.moveMember(data.node, data.fromGroup!, group.name);
-                if (!ok) _fail();
+                if (!ok) {
+                  _fail();
+                  return;
+                }
+                // 拖进来就说明用户想用这个节点：顺手把本组当前出口切过去。
+                final running = widget.runtime?.phase == RuntimePhase.running;
+                await _selectNodeForGroup(group.name, data.node);
+                if (!running && mounted) {
+                  _toast('已加入并切换到「${data.node}」');
+                }
               },
               onRemove: (name) {
                 if (!s.removeGroupMember(group.name, name)) _fail();

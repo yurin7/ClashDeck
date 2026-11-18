@@ -55,25 +55,17 @@ class TargetSelectorField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final showEmpty = value.isEmpty && emptyLabel != null;
     return AppInkWell(
       borderRadius: BorderRadius.circular(Radiuses.md),
       onTap: enabled && onChanged != null ? () => _open(context) : null,
       child: InputDecorator(
         decoration: fieldDecoration(label: label, enabled: enabled),
-        child: Row(
-          children: [
-            Expanded(
-              child: showEmpty
-                  ? Text(emptyLabel!, style: hintStyle(context))
-                  : Align(
-                      alignment: Alignment.centerLeft,
-                      child: NameChip(name: value),
-                    ),
-            ),
-            Icon(Icons.expand_more, size: 18, color: scheme.onSurfaceVariant),
-          ],
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: showEmpty
+              ? Text(emptyLabel!, style: hintStyle(context))
+              : NameChip(name: value),
         ),
       ),
     );

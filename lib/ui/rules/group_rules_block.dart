@@ -138,6 +138,8 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
       targets: targets.primary,
       otherBuiltins: targets.otherBuiltins,
       isNew: initial == null,
+      // 编辑已有规则时，标题行删除入口与左滑删除共用这一套确认。
+      onDelete: initial == null ? null : () => _delete(initial),
     );
     if (draft == null || !mounted) return;
     final parts = <String>[
@@ -160,7 +162,9 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _delete(RuleEntry rule) async {
+  /// 删除一条规则；规则行左滑与编辑弹窗里的删除共用它。
+  Future<bool> _delete(RuleEntry rule) async {
+    if (!mounted) return false;
     final confirmed = await showConfirmDialog(
       context,
       title: '删除这条规则？',
@@ -168,12 +172,13 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
       confirmLabel: '删除',
       danger: true,
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return false;
     if (!widget.state.deleteRule(rule.index)) {
       _fail();
-      return;
+      return false;
     }
     if (mounted) setState(() {});
+    return true;
   }
 
   @override
@@ -244,6 +249,8 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
                         () => _swipedRule = open ? rule.index : null,
                       ),
                       actionLabel: '删除',
+                      // RuleChip 是 kChipRadius 的胶囊，红块跟着裁成同一圆角。
+                      borderRadius: BorderRadius.circular(kChipRadius),
                       onAction: () => _delete(rule),
                       child: LongPressDraggable<RuleDragData>(
                         data: RuleDragData(rule),

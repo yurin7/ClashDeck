@@ -544,6 +544,9 @@ class _HomePageState extends State<HomePage> {
                         SlidableRow(
                           open: _swipedFileName == items[i].fileName,
                           actionLabel: '删除',
+                          // 行卡本身在 AppCard 里，圆角沿用卡片半径，
+                          // 避免左滑时红块在卡片四角露成直角。
+                          borderRadius: BorderRadius.all(Radiuses.card),
                           onAction: () => _delete(items[i]),
                           onOpenChanged: (open) => setState(
                             () => _swipedFileName = open

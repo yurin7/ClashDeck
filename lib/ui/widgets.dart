@@ -662,6 +662,8 @@ class SlidableRow extends StatefulWidget {
     this.open = false,
     this.onOpenChanged,
     this.actionWidth = 80,
+    this.borderRadius,
+    this.background,
   });
 
   final Widget child;
@@ -674,6 +676,13 @@ class SlidableRow extends StatefulWidget {
   final bool open;
   final ValueChanged<bool>? onOpenChanged;
   final double actionWidth;
+
+  /// 行卡圆角：传入后内容与删除红块一起被裁成同一个圆角，
+  /// 红块不会在卡片四角露成直角。不传则保持原来的矩形裁剪。
+  final BorderRadius? borderRadius;
+
+  /// 行卡下面的底色（滑动时露出的那层）。默认 surfaceContainerLow。
+  final Color? background;
 
   @override
   State<SlidableRow> createState() => _SlidableRowState();
@@ -720,63 +729,65 @@ class _SlidableRowState extends State<SlidableRow>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onHorizontalDragStart: (_) => _controller.stop(),
-      onHorizontalDragUpdate: _onDragUpdate,
-      onHorizontalDragEnd: _onDragEnd,
-      child: ClipRect(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            final value = _controller.value;
-            return Stack(
-              children: [
-                if (value > 0)
-                  Positioned.fill(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: SizedBox(
-                        width: widget.actionWidth,
-                        child: Material(
-                          color: scheme.error,
-                          child: AppInkWell(
-                            onTap: widget.onAction,
-                            child: Center(
-                              child: Text(
-                                widget.actionLabel,
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(color: scheme.onError),
-                              ),
-                            ),
+    final slidable = AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final value = _controller.value;
+        return Stack(
+          children: [
+            if (value > 0)
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    width: widget.actionWidth,
+                    child: Material(
+                      color: scheme.error,
+                      child: AppInkWell(
+                        onTap: widget.onAction,
+                        child: Center(
+                          child: Text(
+                            widget.actionLabel,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(color: scheme.onError),
                           ),
                         ),
                       ),
                     ),
                   ),
-                Transform.translate(
-                  offset: Offset(-value * widget.actionWidth, 0),
-                  child: child,
                 ),
-                if (value > 0)
-                  Positioned(
-                    left: 0,
-                    right: widget.actionWidth * value,
-                    top: 0,
-                    bottom: 0,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => widget.onOpenChanged?.call(false),
-                    ),
-                  ),
-              ],
-            );
-          },
-          child: ColoredBox(
-            color: scheme.surfaceContainerLow,
-            child: widget.child,
-          ),
-        ),
+              ),
+            Transform.translate(
+              offset: Offset(-value * widget.actionWidth, 0),
+              child: child,
+            ),
+            if (value > 0)
+              Positioned(
+                left: 0,
+                right: widget.actionWidth * value,
+                top: 0,
+                bottom: 0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => widget.onOpenChanged?.call(false),
+                ),
+              ),
+          ],
+        );
+      },
+      child: ColoredBox(
+        color: widget.background ?? scheme.surfaceContainerLow,
+        child: widget.child,
       ),
+    );
+    return GestureDetector(
+      onHorizontalDragStart: (_) => _controller.stop(),
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      // 圆角行卡必须连红块一起裁，否则滑开时四角会露出直角红块。
+      child: widget.borderRadius == null
+          ? ClipRect(child: slidable)
+          : ClipRRect(borderRadius: widget.borderRadius!, child: slidable),
     );
   }
 }

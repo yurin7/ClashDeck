@@ -34,6 +34,7 @@ class EditDialog extends StatelessWidget {
     this.showFooter = true,
     this.showCancel = true,
     this.actions,
+    this.headerActions,
   });
 
   final String title;
@@ -56,6 +57,11 @@ class EditDialog extends StatelessWidget {
 
   /// 非空时整行替换底部按钮区（三分支选择这类特殊弹窗）。
   final List<Widget>? actions;
+
+  /// 标题行右侧、关闭按钮左边的操作（例如「编辑规则」的删除）。
+  ///
+  /// 只放破坏性/低频动作的图标按钮；常规操作仍走底部按钮区。
+  final List<Widget>? headerActions;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +114,7 @@ class EditDialog extends StatelessWidget {
                       ],
                     ),
                   ),
+                  ...?headerActions,
                   IconButton(
                     tooltip: '关闭',
                     constraints: const BoxConstraints(

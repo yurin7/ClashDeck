@@ -57,7 +57,7 @@ void main() {
     expect(find.text('新建规则'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'a.com');
-    await tester.tapAt(const Offset(8, 8));
+    await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
 
     expect(

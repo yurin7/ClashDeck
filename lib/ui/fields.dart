@@ -29,6 +29,9 @@ InputDecoration fieldDecoration({
     hintText: hint,
     helperText: helper,
     errorText: error,
+    // 长提示/长报错最多两行，超出省略，避免把弹窗按钮挤出屏幕。
+    helperMaxLines: 2,
+    errorMaxLines: 2,
     prefixIcon: prefixIcon,
     suffixIcon: suffixIcon,
     // 前缀/后缀图标别把输入框撑高：默认约束是 48 高，会把带搜索图标的框

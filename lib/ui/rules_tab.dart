@@ -140,6 +140,8 @@ class _RulesTabState extends State<RulesTab> {
       targets: targets.primary,
       otherBuiltins: targets.otherBuiltins,
       isNew: initial == null || index == null,
+      // 删除只在编辑已有规则时出现；和左滑删除共用同一个确认实现。
+      onDelete: index == null ? null : () => _confirmDeleteRule(index),
     );
     if (draft == null || !mounted) return; // 取消 / 校验没过
     final parts = <String>[
@@ -159,11 +161,13 @@ class _RulesTabState extends State<RulesTab> {
   }
 
   /// 行尾「⋮ → 删除」的入口。
-  Future<void> _confirmDelete(RuleEntry rule) => _confirmDeleteRule(rule.index);
+  Future<void> _confirmDelete(RuleEntry rule) async {
+    await _confirmDeleteRule(rule.index);
+  }
 
-  /// 删除一条规则前的二次确认（编辑对话框里的删除走同一套）。
-  Future<void> _confirmDeleteRule(int index) async {
-    if (!mounted) return;
+  /// 删除一条规则前的二次确认。规则行左滑与编辑弹窗里的删除共用它。
+  Future<bool> _confirmDeleteRule(int index) async {
+    if (!mounted) return false;
     final confirmed = await showConfirmDialog(
       context,
       title: '删除这条规则？',
@@ -171,7 +175,12 @@ class _RulesTabState extends State<RulesTab> {
       confirmLabel: '删除',
       danger: true,
     );
-    if (confirmed == true && !s.deleteRule(index)) _fail();
+    if (confirmed != true || !mounted) return false;
+    if (!s.deleteRule(index)) {
+      _fail();
+      return false;
+    }
+    return true;
   }
 
   /// 把一条规则改挂到别的策略组：只替换目标，其余 token 原样保留。
@@ -964,6 +973,8 @@ class _RulesTabState extends State<RulesTab> {
           onOpenChanged: (open) =>
               setState(() => _swipedRule = open ? rule.index : null),
           actionLabel: '删除',
+          // 与 RuleRowCard 的 16 圆角一致：红块跟着卡片一起裁，不露直角。
+          borderRadius: BorderRadius.circular(16),
           onAction: () => _confirmDelete(rule),
           child: RuleRowCard(
             rule: rule,

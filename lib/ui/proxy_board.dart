@@ -858,6 +858,8 @@ class _GroupCard extends StatelessWidget {
                 open: swipeOpen,
                 onOpenChanged: onSwipeOpenChanged,
                 actionLabel: '删除',
+                // 标题行在 AppCard 内，红块按小圆角裁，不越过行矩形。
+                borderRadius: BorderRadius.circular(Radiuses.sm),
                 onAction: onDelete,
                 child: Row(
                   children: [

@@ -31,7 +31,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'google.com');
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(8, 8));
+    await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
 
     expect(state.lastError, isNull);

@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/model/app_settings.dart';
+import '../core/update/semver.dart';
+import '../core/update/update_check.dart';
+import '../data/app_prefs.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'app_picker_page.dart';
 import 'dropdown.dart';
 import 'theme.dart';
+import 'update_dialog.dart';
 import 'widgets.dart';
 import './widgets/app_ink.dart';
 import 'navigation.dart';
@@ -30,6 +34,10 @@ class SettingsPage extends StatefulWidget {
     required this.onOpenSubscription,
     this.activeName = '',
     this.bottomInset = 0,
+    this.appVersion = '',
+    this.prefs,
+    this.checkUpdate,
+    this.openUrl,
   });
 
   final SettingsState? settings;
@@ -45,12 +53,25 @@ class SettingsPage extends StatefulWidget {
 
   final double bottomInset;
 
+  /// 本机版本号（`versionName`），设置页「版本」一行显示。
+  final String appVersion;
+
+  /// 全局偏好：自动检查更新开关、上次检查时间与已提示版本都存在这里。
+  final AppPrefs? prefs;
+
+  /// 检查更新实现（测试注入；默认走 GitHub `releases/latest`）。
+  final Future<UpdateCheckResult> Function(String currentVersion)? checkUpdate;
+
+  /// 打开 Release 页（测试注入；默认交给 url_launcher）。
+  final Future<bool> Function(String url)? openUrl;
+
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _busy = false;
+  bool _checking = false;
   Timer? _reloadTimer;
 
   SettingsState? get _s => widget.settings;
@@ -97,6 +118,45 @@ class _SettingsPageState extends State<SettingsPage> {
     await _run(action);
     if (!mounted || !_running) return;
     showToast(context, '这项改动需要重启内核才生效');
+  }
+
+  // ------------------------------------------------------------ 检查更新
+
+  Future<void> _checkUpdates() async {
+    if (_checking) return;
+    final version = widget.appVersion;
+    if (version.isEmpty || SemVer.tryParse(version) == null) {
+      showToast(context, '当前版本号不可用，暂时没法检查更新');
+      return;
+    }
+    setState(() => _checking = true);
+    try {
+      final result =
+          await (widget.checkUpdate ??
+              (v) => checkForUpdate(currentVersion: v))(version);
+      if (!mounted) return;
+      switch (result) {
+        case UpdateAvailable():
+          await widget.prefs?.setLastNotifiedVersion(result.info.version);
+          if (!mounted) return;
+          await showUpdateDialog(context, result.info, openUrl: widget.openUrl);
+        case UpToDate():
+          showToast(context, '已是最新版本');
+        case UpdateFailed():
+          showToast(context, result.failure.message);
+      }
+      await widget.prefs?.setLastUpdateCheckAt(DateTime.now());
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  Future<void> _setUpdateAutoCheck(bool enabled) async {
+    final prefs = widget.prefs;
+    if (prefs == null) return;
+    await _run(() => prefs.setUpdateAutoCheck(enabled));
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -424,6 +484,27 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: '其它',
                   icon: Icons.more_horiz,
                   children: [
+                    _ValueRow(
+                      label: '版本',
+                      value: widget.appVersion.isEmpty
+                          ? '未知'
+                          : widget.appVersion,
+                    ),
+                    _ActionRow(
+                      label: _checking ? '检查更新中…' : '检查更新',
+                      description: '从 GitHub 读取最新正式版，不会自动下载',
+                      icon: Icons.system_update_alt,
+                      enabled: !_checking,
+                      onTap: _checkUpdates,
+                    ),
+                    _SwitchRow(
+                      label: '自动检查更新',
+                      description: '启动后检查一次；24 小时内不重复，有新版才提示',
+                      value: widget.prefs?.updateAutoCheck ?? false,
+                      onChanged: widget.prefs == null
+                          ? (_) {}
+                          : _setUpdateAutoCheck,
+                    ),
                     _SwitchRow(
                       label: '开机自启',
                       description: '记录开关；部分系统需要额外放行后台启动',

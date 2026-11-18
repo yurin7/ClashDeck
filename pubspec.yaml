@@ -14,6 +14,8 @@ dependencies:
   yaml_edit: ^2.2.4
   path_provider: ^2.1.5
   file_picker: ^13.4.0
+  package_info_plus: 10.2.2
+  url_launcher: 6.3.3
 
 dev_dependencies:
   # 只给 tool/build_geosite_index.dart 算 sha256 用，不进 App 包。

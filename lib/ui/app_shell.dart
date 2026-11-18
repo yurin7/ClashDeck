@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/edit/import_links.dart' as links;
+import '../core/update/semver.dart';
+import '../core/update/update_check.dart';
+import 'update_dialog.dart';
 import '../core/model/app_settings.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
@@ -63,6 +67,9 @@ class _AppShellState extends State<AppShell> {
   bool _ready = false;
   String? _error;
   DateTime? _lastSubscriptionUpdate;
+
+  /// 本机版本号（来自 package_info_plus），设置页与检查更新用。
+  String _appVersion = '';
 
   @override
   void initState() {
@@ -137,10 +144,12 @@ class _AppShellState extends State<AppShell> {
       final prefs = await AppPrefs.load();
       _prefs = prefs;
       _lastSubscriptionUpdate = prefs.lastSubscriptionUpdate;
+      _appVersion = await _loadAppVersion();
       await _reloadProfiles(pickActive: true);
       if (!mounted) return;
       setState(() => _ready = true);
       unawaited(_maybeAutoUpdate());
+      unawaited(_maybeCheckAppUpdate());
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -501,6 +510,32 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<String> _loadAppVersion() async {
+    try {
+      return (await PackageInfo.fromPlatform()).version;
+    } catch (_) {
+      // 某些测试环境没有插件实现：版本号留空，检查更新按钮会提示不可用。
+      return '';
+    }
+  }
+
+  /// 启动后自动检查更新：仅开关打开、24h 内没查过才查；失败静默、同版本只弹一次。
+  Future<void> _maybeCheckAppUpdate() async {
+    final prefs = _prefs;
+    if (prefs == null || !prefs.updateAutoCheck) return;
+    if (_appVersion.isEmpty || SemVer.tryParse(_appVersion) == null) return;
+    if (!shouldAutoCheck(prefs.lastUpdateCheckAt)) return;
+    await Future<void>.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    final result = await checkForUpdate(currentVersion: _appVersion);
+    await prefs.setLastUpdateCheckAt(DateTime.now());
+    if (!mounted || result is! UpdateAvailable) return;
+    if (prefs.lastNotifiedVersion == result.info.version) return;
+    await prefs.setLastNotifiedVersion(result.info.version);
+    if (!mounted) return;
+    await showUpdateDialog(context, result.info);
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     showToast(context, message);
@@ -576,6 +611,8 @@ class _AppShellState extends State<AppShell> {
                       onOpenSubscription: _openSubscription,
                       activeName: _profileName(_activeFileName ?? ''),
                       bottomInset: _bottomInset,
+                      appVersion: _appVersion,
+                      prefs: _prefs,
                     ),
                   ),
                 ),

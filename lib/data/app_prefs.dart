@@ -59,6 +59,29 @@ class AppPrefs {
   Future<void> setRuleUpdateIntervalHours(int hours) =>
       _put('ruleUpdateIntervalHours', hours);
 
+  // ------------------------------------------------------------ 检查更新（全局）
+
+  /// 是否在启动后自动检查更新。默认关（用户要求「不自动联网」）。
+  bool get updateAutoCheck => _data['updateAutoCheck'] as bool? ?? false;
+
+  Future<void> setUpdateAutoCheck(bool enabled) =>
+      _put('updateAutoCheck', enabled);
+
+  /// 上次自动检查的时间（24h 节流用）。
+  DateTime? get lastUpdateCheckAt {
+    final raw = _data['lastUpdateCheckAt'] as String?;
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
+  Future<void> setLastUpdateCheckAt(DateTime? time) =>
+      _put('lastUpdateCheckAt', time?.toIso8601String());
+
+  /// 已经弹过提示的版本（同一版本只弹一次）。
+  String? get lastNotifiedVersion => _data['lastNotifiedVersion'] as String?;
+
+  Future<void> setLastNotifiedVersion(String? version) =>
+      _put('lastNotifiedVersion', version);
+
   Future<void> _put(String key, Object? value) async {
     if (value == null) {
       _data.remove(key);

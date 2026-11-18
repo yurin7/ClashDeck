@@ -20,6 +20,7 @@ import 'home_page.dart';
 import '../core/edit/config_ops.dart';
 import 'import_dialogs.dart';
 import 'overview_page.dart';
+import 'pulse_entry.dart';
 import 'pulse_route.dart';
 import 'pulse_page.dart';
 import 'settings_page.dart';
@@ -420,6 +421,7 @@ class _AppShellState extends State<AppShell> {
   bool _pulseOpen = false;
 
   Future<void> _openPulse() async {
+    if (_pulseOpen) return;
     final settings = _settings;
     final fileName = _activeFileName;
     final prefs = _prefs;
@@ -622,58 +624,61 @@ class _AppShellState extends State<AppShell> {
           Positioned.fill(
             child: Visibility(
               visible: !_pulseOpen,
-              child: PageView(
-                controller: _pager,
-                onPageChanged: (i) => setState(() => _index = i),
-                children: [
-                  _KeepAlivePage(
-                    child: SafeArea(
-                      bottom: false,
-                      child: OverviewPage(
+              child: PulseSwipeEntry(
+                enabled: _index == 0,
+                onOpen: () => unawaited(_openPulse()),
+                child: PageView(
+                  controller: _pager,
+                  onPageChanged: (i) => setState(() => _index = i),
+                  children: [
+                    _KeepAlivePage(
+                      child: SafeArea(
+                        bottom: false,
+                        child: OverviewPage(
+                          runtime: _runtime,
+                          settings: _settings,
+                          activeProfile: _activeFileName,
+                          profileName: _activeName,
+                          profileCount: _profiles.length,
+                          onOpenEditor: _openEditor,
+                          onPickProfile: _pickProfile,
+                          onRefreshProfiles: _reloadProfiles,
+                          bottomInset: _bottomInset,
+                        ),
+                      ),
+                    ),
+                    _KeepAlivePage(
+                      child: HomePage(
+                        activeFileName: _activeFileName,
+                        switchingFileName: _switchingFileName,
+                        onSetActive: _setActive,
+                        onProfilesChanged: _reloadProfiles,
+                        onDeleteProfile: _deleteProfile,
                         runtime: _runtime,
-                        settings: _settings,
-                        activeProfile: _activeFileName,
-                        profileName: _activeName,
-                        profileCount: _profiles.length,
-                        onOpenEditor: _openEditor,
-                        onPickProfile: _pickProfile,
-                        onRefreshProfiles: _reloadProfiles,
-                        onOpenPulse: _openPulse,
+                        autoSave: _settings?.autoSave ?? false,
                         bottomInset: _bottomInset,
                       ),
                     ),
-                  ),
-                  _KeepAlivePage(
-                    child: HomePage(
-                      activeFileName: _activeFileName,
-                      switchingFileName: _switchingFileName,
-                      onSetActive: _setActive,
-                      onProfilesChanged: _reloadProfiles,
-                      onDeleteProfile: _deleteProfile,
-                      runtime: _runtime,
-                      autoSave: _settings?.autoSave ?? false,
-                      bottomInset: _bottomInset,
-                    ),
-                  ),
-                  _KeepAlivePage(
-                    child: SafeArea(
-                      bottom: false,
-                      child: SettingsPage(
-                        settings: _settings,
-                        runtime: _runtime,
-                        lastSubscriptionUpdate: _lastSubscriptionUpdate,
-                        onUpdateSubscription: _updateSubscription,
-                        onImportText: _importText,
-                        onImportUrl: _importUrl,
-                        onOpenSubscription: _openSubscription,
-                        activeName: _profileName(_activeFileName ?? ''),
-                        bottomInset: _bottomInset,
-                        appVersion: _appVersion,
-                        prefs: _prefs,
+                    _KeepAlivePage(
+                      child: SafeArea(
+                        bottom: false,
+                        child: SettingsPage(
+                          settings: _settings,
+                          runtime: _runtime,
+                          lastSubscriptionUpdate: _lastSubscriptionUpdate,
+                          onUpdateSubscription: _updateSubscription,
+                          onImportText: _importText,
+                          onImportUrl: _importUrl,
+                          onOpenSubscription: _openSubscription,
+                          activeName: _profileName(_activeFileName ?? ''),
+                          bottomInset: _bottomInset,
+                          appVersion: _appVersion,
+                          prefs: _prefs,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

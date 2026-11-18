@@ -13,13 +13,6 @@ import 'widgets.dart';
 import 'widgets/start_stop_button.dart';
 import 'motion.dart';
 
-/// 概览左滑进 Pulse 的判定：整页横向左扫够远或够快。
-
-/// 右边缘起手会和 Android 手势导航的「返回」抢系统手势，所以不做边缘限定；
-/// 横向胶囊行自己会赢得手势竞技场，不会被误触发。
-bool pulseDragShouldOpen({required double dx, required double velocity}) =>
-    dx < -100 || velocity < -300;
-
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
 class OverviewPage extends StatefulWidget {
   const OverviewPage({
@@ -32,7 +25,6 @@ class OverviewPage extends StatefulWidget {
     required this.onOpenEditor,
     required this.onPickProfile,
     required this.onRefreshProfiles,
-    this.onOpenPulse,
     this.bottomInset = 0,
   });
 
@@ -45,9 +37,6 @@ class OverviewPage extends StatefulWidget {
   final Future<void> Function() onPickProfile;
   final Future<void> Function() onRefreshProfiles;
 
-  /// 左滑（整页横向左扫）打开 Pulse 负一屏。
-  final VoidCallback? onOpenPulse;
-
   final double bottomInset;
 
   @override
@@ -57,26 +46,6 @@ class OverviewPage extends StatefulWidget {
 class _OverviewPageState extends State<OverviewPage> {
   final List<double> _history = <double>[];
   Timer? _poll;
-
-  /// 横向手势累计位移；整页左扫够远/够快进 Pulse。
-  double _pulseDragDx = 0;
-
-  void _onPulseDragStart(DragStartDetails details) {
-    _pulseDragDx = 0;
-  }
-
-  void _onPulseDragUpdate(DragUpdateDetails details) {
-    _pulseDragDx += details.delta.dx;
-  }
-
-  void _onPulseDragEnd(DragEndDetails details) {
-    final open = pulseDragShouldOpen(
-      dx: _pulseDragDx,
-      velocity: details.primaryVelocity ?? 0,
-    );
-    _pulseDragDx = 0;
-    if (open) widget.onOpenPulse?.call();
-  }
 
   @override
   void initState() {
@@ -123,98 +92,92 @@ class _OverviewPageState extends State<OverviewPage> {
       RuntimePhase.error => semantic.danger,
       RuntimePhase.idle => scheme.onSurfaceVariant,
     };
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: _onPulseDragStart,
-      onHorizontalDragUpdate: _onPulseDragUpdate,
-      onHorizontalDragEnd: _onPulseDragEnd,
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.xl,
-              Insets.md,
-              Insets.xl,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: MicroLabel(
-                          'OVERVIEW',
-                          color: scheme.onSurfaceVariant,
-                        ),
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.xl,
+            Insets.md,
+            Insets.xl,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: MicroLabel(
+                        'OVERVIEW',
+                        color: scheme.onSurfaceVariant,
                       ),
-                      IconButton(
-                        tooltip: '刷新',
-                        onPressed: () async {
-                          await widget.onRefreshProfiles();
-                          await runtime.refreshStatus();
-                        },
-                        icon: const Icon(Icons.refresh, size: 20),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: Insets.sm),
-                  _StatusCard(
-                    runtime: runtime,
-                    statusColor: statusColor,
-                    history: _history,
-                    running: _running,
-                  ),
-                ],
-              ),
+                    ),
+                    IconButton(
+                      tooltip: '刷新',
+                      onPressed: () async {
+                        await widget.onRefreshProfiles();
+                        await runtime.refreshStatus();
+                      },
+                      icon: const Icon(Icons.refresh, size: 20),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Insets.sm),
+                _StatusCard(
+                  runtime: runtime,
+                  statusColor: statusColor,
+                  history: _history,
+                  running: _running,
+                ),
+              ],
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.xl,
-              Insets.lg,
-              Insets.xl,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _QuickControls(
-                runtime: runtime,
-                settings: widget.settings,
-                onChanged: () => setState(() {}),
-              ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.xl,
+            Insets.lg,
+            Insets.xl,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _QuickControls(
+              runtime: runtime,
+              settings: widget.settings,
+              onChanged: () => setState(() {}),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.xl,
-              Insets.lg,
-              Insets.xl,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: _ActiveProfileCard(
-                name: widget.profileName,
-                fileName: widget.activeProfile,
-                settings: widget.settings,
-                profileCount: widget.profileCount,
-                onOpenEditor: widget.onOpenEditor,
-                onPickProfile: widget.onPickProfile,
-              ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.xl,
+            Insets.lg,
+            Insets.xl,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _ActiveProfileCard(
+              name: widget.profileName,
+              fileName: widget.activeProfile,
+              settings: widget.settings,
+              profileCount: widget.profileCount,
+              onOpenEditor: widget.onOpenEditor,
+              onPickProfile: widget.onPickProfile,
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              Insets.xl,
-              Insets.lg,
-              Insets.xl,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(child: _LogCard(runtime: runtime)),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            Insets.xl,
+            Insets.lg,
+            Insets.xl,
+            0,
           ),
-          SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
-        ],
-      ),
+          sliver: SliverToBoxAdapter(child: _LogCard(runtime: runtime)),
+        ),
+        SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
+      ],
     );
   }
 }

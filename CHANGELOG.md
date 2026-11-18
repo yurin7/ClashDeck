@@ -2,6 +2,17 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
+## [0.3.1] - 2026-11-19
+
+### Fixes
+
+- 修复概览「停止内核」按钮比「启动内核」窄、矮：三种状态统一 46 高、铺满宽度、24 横向内边距与 14 圆角。
+- 修复 Pulse 负一屏打不开：原入口依赖概览页 `onHorizontalDrag*`，被 `PageView` 的横向手势竞技场吃掉；改为监听第一页向右拖出 `overscroll`（≥96dp 或右甩 ≥350px/s）后打开，并新增 `PulseSwipeEntry`。
+
+### Tests
+
+- 新增 `test/pulse_entry_test.dart`（阈值、右拖触发、非首页不触发）与 `test/start_stop_button_test.dart`（三态同宽同高）；583 个测试全绿，UI 规范检查 0 基线。
+
 ## [0.3.0] - 2026-11-19
 
 ### Features

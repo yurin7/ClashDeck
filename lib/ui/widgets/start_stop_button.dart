@@ -1,11 +1,17 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../motion.dart';
+import '../theme.dart';
 import '../widgets.dart';
 
 /// 内核启停按钮：停止 / 运行中 / 处理中三种状态之间交叉淡入淡出。
 ///
 /// 只重建按钮自身；动画时长走 [Motion]，系统开启「减少动画」时自动降为短促切换。
+///
+/// 三种状态必须严格同宽同高：启动态是铺满的 [AccentButton]，停止/处理中是
+/// [OutlinedButton]，所以两处都要显式给 `minimumSize` 并让 AnimatedSwitcher
+/// 的 Stack 以 `StackFit.expand` 约束子级，否则 OutlinedButton 会按内容收缩，
+/// 出现「停止按钮比启动按钮短」的问题（0.3.0 实测）。
 class StartStopButton extends StatelessWidget {
   const StartStopButton({
     super.key,
@@ -26,6 +32,15 @@ class StartStopButton extends StatelessWidget {
   final bool busySpinner;
   final String busyLabel;
 
+  /// 与 [AccentButton] 的 46 高、24 横向内边距、14 圆角保持一致。
+  static ButtonStyle get _outlinedStyle => OutlinedButton.styleFrom(
+    minimumSize: const Size.fromHeight(46),
+    padding: const EdgeInsets.symmetric(horizontal: Insets.xl),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(Radiuses.md)),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final motion = Motion.of(context);
@@ -42,6 +57,7 @@ class StartStopButton extends StatelessWidget {
             )
           : OutlinedButton.icon(
               key: const ValueKey('start-stop-busy'),
+              style: _outlinedStyle,
               onPressed: null,
               icon: const Icon(Icons.play_arrow_rounded, size: 20),
               label: Text(busyLabel),
@@ -49,6 +65,7 @@ class StartStopButton extends StatelessWidget {
     } else if (running) {
       child = OutlinedButton.icon(
         key: const ValueKey('start-stop-stop'),
+        style: _outlinedStyle,
         onPressed: onStop,
         icon: const Icon(Icons.stop_circle_outlined, size: 20),
         label: const Text('停止内核'),
@@ -70,6 +87,7 @@ class StartStopButton extends StatelessWidget {
         switchInCurve: motion.enter,
         switchOutCurve: motion.exit,
         layoutBuilder: (current, previous) => Stack(
+          fit: StackFit.expand,
           alignment: Alignment.center,
           children: [...previous, ?current],
         ),

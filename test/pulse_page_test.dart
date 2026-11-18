@@ -99,7 +99,7 @@ void main() {
     expect(find.text('启动内核后可测速'), findsOneWidget);
     expect(find.text('检查更新'), findsWidgets);
     expect(find.text('运行状态'), findsOneWidget);
-    expect(find.text('配置文件'), findsOneWidget);
+    expect(find.text('当前配置'), findsOneWidget);
     expect(find.text('demo'), findsWidgets);
   });
 

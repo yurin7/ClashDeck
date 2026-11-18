@@ -356,6 +356,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final motion = Motion.of(context);
     final disableAnimations =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
@@ -398,6 +399,26 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+            Positioned(
+              right: Insets.lg,
+              bottom: Insets.lg,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Text('右滑返回', style: hintStyle(context)),
+                ),
               ),
             ),
             SafeArea(
@@ -458,9 +479,32 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               children: [
                 const _GradientWordmark(),
                 const SizedBox(height: 2),
-                Text(
-                  '${widget.appVersion} · $status',
-                  style: hintStyle(context),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: switch (phase) {
+                          RuntimePhase.running => scheme.primary,
+                          RuntimePhase.starting ||
+                          RuntimePhase.stopping => scheme.tertiary,
+                          RuntimePhase.error => scheme.error,
+                          RuntimePhase.idle => scheme.outline,
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        '${widget.appVersion} · $status',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: hintStyle(context),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -643,35 +687,45 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               Text('当前 ${widget.appVersion}', style: hintStyle(context)),
             ],
           ),
-          const SizedBox(height: Insets.sm),
+          const SizedBox(height: Insets.xs),
           Row(
             children: [
               Expanded(
                 child: Text(
                   switch (result) {
-                    UpdateAvailable() => '发现 ${result.info.version} · 去查看',
+                    UpdateAvailable() => '发现 ${result.info.version}',
                     UpToDate() => '已是最新版本',
                     UpdateFailed() => result.failure.message,
                     null => '从 GitHub 读取最新正式版，不会自动下载',
                   },
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     color: result is UpdateAvailable
                         ? scheme.primary
                         : scheme.onSurfaceVariant,
                   ),
                 ),
               ),
-              if (result is UpdateAvailable)
-                TextButton(
-                  onPressed: () => _openRelease(result.info.url),
-                  child: const Text('去查看'),
-                )
-              else
-                TextButton(
-                  onPressed: _checking ? null : _checkUpdate,
-                  child: Text(_checking ? '检查中…' : '检查更新'),
+              const SizedBox(width: Insets.sm),
+              TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                  textStyle: const TextStyle(fontSize: 12.5),
                 ),
+                onPressed: result is UpdateAvailable
+                    ? () => _openRelease(result.info.url)
+                    : (_checking ? null : _checkUpdate),
+                child: Text(
+                  result is UpdateAvailable
+                      ? '去查看'
+                      : (_checking ? '检查中…' : '检查更新'),
+                ),
+              ),
             ],
           ),
         ],
@@ -710,10 +764,42 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: Insets.sm),
-          _InfoLine(label: '运行时长', value: _uptimeText()),
-          _InfoLine(label: '连接数', value: _connections?.toString() ?? '—'),
-          _InfoLine(label: '配置文件', value: widget.profileName),
-          _InfoLine(label: '全局出口', value: exit),
+          Row(
+            children: [
+              Expanded(
+                child: _Kv(label: '内核状态', value: phaseText, color: color),
+              ),
+              Expanded(
+                child: _Kv(label: '运行时长', value: _uptimeText()),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _Kv(
+                  label: '连接数',
+                  value: _connections?.toString() ?? '—',
+                  leading: _BreathingDot(
+                    animation: _radar,
+                    enabled: phase == RuntimePhase.running,
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _Kv(label: '当前配置', value: widget.profileName),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _Kv(label: '全局出口', value: exit),
+              ),
+              const Spacer(),
+            ],
+          ),
           if (phase == RuntimePhase.error && runtime?.lastError != null)
             Padding(
               padding: const EdgeInsets.only(top: Insets.sm),
@@ -897,9 +983,9 @@ class _BackdropPainter extends CustomPainter {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color.alphaBlend(primary.withValues(alpha: 0.16), base),
+            Color.alphaBlend(primary.withValues(alpha: 0.14), base),
             base,
-            Color.alphaBlend(tertiary.withValues(alpha: 0.10), base),
+            Color.alphaBlend(tertiary.withValues(alpha: 0.09), base),
           ],
         ).createShader(rect),
     );
@@ -933,13 +1019,13 @@ class _BackdropPainter extends CustomPainter {
     for (final (center, radius, color) in blobs) {
       final paint = Paint()
         ..shader = RadialGradient(
-          colors: [color.withValues(alpha: 0.20), color.withValues(alpha: 0)],
+          colors: [color.withValues(alpha: 0.176), color.withValues(alpha: 0)],
         ).createShader(Rect.fromCircle(center: center, radius: radius));
       canvas.drawCircle(center, radius, paint);
     }
 
     final grid = Paint()
-      ..color = Colors.white.withValues(alpha: 0.035)
+      ..color = Colors.white.withValues(alpha: 0.03)
       ..strokeWidth = 0.6;
     const step = 36.0;
     for (var x = 0.0; x <= size.width; x += step) {
@@ -954,20 +1040,41 @@ class _BackdropPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), scan);
     }
 
-    if (reducedMotion) return;
-    final particle = Paint()..color = Colors.white.withValues(alpha: 0.5);
-    for (var i = 0; i < 10; i++) {
-      final seed = i * 0.37;
-      final x = size.width * (0.08 + ((seed * 2.7) % 0.86));
-      final drift = (t + seed) % 1.0;
-      final y = size.height * (0.9 - drift * 0.75);
-      final alpha = (0.35 * (1 - drift)).clamp(0.0, 0.35);
-      canvas.drawCircle(
-        Offset(x, y),
-        i.isEven ? 1.6 : 2.4,
-        particle..color = Colors.white.withValues(alpha: alpha),
-      );
+    if (!reducedMotion) {
+      final particle = Paint()..color = Colors.white.withValues(alpha: 0.5);
+      for (var i = 0; i < 10; i++) {
+        final seed = i * 0.37;
+        final x = size.width * (0.08 + ((seed * 2.7) % 0.86));
+        final drift = (t + seed) % 1.0;
+        final y = size.height * (0.9 - drift * 0.75);
+        final alpha = (0.28 * (1 - drift)).clamp(0.0, 0.28);
+        canvas.drawCircle(
+          Offset(x, y),
+          i.isEven ? 1.6 : 2.4,
+          particle..color = Colors.white.withValues(alpha: alpha),
+        );
+      }
     }
+
+    // 暗色 scrim：保证正文与背景的对比度（顶部浅、底部深）。
+    final scrim = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0x1A05060A), Color(0x4705060A), Color(0x6105060A)],
+        stops: [0.0, 0.55, 1.0],
+      ).createShader(rect);
+    canvas.drawRect(rect, scrim);
+
+    // 四周轻微 vignette，收住画面边缘。
+    final vignette = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment.center,
+        radius: 1.05,
+        colors: [Colors.transparent, Color(0x59000000)],
+        stops: [0.55, 1.0],
+      ).createShader(rect);
+    canvas.drawRect(rect, vignette);
   }
 
   @override
@@ -997,7 +1104,6 @@ class _PulseHeader extends StatelessWidget {
           style: monoStyle(context, size: 10, color: scheme.onSurfaceVariant),
         ),
         const Spacer(),
-        Text('右滑返回', style: hintStyle(context)),
       ],
     );
   }
@@ -1109,12 +1215,20 @@ class _LatencyRowState extends State<_LatencyRow>
       _ => scheme.error,
     };
     final target = ms == null ? 0.0 : widget.ratio.clamp(0.02, 1.0);
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+    final row = Container(
+      height: 44,
+      padding: const EdgeInsets.only(right: 2),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.4),
+          ),
+        ),
+      ),
       child: Row(
         children: [
-          SizedBox(
-            width: 130,
+          Expanded(
+            flex: 5,
             child: Text(
               widget.name,
               maxLines: 1,
@@ -1122,7 +1236,9 @@ class _LatencyRowState extends State<_LatencyRow>
               style: const TextStyle(fontSize: 12.5),
             ),
           ),
+          const SizedBox(width: Insets.sm),
           Expanded(
+            flex: 6,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: TweenAnimationBuilder<double>(
@@ -1132,28 +1248,30 @@ class _LatencyRowState extends State<_LatencyRow>
                 builder: (context, value, _) => LinearProgressIndicator(
                   value: value,
                   minHeight: 6,
-                  backgroundColor: scheme.surfaceContainerHighest,
+                  backgroundColor: Colors.white.withValues(alpha: 0.06),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 58,
+          const SizedBox(width: 10),
+          Container(
+            width: 64,
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: ms == null ? 0.10 : 0.16),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withValues(alpha: 0.35)),
+            ),
             child: ms == null
-                ? Text(
-                    '超时',
-                    textAlign: TextAlign.right,
-                    style: monoStyle(context, size: 11, color: color),
-                  )
+                ? Text('超时', style: monoStyle(context, size: 11, color: color))
                 : TweenAnimationBuilder<double>(
                     tween: Tween<double>(end: ms.toDouble()),
                     duration: kLatencyCountDuration,
                     curve: Curves.easeOutCubic,
                     builder: (context, value, _) => Text(
                       '${value.round()} ms',
-                      textAlign: TextAlign.right,
                       style: monoStyle(context, size: 11, color: color),
                     ),
                   ),
@@ -1368,30 +1486,102 @@ class _Sheen extends StatelessWidget {
   }
 }
 
-class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.label, required this.value});
+/// 运行状态的两列 key-value：标签小号灰、值右对齐等宽。
+class _Kv extends StatelessWidget {
+  const _Kv({
+    required this.label,
+    required this.value,
+    this.color,
+    this.leading,
+  });
 
   final String label;
   final String value;
+  final Color? color;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: hintStyle(context)),
-          const Spacer(),
-          Text(
-            value,
-            style: monoStyle(
-              context,
-              size: 12,
-              color: Theme.of(context).colorScheme.onSurface,
+          if (leading != null) ...[leading!, const SizedBox(width: 5)],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: monoStyle(
+                context,
+                size: 11.5,
+                color: color ?? scheme.onSurface,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 连接数前的 3s 呼吸圆点，只在运行中动。
+class _BreathingDot extends StatelessWidget {
+  const _BreathingDot({
+    required this.animation,
+    required this.enabled,
+    required this.color,
+  });
+
+  final Animation<double> animation;
+  final bool enabled;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return Container(
+        width: 5,
+        height: 5,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: 0.3),
+        ),
+      );
+    }
+    final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduced) {
+      return Container(
+        width: 5,
+        height: 5,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      );
+    }
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = 0.5 + 0.5 * math.sin(animation.value * math.pi * 2);
+        return Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.35 + 0.55 * t),
+          ),
+        );
+      },
     );
   }
 }

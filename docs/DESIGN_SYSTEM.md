@@ -53,9 +53,12 @@
 
 - `⋮` 只表示「设置 / 编辑」，不承载导入、隐藏等动作；**规则行不再有 `⋮`**。
 - 规则行行尾固定两个动作：`swap_horiz`「换到别的组」（44dp 热区，点开即 TargetPickerSheet，选中即写回）与可选「更新规则集」；点行本体 = 编辑。
-- 删除统一「左滑露出删除 → 确认弹窗」；不在 `⋮` 里。**唯一例外**：编辑规则时标题行右侧的删除图标（44dp、danger 色、仅编辑态），与左滑删除共用同一确认实现。
-- 左滑只作用在行本体：组卡的滑区是**标题行**，规则行的滑区是**规则胶囊本体**；成员 chip 区不参与滑动。
-- 左滑删除必须把内容裁到行卡圆角：`SlidableRow(borderRadius: 行卡半径)`，红块不超出行 rect，行与行之间的留白由外层 `Padding` 负责（不要塞进滑动区）。
+- 删除统一「左滑露出删除 → 确认弹窗」；不在 `⋮` 里。**唯一例外**：编辑规则时标题行右侧的删除图标（44dp、danger 色、仅编辑态）。所有删除入口共用 `lib/ui/widgets/delete_confirm.dart` 的 `confirmDelete`（`danger: true`，可带引用提示）。
+- 左滑只作用在行本体：组卡的滑区是**标题行**，规则行的滑区是**规则胶囊本体**，节点行的滑区是整行 `NodeRow`；成员 chip 区不参与滑动。
+- 左滑删除必须把内容裁到行卡圆角：`SlidableRow(borderRadius: 行卡半径)`（必传），红块不超出行 rect，行与行之间的留白由外层 `Padding` 负责（不要塞进滑动区）。滑出宽度 80，`open`/关闭 220ms。
+- 点「删除」先收起该行，再弹确认；确认框取消后行**保持收起**。同一列表同一时刻只允许一行展开（单行互斥）。
+- 删除节点时确认框附带引用提示（「N 个组引用了它：…，删除后会一起移除」）；删除策略组只删组、不动节点。
+
 - 规则编辑的关闭语义：**新建**时点遮罩 / 右上 × / 系统返回一律退出，空或半填直接丢弃、不提示；**编辑**时合法就保存并关闭，非法则丢弃改动、toast「内容无效，未保存」并关闭。
 - 抽屉 / sheet 顶部固定拖拽手柄；点击关闭按钮、下滑、点遮罩都可退出。
 - 页面切换只做高亮与数字过渡（220ms），不重排列表。
@@ -103,6 +106,7 @@
 | `Checkbox(` / `Checkbox.adaptive(` / `CheckboxListTile(` / `CheckboxListTile.adaptive(` | 高亮行 `SelectableTile` / `NameChip` | — |
 | `showDialog<` | `showAppDialog` | — |
 | `Dismissible(` | `SlidableRow`（左滑） | — |
+| `onHorizontalDragUpdate:` | `SlidableRow`（左滑手势只在共享组件里实现） | `lib/ui/widgets.dart` |
 | `maxLines: null` | `AppTextArea` / `AppTextField(expands: true)` | `lib/ui/fields.dart` |
 | `duration: const Duration(` | `Motion` token（`lib/ui/motion.dart`） | `lib/ui/motion.dart` |
 | `PickerSheetScaffold(` | `showSectionedPicker` / `showSelectSheet` | `lib/ui/sheets/` 与 `lib/ui/rule_picker_sheet.dart` |
@@ -171,6 +175,7 @@
 | 全局出口 | `showSelectSheet` + `SectionedPicker` | 分区：内核默认 → 系统策略 → 策略组 → 节点 |
 | 选择规则（挂到组） | `showSelectSheet` + `rule_picker_sheet` | 行内 `RuleChip` |
 | 移动到组（规则） | `showSelectSheet` + 组列表 | `GroupChip` 行 |
-| 删除确认 | `showConfirmDialog` | 破坏性：确定按钮 error 色；入口：规则行左滑 + 编辑规则标题行删除（同一确认实现） |
+| 节点列表 | `NodeRow`（`lib/ui/widgets/node_row.dart`） | 行式：协议方块 + 名称 + 协议·延迟 + 当前徽章 + ⋮；点行编辑、长按拖拽、左滑删除 |
+| 删除确认 | `confirmDelete`（`lib/ui/widgets/delete_confirm.dart`） | 破坏性：`danger: true`；入口：配置 / 策略组 / 规则 / 节点左滑、编辑规则标题行删除；节点确认带引用组提示 |
 | 忙碌 / 进度 | `showAppDialog(width:)` + `BusyDialog` | `barrierDismissible: false`；可带进度与取消 |
 | 撤销确认 | `showConfirmDialog` | 文案说明影响范围，非破坏性样式 |

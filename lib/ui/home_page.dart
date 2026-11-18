@@ -17,6 +17,7 @@ import 'widgets.dart';
 import './widgets/app_ink.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
+import 'widgets/delete_confirm.dart';
 import 'widgets/edit_dialog.dart';
 import 'motion.dart';
 
@@ -334,15 +335,13 @@ class _HomePageState extends State<HomePage> {
   Future<void> _delete(StoredProfile item) async {
     final store = _store;
     if (store == null) return;
-    setState(() => _swipedFileName = null);
-    final ok = await showConfirmDialog(
+    // 收起行由 SlidableRow 内部完成（点删除先收起，再弹确认框）。
+    final ok = await confirmDelete(
       context,
       title: '删除「${item.name}」？',
       message: '删除后不可恢复，建议先备份 YAML。',
-      confirmLabel: '删除',
-      danger: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     final onDelete = widget.onDeleteProfile;
     if (onDelete != null) {
       await onDelete(item.fileName);

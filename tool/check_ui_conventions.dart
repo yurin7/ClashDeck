@@ -163,6 +163,12 @@ bannedPatterns =
         allow: <String>{'lib/ui/motion.dart'},
       ),
       (
+        pattern: 'onHorizontalDragUpdate:',
+        rule: 'no-raw-swipe',
+        message: '左滑手势统一用 SlidableRow，不在行内自建 onHorizontalDragUpdate',
+        allow: <String>{'lib/ui/widgets.dart'},
+      ),
+      (
         pattern: 'PickerSheetScaffold(',
         rule: 'no-raw-picker-scaffold',
         message:

@@ -17,7 +17,9 @@ import 'chips.dart';
 import 'sheets.dart';
 import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
+import 'widgets/delete_confirm.dart';
 import 'widgets/edit_dialog.dart';
+import 'widgets/node_row.dart';
 import 'widgets/selectable_tile.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -218,8 +220,18 @@ class _ProxyBoardState extends State<ProxyBoard> {
   }
 
   Future<void> _deleteNode(ProxyEntry node) async {
-    final ok = await _confirm('删除节点「${node.name}」？', '会同时从所有策略组里移除它。');
-    if (ok != true) return;
+    final refs = s.profile.groups
+        .where((g) => !g.computedMembers && g.members.contains(node.name))
+        .map((g) => g.name)
+        .toList();
+    final ok = await _confirm(
+      '删除节点「${node.name}」？',
+      '会同时从所有策略组里移除它。',
+      extraHint: refs.isEmpty
+          ? null
+          : '${refs.length} 个组引用了它：${refs.join('、')}。删除后会一起移除。',
+    );
+    if (!ok) return;
     if (!s.deleteProxy(node.name)) _fail();
   }
 
@@ -394,12 +406,20 @@ class _ProxyBoardState extends State<ProxyBoard> {
     _ => t,
   };
 
-  Future<bool?> _confirm(String title, String message) =>
-      showConfirmDialog(context, title: title, message: message);
+  Future<bool> _confirm(String title, String message, {String? extraHint}) =>
+      confirmDelete(
+        context,
+        title: title,
+        message: message,
+        extraHint: extraHint,
+      );
 
   Future<void> _deleteGroup(GroupEntry group) async {
-    final ok = await _confirm('删除策略组「${group.name}」？', '引用它的规则会变成悬空引用，校验会提示。');
-    if (ok != true) return;
+    final ok = await _confirm(
+      '删除策略组「${group.name}」？',
+      '组里的节点不会被删除；引用它的规则会变成悬空引用，校验会提示。',
+    );
+    if (!ok) return;
     if (!s.apply((d) => ConfigOps.deleteGroup(d, group.name))) _fail();
   }
 
@@ -475,8 +495,9 @@ class _ProxyBoardState extends State<ProxyBoard> {
         ),
         _NodeListCard(
           nodes: profile.proxies,
+          delays: widget.runtime?.delays ?? const <String, int?>{},
+          currentName: selection[kDefaultGroupName],
           onOpen: _editNode,
-          onMove: (n) => _moveDialog(n, null),
           onDelete: _deleteNode,
           onMenuNode: (n) => _showNodeActions(n),
           onAdd: _addNode,
@@ -595,24 +616,30 @@ class _NodeListCard extends StatefulWidget {
   const _NodeListCard({
     required this.nodes,
     required this.onOpen,
-    required this.onMove,
     required this.onDelete,
     required this.onDrop,
     required this.onAdd,
     this.onMenuNode,
+    this.delays = const <String, int?>{},
+    this.currentName,
   });
 
   final List<ProxyEntry> nodes;
   final void Function(ProxyEntry) onOpen;
-  final void Function(ProxyEntry) onMove;
   final void Function(ProxyEntry) onDelete;
   final void Function(DragNodeData) onDrop;
 
   /// 区头的「添加节点」入口，和底部「新建组」并列。
   final VoidCallback onAdd;
 
-  /// 手机上点芯片右侧 ⋮ 打开操作表（编辑 / 移动 / 删除）。
+  /// 手机上点行尾 ⋮ 打开操作表（编辑 / 移动 / 删除）。
   final void Function(ProxyEntry)? onMenuNode;
+
+  /// 最近一次测速结果；`containsKey` 区分「未测速」与「超时」。
+  final Map<String, int?> delays;
+
+  /// 当前 DEFAULT 组的出口节点（节点行右侧显示「当前」徽章）。
+  final String? currentName;
 
   @override
   State<_NodeListCard> createState() => _NodeListCardState();
@@ -620,6 +647,16 @@ class _NodeListCard extends StatefulWidget {
 
 class _NodeListCardState extends State<_NodeListCard> {
   bool _expanded = false;
+
+  /// 同一时刻只允许一行左滑展开。
+  String? _swipedNode;
+
+  String _delayText(String name) {
+    final delays = widget.delays;
+    if (!delays.containsKey(name)) return '未测速';
+    final delay = delays[name];
+    return delay == null ? '超时' : '$delay ms';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -698,25 +735,39 @@ class _NodeListCardState extends State<_NodeListCard> {
                           if (count == 0)
                             Text('还没有节点：点右上角「+」添加。', style: hintStyle(context))
                           else
-                            Wrap(
-                              spacing: Insets.sm,
-                              runSpacing: Insets.sm,
+                            Column(
                               children: [
-                                for (final n in widget.nodes)
-                                  MotionEntrance(
-                                    key: ValueKey('node-chip-${n.name}'),
-                                    child: NodeChip(
-                                      node: n,
-                                      fromGroup: null,
-                                      onOpen: () => widget.onOpen(n),
-                                      onMove: () => widget.onMove(n),
-                                      onDelete: () => widget.onDelete(n),
-                                      onRemove: null,
-                                      onMenu: widget.onMenuNode == null
-                                          ? null
-                                          : () => widget.onMenuNode!(n),
+                                for (
+                                  var i = 0;
+                                  i < widget.nodes.length;
+                                  i++
+                                ) ...[
+                                  if (i > 0) const SizedBox(height: 6),
+                                  NodeRow(
+                                    key: ValueKey(
+                                      'node-row-${widget.nodes[i].name}',
                                     ),
+                                    node: widget.nodes[i],
+                                    delayText: _delayText(widget.nodes[i].name),
+                                    selected:
+                                        widget.currentName ==
+                                        widget.nodes[i].name,
+                                    open: _swipedNode == widget.nodes[i].name,
+                                    onOpenChanged: (open) => setState(
+                                      () => _swipedNode = open
+                                          ? widget.nodes[i].name
+                                          : null,
+                                    ),
+                                    onTap: () => widget.onOpen(widget.nodes[i]),
+                                    onMenu: widget.onMenuNode == null
+                                        ? null
+                                        : () => widget.onMenuNode!(
+                                            widget.nodes[i],
+                                          ),
+                                    onDelete: () =>
+                                        widget.onDelete(widget.nodes[i]),
                                   ),
+                                ],
                               ],
                             ),
                         ],
@@ -858,8 +909,8 @@ class _GroupCard extends StatelessWidget {
                 open: swipeOpen,
                 onOpenChanged: onSwipeOpenChanged,
                 actionLabel: '删除',
-                // 标题行在 AppCard 内，红块按小圆角裁，不越过行矩形。
-                borderRadius: BorderRadius.circular(Radiuses.sm),
+                // 标题行在 AppCard 内：红块按卡片圆角裁，不越过行矩形。
+                borderRadius: BorderRadius.all(Radiuses.card),
                 onAction: onDelete,
                 child: Row(
                   children: [

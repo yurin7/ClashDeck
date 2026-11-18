@@ -7,7 +7,7 @@ Widget _host(Widget row) => MaterialApp(
 );
 
 void main() {
-  testWidgets('传了 borderRadius 就用同圆角裁整行，不传仍用矩形裁剪', (tester) async {
+  testWidgets('整行按传入圆角裁剪（内容与红块共用）', (tester) async {
     const radius = BorderRadius.all(Radius.circular(16));
     await tester.pumpWidget(
       _host(
@@ -23,18 +23,37 @@ void main() {
       tester.widget<ClipRRect>(find.byType(ClipRRect)).borderRadius,
       radius,
     );
+    expect(find.byType(ClipRect), findsNothing);
+  });
 
+  testWidgets('点删除先收起行，再执行删除动作', (tester) async {
+    final events = <String>[];
+    var open = true;
     await tester.pumpWidget(
-      _host(
-        SlidableRow(
-          actionLabel: '删除',
-          onAction: () {},
-          child: const SizedBox(height: 56, child: Text('行')),
+      StatefulBuilder(
+        builder: (context, setState) => _host(
+          SlidableRow(
+            actionLabel: '删除',
+            borderRadius: const BorderRadius.all(Radius.circular(16)),
+            open: open,
+            onOpenChanged: (value) {
+              events.add('open:$value');
+              setState(() => open = value);
+            },
+            onAction: () => events.add('action'),
+            child: const SizedBox(height: 56, child: Text('行')),
+          ),
         ),
       ),
     );
-    expect(find.byType(ClipRect), findsOneWidget);
-    expect(find.byType(ClipRRect), findsNothing);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    // 顺序必须是「先收起再删」，否则确认框会盖在半开的行上。
+    expect(events, ['open:false', 'action']);
+    expect(open, isFalse);
   });
 
   testWidgets('展开时红块在行 rect 内，内容尺寸不变', (tester) async {
@@ -91,25 +110,5 @@ void main() {
     expect(actionRect.left, greaterThanOrEqualTo(rowRect.right - 80 - 0.5));
     expect(actionRect.top, greaterThanOrEqualTo(rowRect.top - 0.5));
     expect(actionRect.bottom, lessThanOrEqualTo(rowRect.bottom + 0.5));
-  });
-
-  testWidgets('点删除触发 onAction', (tester) async {
-    var taps = 0;
-    await tester.pumpWidget(
-      _host(
-        SlidableRow(
-          actionLabel: '删除',
-          onAction: () => taps++,
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
-          open: true,
-          child: const SizedBox(height: 56, child: Text('行')),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('删除'));
-    await tester.pumpAndSettle();
-    expect(taps, 1);
   });
 }

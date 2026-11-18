@@ -14,7 +14,7 @@ import '../widgets/target_selector_field.dart';
 import '../chips.dart';
 import 'rule_row_card.dart';
 import '../widgets/app_ink.dart';
-import '../widgets/edit_dialog.dart';
+import '../widgets/delete_confirm.dart';
 
 /// 组卡与系统策略卡共用的「规则区块」。
 ///
@@ -165,14 +165,12 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
   /// 删除一条规则；规则行左滑与编辑弹窗里的删除共用它。
   Future<bool> _delete(RuleEntry rule) async {
     if (!mounted) return false;
-    final confirmed = await showConfirmDialog(
+    final confirmed = await confirmDelete(
       context,
       title: '删除这条规则？',
       message: '这条规则会从当前配置里移除，删掉后只能重新添加。',
-      confirmLabel: '删除',
-      danger: true,
     );
-    if (confirmed != true || !mounted) return false;
+    if (!confirmed || !mounted) return false;
     if (!widget.state.deleteRule(rule.index)) {
       _fail();
       return false;

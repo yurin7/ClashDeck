@@ -662,7 +662,7 @@ class SlidableRow extends StatefulWidget {
     this.open = false,
     this.onOpenChanged,
     this.actionWidth = 80,
-    this.borderRadius,
+    required this.borderRadius,
     this.background,
   });
 
@@ -677,9 +677,9 @@ class SlidableRow extends StatefulWidget {
   final ValueChanged<bool>? onOpenChanged;
   final double actionWidth;
 
-  /// 行卡圆角：传入后内容与删除红块一起被裁成同一个圆角，
-  /// 红块不会在卡片四角露成直角。不传则保持原来的矩形裁剪。
-  final BorderRadius? borderRadius;
+  /// 行卡圆角：内容与删除红块一起被裁成同一个圆角，红块不会在四角露成
+  /// 直角。调用方必须传入行卡自身的圆角（规则 16、节点行 8、组卡 16…）。
+  final BorderRadius borderRadius;
 
   /// 行卡下面的底色（滑动时露出的那层）。默认 surfaceContainerLow。
   final Color? background;
@@ -726,6 +726,16 @@ class _SlidableRowState extends State<SlidableRow>
     _controller.animateTo(shouldOpen ? 1 : 0, curve: Curves.easeOutCubic);
   }
 
+  /// 点操作按钮：先让行收起，再执行动作。
+  ///
+  /// 收起必须发生在弹确认框之前——否则弹框盖在展开的行上，取消后行还是
+  /// 半开状态，看起来像没点中。所有删除入口共用这一行为。
+  void _handleAction() {
+    widget.onOpenChanged?.call(false);
+    _controller.animateTo(0, curve: Curves.easeOutCubic);
+    widget.onAction();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -744,7 +754,7 @@ class _SlidableRowState extends State<SlidableRow>
                     child: Material(
                       color: scheme.error,
                       child: AppInkWell(
-                        onTap: widget.onAction,
+                        onTap: _handleAction,
                         child: Center(
                           child: Text(
                             widget.actionLabel,
@@ -785,9 +795,7 @@ class _SlidableRowState extends State<SlidableRow>
       onHorizontalDragUpdate: _onDragUpdate,
       onHorizontalDragEnd: _onDragEnd,
       // 圆角行卡必须连红块一起裁，否则滑开时四角会露出直角红块。
-      child: widget.borderRadius == null
-          ? ClipRect(child: slidable)
-          : ClipRRect(borderRadius: widget.borderRadius!, child: slidable),
+      child: ClipRRect(borderRadius: widget.borderRadius, child: slidable),
     );
   }
 }

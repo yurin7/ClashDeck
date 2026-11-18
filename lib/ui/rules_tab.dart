@@ -29,6 +29,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import './widgets/app_ink.dart';
 import './widgets/edit_dialog.dart';
+import './widgets/delete_confirm.dart';
 import './widgets/busy_dialog.dart';
 
 class RulesTab extends StatefulWidget {
@@ -168,14 +169,12 @@ class _RulesTabState extends State<RulesTab> {
   /// 删除一条规则前的二次确认。规则行左滑与编辑弹窗里的删除共用它。
   Future<bool> _confirmDeleteRule(int index) async {
     if (!mounted) return false;
-    final confirmed = await showConfirmDialog(
+    final confirmed = await confirmDelete(
       context,
       title: '删除这条规则？',
       message: '这条规则会从当前配置里移除，删掉后只能重新添加。',
-      confirmLabel: '删除',
-      danger: true,
     );
-    if (confirmed != true || !mounted) return false;
+    if (!confirmed || !mounted) return false;
     if (!s.deleteRule(index)) {
       _fail();
       return false;

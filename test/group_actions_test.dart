@@ -90,7 +90,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.textContaining('删除策略组「OTHER」'), findsOneWidget);
 
-    await tester.tap(find.text('确定'));
+    await tester.tap(find.text('删除').last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 

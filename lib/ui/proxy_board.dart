@@ -3,15 +3,13 @@ import 'package:material_ui/material_ui.dart';
 import '../core/edit/member_picker.dart';
 import '../core/edit/config_ops.dart';
 import '../core/model/profile.dart';
-import '../core/model/rule_types.dart';
 import '../core/schema/group_schema.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'import_dialogs.dart';
 import 'dropdown.dart';
-import 'rule_edit_dialog.dart';
-import 'rule_picker_sheet.dart';
+import 'rules/group_rules_block.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -885,7 +883,7 @@ class _GroupCard extends StatelessWidget {
                   ),
                 ),
               ],
-              _GroupRulesCard(state: state, group: group),
+              GroupRulesBlock(state: state, target: group.name),
             ],
           ),
         );
@@ -1578,248 +1576,6 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 组卡片里的「本组规则」：按 target == 组名反查，可直接改 / 删 / 加。
-///
-/// 规则的数据结构没变——组只是规则的目标，这里只是换个入口看同一批规则。
-class _GroupRulesCard extends StatefulWidget {
-  const _GroupRulesCard({required this.state, required this.group});
-
-  final EditorState state;
-  final GroupEntry group;
-
-  @override
-  State<_GroupRulesCard> createState() => _GroupRulesCardState();
-}
-
-class _GroupRulesCardState extends State<_GroupRulesCard> {
-  bool _expanded = false;
-
-  List<RuleEntry> get _rules => [
-    for (final rule in widget.state.profile.rules)
-      if (rule.target == widget.group.name) rule,
-  ];
-
-  void _fail() {
-    if (!mounted) return;
-    showToast(context, '这条规则没写进去，请检查配置');
-  }
-
-  /// 从已有规则里批量挑，挑中的改到本组名下。
-  Future<void> _addExisting() async {
-    final profile = widget.state.profile;
-    final picked = await showRulePickerSheet(
-      context,
-      group: widget.group.name,
-      candidates: rulesAssignableTo(profile, widget.group.name),
-    );
-    if (picked == null || picked.isEmpty) return;
-    final rules = profile.rules;
-    if (!widget.state.apply(
-      (doc) => retargetRules(
-        doc,
-        rules,
-        picked.map((rule) => rule.index),
-        widget.group.name,
-      ),
-    )) {
-      _fail();
-      return;
-    }
-    if (!mounted) return;
-    setState(() {});
-    final ruleSets = picked.where((rule) => rule.type == 'RULE-SET').length;
-    showToast(
-      context,
-      ruleSets == 0
-          ? '已把 ${picked.length} 条规则挂到「${widget.group.name}」'
-          : '已把 ${picked.length} 条规则挂到「${widget.group.name}」（含 $ruleSets 条规则集）',
-    );
-  }
-
-  Future<void> _edit({RuleEntry? initial}) async {
-    final profile = widget.state.profile;
-    final targets = <String>{
-      ...profile.allTargets,
-      widget.group.name,
-      if (initial != null) initial.target,
-    }.toList();
-
-    final result = await showAppDialog<Object>(
-      context,
-      builder: (_) => RuleEditDialog(
-        initialType: initial?.type,
-        initialPayload: initial?.payload,
-        initialTarget: initial?.target ?? widget.group.name,
-        initialNoResolve: initial?.noResolve ?? false,
-        targets: targets,
-        isNew: initial == null,
-      ),
-    );
-    if (result == null) return;
-
-    if (result == 'delete') {
-      if (initial == null) return;
-      await _delete(initial);
-      return;
-    }
-
-    final draft = result as RuleDraft;
-    final parts = <String>[
-      draft.type,
-      if (!kTerminalRuleTypes.contains(draft.type)) draft.payload,
-      draft.target,
-      if (draft.noResolve) 'no-resolve',
-      ...?initial?.options.where((o) => o != 'no-resolve'),
-    ];
-    final line = parts.where((p) => p.isNotEmpty).join(',');
-    final ok = initial == null
-        ? widget.state.addRule(line)
-        : widget.state.apply(
-            (d) => ConfigOps.updateRule(d, initial.index, line),
-          );
-    if (!ok) {
-      _fail();
-      return;
-    }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _delete(RuleEntry rule) async {
-    final confirmed = await showAppDialog<bool>(
-      context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除这条规则？'),
-        content: Text(
-          '这条规则会从当前配置里移除，删掉后只能重新添加。',
-          style: Theme.of(ctx).textTheme.bodySmall,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!widget.state.deleteRule(rule.index)) {
-      _fail();
-      return;
-    }
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final rules = _rules;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: Insets.md),
-        const Hairline(),
-        InkWell(
-          borderRadius: BorderRadius.circular(Radiuses.xs),
-          onTap: rules.isEmpty
-              ? null
-              : () => setState(() => _expanded = !_expanded),
-          child: Padding(
-            padding: const EdgeInsets.only(top: Insets.md, right: Insets.sm),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.rule_outlined,
-                  size: 16,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: Insets.sm),
-                Text(
-                  '本组规则 ${rules.length}',
-                  style: mono(12, color: scheme.onSurfaceVariant),
-                ),
-                if (rules.isEmpty) ...[
-                  const SizedBox(width: Insets.sm),
-                  Text(
-                    '还没有规则',
-                    style: hintStyle(context)?.copyWith(fontSize: 11.5),
-                  ),
-                ],
-                const Spacer(),
-                if (rules.isNotEmpty)
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-              ],
-            ),
-          ),
-        ),
-        if (_expanded && rules.isNotEmpty) ...[
-          const SizedBox(height: Insets.xs),
-          for (final rule in rules)
-            InkWell(
-              borderRadius: BorderRadius.circular(Radiuses.xs),
-              onTap: () => _edit(initial: rule),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: Insets.xs),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        rule.payload.isEmpty
-                            ? rule.type
-                            : '${rule.type} · ${rule.payload}',
-                        style: mono(11.5, color: scheme.onSurface),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '删除这条规则',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _delete(rule),
-                      icon: Icon(
-                        Icons.delete_outline,
-                        size: 16,
-                        color: scheme.error,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-        if (_expanded || rules.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: Insets.xs, right: Insets.sm),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: _addExisting,
-                  icon: const Icon(Icons.playlist_add, size: 16),
-                  label: const Text('添加已有规则'),
-                ),
-                TextButton.icon(
-                  onPressed: () => _edit(),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('新建一条'),
-                ),
-              ],
-            ),
-          ),
-      ],
     );
   }
 }

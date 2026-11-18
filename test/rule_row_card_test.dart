@@ -7,11 +7,13 @@ void main() {
   Future<void> pumpCard(
     WidgetTester tester, {
     required RuleEntry rule,
-    String? note,
     VoidCallback? onTap,
     VoidCallback? onEdit,
     VoidCallback? onMoveToGroup,
+    VoidCallback? onRefresh,
     VoidCallback? onDelete,
+    Widget? trailing,
+    bool compact = false,
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -21,11 +23,15 @@ void main() {
               width: 360,
               child: RuleRowCard(
                 rule: rule,
-                note: note,
-                dragHandle: const Icon(Icons.drag_indicator, size: 17),
+                compact: compact,
+                trailing: trailing,
+                dragHandle: compact
+                    ? null
+                    : const Icon(Icons.drag_indicator, size: 17),
                 onTap: onTap ?? () {},
                 onEdit: onEdit ?? () {},
-                onMoveToGroup: onMoveToGroup ?? () {},
+                onMoveToGroup: onMoveToGroup,
+                onRefresh: onRefresh,
                 onDelete: onDelete ?? () {},
               ),
             ),
@@ -35,19 +41,19 @@ void main() {
     );
   }
 
-  testWidgets('规则行胶囊卡：类型 + 匹配内容 + → 目标，并保留拖动手柄', (tester) async {
+  testWidgets('规则行胶囊卡：主标题带中文名，副标题是类型 + → 目标', (tester) async {
     var taps = 0;
     final rule = RuleEntry.parse(0, 'RULE-SET,loyal-reject,PROXY');
-    await pumpCard(tester, rule: rule, note: '广告与跟踪域名', onTap: () => taps++);
+    await pumpCard(tester, rule: rule, onTap: () => taps++);
 
+    expect(find.text('loyal-reject · 广告与跟踪域名'), findsOneWidget);
     expect(find.text('RULE-SET'), findsOneWidget);
-    expect(find.text('loyal-reject'), findsOneWidget);
-    expect(find.text('→ PROXY  ·  广告与跟踪域名'), findsOneWidget);
+    expect(find.text('→ PROXY'), findsOneWidget);
     // 拖动手柄复用外部传入的 widget，卡片内部不自建。
     expect(find.byIcon(Icons.drag_indicator), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('loyal-reject'));
+    await tester.tap(find.text('loyal-reject · 广告与跟踪域名'));
     await tester.pump();
     expect(taps, 1);
   });
@@ -61,6 +67,38 @@ void main() {
     expect(find.text('兜底'), findsOneWidget);
     expect(find.text('→ DIRECT'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('规则行胶囊卡：本地规则直接用匹配内容当标题', (tester) async {
+    final rule = RuleEntry.parse(0, 'DOMAIN-SUFFIX,google.com,PROXY');
+    await pumpCard(tester, rule: rule);
+
+    expect(find.text('google.com'), findsOneWidget);
+    expect(find.text('DOMAIN-SUFFIX'), findsOneWidget);
+    expect(find.text('→ PROXY'), findsOneWidget);
+  });
+
+  testWidgets('规则行胶囊卡：缓存信息在副标题，更新入口在 ⋮ 菜单', (tester) async {
+    var refreshes = 0;
+    final rule = RuleEntry.parse(0, 'RULE-SET,loyal-reject,PROXY');
+    await pumpCard(
+      tester,
+      rule: rule,
+      trailing: const Text('未缓存'),
+      onRefresh: () => refreshes++,
+    );
+
+    expect(find.text('未缓存'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('更新规则集'), findsOneWidget);
+
+    await tester.tap(find.text('更新规则集'));
+    await tester.pumpAndSettle();
+    expect(refreshes, 1);
   });
 
   testWidgets('规则行胶囊卡：⋮ 菜单提供编辑 / 改挂到组 / 删除', (tester) async {
@@ -87,5 +125,21 @@ void main() {
     expect(deletes, 1);
     expect(edits, 0);
     expect(moves, 0);
+  });
+
+  testWidgets('规则行胶囊卡：紧凑模式只留图标 + 标题', (tester) async {
+    final rule = RuleEntry.parse(0, 'DOMAIN-SUFFIX,google.com,PROXY');
+    await pumpCard(tester, rule: rule, compact: true);
+
+    expect(find.text('google.com'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
+    expect(find.byIcon(Icons.drag_indicator), findsNothing);
+    expect(find.text('DOMAIN-SUFFIX'), findsNothing);
+
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('改挂到组'), findsNothing);
   });
 }

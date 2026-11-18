@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/edit/config_ops.dart';
-import '../core/edit/geosite_index.dart';
 import '../core/edit/import_plan.dart';
 import '../core/edit/import_rules.dart';
 import '../core/edit/online_import.dart';
@@ -690,30 +689,32 @@ class _RulesTabState extends State<RulesTab> {
     return null;
   }
 
-  Widget? _rowTrailing(BuildContext context, RuleEntry rule) {
+  Widget? _cacheTrailing(BuildContext context, RuleEntry rule) {
     if (rule.type != 'RULE-SET') return null;
     final preset = _presetOf(rule.payload);
     if (preset == null) return null;
     final scheme = Theme.of(context).colorScheme;
+    if (_failedProviders.contains(preset.id)) {
+      return Pill(label: '更新失败', color: scheme.error, dense: true);
+    }
     final at = _cacheTimes[preset.id];
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (_failedProviders.contains(preset.id))
-          Pill(label: '更新失败', color: scheme.error, dense: true)
-        else
-          Text(
-            at == null ? '未缓存' : '缓存于 ${_formatCacheTime(at)}',
-            style: hintStyle(context),
-          ),
-        IconButton(
-          tooltip: '更新这个规则集',
-          visualDensity: VisualDensity.compact,
-          onPressed: _refreshing ? null : () => _refreshPresets([preset]),
-          icon: const Icon(Icons.refresh, size: 18),
-        ),
-      ],
+    return Text(
+      at == null ? '未缓存' : '缓存于 ${_formatCacheTime(at)}',
+      style: mono(10, color: scheme.onSurfaceVariant),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
+  }
+
+  /// 在线规则集的「更新」入口，从行尾按钮挪进了 ⋮ 菜单。
+  VoidCallback? _refreshFor(RuleEntry rule) {
+    if (rule.type != 'RULE-SET') return null;
+    final preset = _presetOf(rule.payload);
+    if (preset == null) return null;
+    return () {
+      if (_refreshing) return;
+      _refreshPresets([preset]);
+    };
   }
 
   String get _intervalLabel =>
@@ -1038,8 +1039,8 @@ class _RulesTabState extends State<RulesTab> {
                   padding: const EdgeInsets.only(bottom: Insets.sm),
                   child: RuleRowCard(
                     rule: rule,
-                    trailing: _rowTrailing(context, rule),
-                    note: _ruleNote(rule),
+                    trailing: _cacheTrailing(context, rule),
+                    onRefresh: _refreshFor(rule),
                     dragHandle: ReorderableDragStartListener(
                       index: i,
                       child: MouseRegion(
@@ -1216,27 +1217,6 @@ class _RulesTabState extends State<RulesTab> {
       ],
     );
   }
-}
-
-/// `RULE-SET` 里的 provider 名 → 预设中文名（查不到返回 null）。
-String? _presetLabelOf(String providerName) {
-  for (final preset in [...kLoyalRulesPresets, ...kAclRulesPresets]) {
-    if (preset.id == providerName) return preset.label;
-  }
-  return null;
-}
-
-/// 规则行的补充说明：`GEOSITE` / `RULE-SET` 顺带把中文名带出来（没有就返回 null）。
-String? _ruleNote(RuleEntry rule) {
-  if (rule.isTerminal) return null;
-  final payload = rule.payload;
-  if (payload.isEmpty) return null;
-  if (rule.type == 'GEOSITE') {
-    final label = geositeLabelOf(payload);
-    return label == payload ? null : label;
-  }
-  if (rule.type == 'RULE-SET') return _presetLabelOf(payload);
-  return null;
 }
 
 class _ZoneHeaderDelegate extends SliverPersistentHeaderDelegate {

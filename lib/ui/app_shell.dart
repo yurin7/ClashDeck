@@ -20,13 +20,14 @@ import 'home_page.dart';
 import '../core/edit/config_ops.dart';
 import 'import_dialogs.dart';
 import 'overview_page.dart';
+import 'pulse_drawer.dart';
 import 'pulse_entry.dart';
-import 'pulse_route.dart';
 import 'pulse_page.dart';
 import 'settings_page.dart';
 import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'widgets/horizontal_drag.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'motion.dart';
@@ -44,7 +45,8 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell>
+    with SingleTickerProviderStateMixin {
   static const double _islandHeight = 66;
   static const double _bottomInset = 108;
 
@@ -86,6 +88,10 @@ class _AppShellState extends State<AppShell> {
       settingsProvider: () => _settings?.app ?? AppSettings.defaults,
     );
     _pager = PageController()..addListener(_onPagerScroll);
+    _pulseReveal = AnimationController(
+      vsync: this,
+      duration: Motion.normal.expand,
+    );
     unawaited(_boot());
   }
 
@@ -121,6 +127,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _pulseReveal.dispose();
     _pager.dispose();
     _runtime.dispose();
     super.dispose();
@@ -419,8 +426,56 @@ class _AppShellState extends State<AppShell> {
   }
 
   bool _pulseOpen = false;
+  late final AnimationController _pulseReveal;
+  String? _pulseFileName;
+  Profile? _pulseProfile;
+  AppPrefs? _pulsePrefs;
+  double _pulseDragDx = 0;
 
-  Future<void> _openPulse() async {
+  /// 从概览左滑打开 Pulse：先按 80% 抽屉跟手，松手过半再补到全开。
+  void _onPulseDragStart() {
+    _pulseDragDx = 0;
+  }
+
+  void _onPulseDragUpdate(DragUpdateDetails details) {
+    _pulseDragDx += details.delta.dx;
+    if (_pulseDragDx >= 0) return;
+    if (!_pulseOpen) _beginPulse();
+    final width = MediaQuery.sizeOf(context).width;
+    _pulseReveal.value = pulseDrawerProgress(
+      dragDx: _pulseDragDx,
+      panelWidth: pulseDrawerPanelWidth(width),
+    );
+  }
+
+  void _onPulseDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final open = pulseDrawerShouldOpen(
+      progress: _pulseReveal.value,
+      velocity: velocity,
+    );
+    unawaited(_settlePulse(open ? 1 : 0));
+  }
+
+  /// 面板打开后向右拖：progress 从 1 往下减，松手按 0.65/速度判定。
+  void _onPulseCloseDragUpdate(DragUpdateDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    final panelWidth = pulseDrawerPanelWidth(width);
+    if (panelWidth <= 0) return;
+    _pulseReveal.value = (_pulseReveal.value + details.delta.dx / panelWidth)
+        .clamp(0.0, 1.0);
+  }
+
+  void _onPulseCloseDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final close = pulseDrawerShouldClose(
+      progress: _pulseReveal.value,
+      velocity: velocity,
+    );
+    unawaited(_settlePulse(close ? 0 : 1));
+  }
+
+  void _beginPulse() {
     if (_pulseOpen) return;
     final settings = _settings;
     final fileName = _activeFileName;
@@ -429,34 +484,41 @@ class _AppShellState extends State<AppShell> {
       _toast('还没有配置');
       return;
     }
-    final profile = Profile.from(settings.doc);
-    setState(() => _pulseOpen = true);
-    await Navigator.of(context).push(
-      pulseRoute<void>(
-        (_) => PulsePage(
-          appVersion: _appVersion,
-          profileName: fileName,
-          profile: profile,
-          prefs: prefs,
-          runtime: _runtime,
-          globalExit: settings.globalNode,
-          startKernel: _runtime.start,
-          onLatencyCached: (name, values) {
-            if (!mounted) return;
-            setState(() {
-              _latencyCache = {..._latencyCache, ...values};
-            });
-          },
-        ),
-      ),
-    );
-    if (!mounted) return;
     setState(() {
-      _pulseOpen = false;
-      _latencyCache = prefs.latenciesOf(fileName);
+      _pulseOpen = true;
+      _pulseFileName = fileName;
+      _pulseProfile = Profile.from(settings.doc);
+      _pulsePrefs = prefs;
     });
   }
 
+  Future<void> _settlePulse(double target) async {
+    if (target > 0 && !_pulseOpen) _beginPulse();
+    if (!_pulseOpen) return;
+    await _pulseReveal.animateTo(
+      target,
+      duration: Motion.of(context).expand,
+      curve: Curves.easeOutCubic,
+    );
+    if (target == 0) _endPulse();
+  }
+
+  void _endPulse() {
+    if (!mounted || !_pulseOpen) return;
+    final prefs = _pulsePrefs;
+    final fileName = _pulseFileName;
+    setState(() {
+      _pulseOpen = false;
+      _pulseFileName = null;
+      _pulseProfile = null;
+      _pulsePrefs = null;
+      if (prefs != null && fileName != null) {
+        _latencyCache = prefs.latenciesOf(fileName);
+      }
+    });
+  }
+
+  Future<void> _closePulse() => _settlePulse(0);
   Future<void> _openEditorFor(String fileName) async {
     await Navigator.of(context).push(
       appRoute<void>(
@@ -617,18 +679,30 @@ class _AppShellState extends State<AppShell> {
         ),
       );
     }
-    return Scaffold(
-      backgroundColor: _pulseOpen ? const Color(0xFF05060A) : null,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Visibility(
-              visible: !_pulseOpen,
-              child: PulseSwipeEntry(
-                enabled: _index == 0,
-                onOpen: () => unawaited(_openPulse()),
+    return PopScope(
+      canPop: !_pulseOpen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _pulseOpen) unawaited(_closePulse());
+      },
+      child: Scaffold(
+        backgroundColor: _pulseOpen ? const Color(0xFF05060A) : null,
+        body: Stack(
+          children: [
+            // 主界面：抽屉打开时轻微缩小，左侧 20% 留给暗区。
+            AnimatedBuilder(
+              animation: _pulseReveal,
+              builder: (context, child) => Transform.scale(
+                scale: 1 - 0.02 * _pulseReveal.value,
+                child: child,
+              ),
+              child: HorizontalDragArea(
+                behavior: HitTestBehavior.translucent,
+                onStart: _index == 0 ? _onPulseDragStart : null,
+                onUpdate: _index == 0 ? _onPulseDragUpdate : null,
+                onEnd: _index == 0 ? _onPulseDragEnd : null,
                 child: PageView(
                   controller: _pager,
+                  physics: pulsePagerPhysics(_index),
                   onPageChanged: (i) => setState(() => _index = i),
                   children: [
                     _KeepAlivePage(
@@ -681,22 +755,57 @@ class _AppShellState extends State<AppShell> {
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: Insets.xl,
-            right: Insets.xl,
-            bottom: Insets.lg,
-            child: Visibility(
-              visible: !_pulseOpen,
-              child: _FloatingIsland(
-                height: _islandHeight,
-                index: _index,
-                page: _page,
-                onChanged: (i) => unawaited(_goTo(i)),
+            Positioned(
+              left: Insets.xl,
+              right: Insets.xl,
+              bottom: Insets.lg,
+              child: Visibility(
+                visible: !_pulseOpen,
+                child: _FloatingIsland(
+                  height: _islandHeight,
+                  index: _index,
+                  page: _page,
+                  onChanged: (i) => unawaited(_goTo(i)),
+                ),
               ),
             ),
-          ),
-        ],
+            // 右侧 80% 抽屉：跟手 progress 由拖拽/回弹动画驱动。
+            if (_pulseOpen &&
+                _pulseProfile != null &&
+                _pulsePrefs != null &&
+                _pulseFileName != null)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _pulseReveal,
+                  builder: (context, child) => PulseDrawer(
+                    progress: _pulseReveal.value,
+                    onClose: () => unawaited(_closePulse()),
+                    child: HorizontalDragArea(
+                      onUpdate: _onPulseCloseDragUpdate,
+                      onEnd: _onPulseCloseDragEnd,
+                      child: child!,
+                    ),
+                  ),
+                  child: PulsePage(
+                    appVersion: _appVersion,
+                    profileName: _pulseFileName!,
+                    profile: _pulseProfile!,
+                    prefs: _pulsePrefs!,
+                    runtime: _runtime,
+                    globalExit: _settings?.globalNode,
+                    startKernel: _runtime.start,
+                    onClose: () => unawaited(_closePulse()),
+                    onLatencyCached: (name, values) {
+                      if (!mounted) return;
+                      setState(() {
+                        _latencyCache = {..._latencyCache, ...values};
+                      });
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

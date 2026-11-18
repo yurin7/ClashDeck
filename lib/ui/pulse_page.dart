@@ -41,6 +41,7 @@ class PulsePage extends StatefulWidget {
     this.startKernel,
     this.globalExit,
     this.onLatencyCached,
+    required this.onClose,
   });
 
   final String appVersion;
@@ -56,6 +57,9 @@ class PulsePage extends StatefulWidget {
   final String? globalExit;
   final void Function(String profileName, Map<String, int?> values)?
   onLatencyCached;
+
+  /// 抽屉右上角 ×：由 AppShell 负责收起。
+  final VoidCallback onClose;
 
   @override
   State<PulsePage> createState() => _PulsePageState();
@@ -356,103 +360,57 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final motion = Motion.of(context);
     final disableAnimations =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final cards = <Widget>[
-      _PulseHeader(
-        onBack: () => Navigator.of(context).maybePop(),
-        motion: motion,
-      ),
+      _PulseHeader(onClose: widget.onClose, motion: motion),
       _infoCard(context, motion, disableAnimations),
       _latencyCard(context),
       _updateCard(context),
       _runtimeCard(context),
     ];
-    return Scaffold(
-      // 叠加层：下层主界面仍可见（被 barrier 压暗），这里不能铺不透明底色。
-      backgroundColor: const Color(0xFF05060A),
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragEnd: (details) {
-          if ((details.primaryVelocity ?? 0) > 300) {
-            Navigator.of(context).maybePop();
-          }
-        },
-        onVerticalDragEnd: (details) {
-          if ((details.primaryVelocity ?? 0) > 500) {
-            Navigator.of(context).maybePop();
-          }
-        },
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: _PulseBackdrop(
-                  animation: _backdrop,
-                  reducedMotion: _reducedMotion,
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: _PulseBackdrop(
+                animation: _backdrop,
+                reducedMotion: _reducedMotion,
               ),
             ),
-            Positioned.fill(
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                Insets.lg,
+                Insets.sm,
+                Insets.lg,
+                56,
+              ),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).maybePop(),
-              ),
-            ),
-            Positioned(
-              right: Insets.lg,
-              bottom: Insets.lg,
-              child: IgnorePointer(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.surface.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Text('右滑返回', style: hintStyle(context)),
-                ),
-              ),
-            ),
-            SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  Insets.lg,
-                  Insets.sm,
-                  Insets.lg,
-                  56,
-                ),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {},
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < cards.length; i++)
-                        _PulseIntro(
-                          index: i,
-                          animation: _enter,
-                          reducedMotion: disableAnimations,
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              top: i == 0 ? 0 : Insets.md,
-                            ),
-                            child: cards[i],
-                          ),
+                onTap: () {},
+                child: Column(
+                  children: [
+                    for (var i = 0; i < cards.length; i++)
+                      _PulseIntro(
+                        index: i,
+                        animation: _enter,
+                        reducedMotion: disableAnimations,
+                        child: Padding(
+                          padding: EdgeInsets.only(top: i == 0 ? 0 : Insets.md),
+                          child: cards[i],
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1064,9 +1022,9 @@ class _BackdropPainter extends CustomPainter {
 }
 
 class _PulseHeader extends StatelessWidget {
-  const _PulseHeader({required this.onBack, required this.motion});
+  const _PulseHeader({required this.onClose, required this.motion});
 
-  final VoidCallback onBack;
+  final VoidCallback onClose;
   final Motion motion;
 
   @override
@@ -1074,17 +1032,17 @@ class _PulseHeader extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        IconButton(
-          tooltip: '返回',
-          onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        const SizedBox(width: 2),
         Text(
           'PULSE',
           style: monoStyle(context, size: 10, color: scheme.onSurfaceVariant),
         ),
         const Spacer(),
+        IconButton(
+          tooltip: '收起',
+          onPressed: onClose,
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.close_rounded, size: 20),
+        ),
       ],
     );
   }

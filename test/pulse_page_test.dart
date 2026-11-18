@@ -84,11 +84,31 @@ void main() {
     profileName: 'demo',
     profile: Profile.from(YamlDoc.parse(_yaml)),
     prefs: prefs,
+    onClose: () {},
     checkUpdate: checkUpdate,
     openUrl: openUrl,
     startKernel: startKernel,
   );
 
+  testWidgets('右上角 × 会触发 onClose', (tester) async {
+    await loadPrefs(tester);
+    var closed = 0;
+    await tester.pumpWidget(
+      host(
+        PulsePage(
+          appVersion: '0.3.2',
+          profileName: 'demo',
+          profile: Profile.from(YamlDoc.parse(_yaml)),
+          prefs: prefs,
+          onClose: () => closed++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byTooltip('收起'));
+    await tester.pump();
+    expect(closed, 1);
+  });
   testWidgets('四张卡都在，内核未运行时提示先启动', (tester) async {
     await loadPrefs(tester);
     await tester.pumpWidget(host(page()));

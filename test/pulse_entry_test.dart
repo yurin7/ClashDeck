@@ -3,79 +3,78 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:clashdeck/ui/pulse_entry.dart';
 
-/// 负一屏入口：概览（PageView 第一页）继续向右拖出 overscroll 才触发。
-///
-/// 0.3.0 的 bug 是入口写在概览页里的 `onHorizontalDrag*`，被 PageView 的
-/// 横向手势竞技场吃掉，左右滑都打不开；现在改为监听 PageView 左边界
-/// 的 overscroll。
+/// 0.3.2 起 Pulse 改右侧 80% 抽屉：手势阈值、面板宽度与分页物理都收在这里，
+/// 方便单测。0.3.0 的 bug 是入口手势被 PageView 的手势竞技场吃掉，
+/// 现在第 0 页直接禁用横向滚动（[pulsePagerPhysics]）。
 void main() {
-  group('pulseSwipeShouldOpen', () {
-    test('向右拖 96dp 以上打开', () {
-      expect(pulseSwipeShouldOpen(dragDx: 97, velocity: 0), isTrue);
+  group('pulseDrawerPanelWidth', () {
+    test('面板宽 = 屏宽 * 0.8', () {
+      expect(pulseDrawerPanelWidth(400), 320);
+      expect(pulseDrawerPanelWidth(1000), 800);
     });
 
-    test('右甩够快（位移小）也打开', () {
-      expect(pulseSwipeShouldOpen(dragDx: 12, velocity: 500), isTrue);
-    });
-
-    test('向左拖不打开', () {
-      expect(pulseSwipeShouldOpen(dragDx: -120, velocity: -600), isFalse);
-    });
-
-    test('拖动太短太慢不打开', () {
-      expect(pulseSwipeShouldOpen(dragDx: 40, velocity: 200), isFalse);
+    test('窄屏也不会超过屏宽', () {
+      expect(pulseDrawerPanelWidth(10), lessThanOrEqualTo(10));
     });
   });
 
-  testWidgets('第一页向右拖会请求打开负一屏', (tester) async {
-    var opened = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: PulseSwipeEntry(
-            enabled: true,
-            onOpen: () => opened++,
-            child: PageView(
-              children: const [
-                Center(child: Text('overview')),
-                Center(child: Text('config')),
-                Center(child: Text('settings')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  group('pulseDrawerProgress', () {
+    test('按住左滑时进度跟随位移', () {
+      expect(pulseDrawerProgress(dragDx: -160, panelWidth: 320), 0.5);
+    });
 
-    // 手指从中间向右拖：第一页右边拖不出上一页，PageView 只能报告 overscroll。
-    await tester.drag(find.byType(PageView), const Offset(160, 0));
-    await tester.pumpAndSettle();
+    test('反向拖动与超范围都夹在 0..1', () {
+      expect(pulseDrawerProgress(dragDx: 80, panelWidth: 320), 0);
+      expect(pulseDrawerProgress(dragDx: -640, panelWidth: 320), 1);
+    });
 
-    expect(opened, 1);
+    test('屏宽异常时返回 0，避免除零', () {
+      expect(pulseDrawerProgress(dragDx: -100, panelWidth: 0), 0);
+    });
   });
 
-  testWidgets('不在第一页（enabled=false）时向右拖不触发', (tester) async {
-    var opened = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: PulseSwipeEntry(
-            enabled: false,
-            onOpen: () => opened++,
-            child: PageView(
-              children: const [
-                Center(child: Text('overview')),
-                Center(child: Text('config')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  group('pulseDrawerShouldOpen', () {
+    test('松手过半就打开', () {
+      expect(pulseDrawerShouldOpen(progress: 0.36, velocity: 0), isTrue);
+    });
 
-    await tester.drag(find.byType(PageView), const Offset(160, 0));
-    await tester.pumpAndSettle();
+    test('松手不过半且没有左甩速度就回弹', () {
+      expect(pulseDrawerShouldOpen(progress: 0.34, velocity: 0), isFalse);
+    });
 
-    expect(opened, 0);
+    test('速度够快（左甩）即使位移不足也打开', () {
+      expect(pulseDrawerShouldOpen(progress: 0.1, velocity: -301), isTrue);
+    });
+
+    test('阈值是严格大于：0.35 与 -300 都不打开', () {
+      expect(pulseDrawerShouldOpen(progress: 0.35, velocity: 0), isFalse);
+      expect(pulseDrawerShouldOpen(progress: 0.2, velocity: -300), isFalse);
+      expect(pulseDrawerShouldOpen(progress: 0.351, velocity: 0), isTrue);
+    });
+  });
+
+  group('pulseDrawerShouldClose', () {
+    test('拖回四成以上就收起', () {
+      expect(pulseDrawerShouldClose(progress: 0.64, velocity: 0), isTrue);
+    });
+
+    test('只拖了一点点且没有右甩就回弹', () {
+      expect(pulseDrawerShouldClose(progress: 0.66, velocity: 0), isFalse);
+    });
+
+    test('右甩够快就收起', () {
+      expect(pulseDrawerShouldClose(progress: 0.9, velocity: 301), isTrue);
+    });
+  });
+
+  group('pulsePagerPhysics', () {
+    test('第 0 页禁用横向滚动', () {
+      expect(pulsePagerPhysics(0), isA<NeverScrollableScrollPhysics>());
+    });
+
+    test('其它页保留分页滚动', () {
+      expect(pulsePagerPhysics(1), isA<PageScrollPhysics>());
+      expect(pulsePagerPhysics(2), isA<PageScrollPhysics>());
+    });
   });
 }

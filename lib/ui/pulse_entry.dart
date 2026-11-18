@@ -1,81 +1,38 @@
 import 'package:material_ui/material_ui.dart';
 
-/// 负一屏（Pulse）入口判定：在概览（PageView 第一页）继续向右拖，
-/// 累计位移超过 96dp 或向右甩得够快（>350px/s）就打开。
+/// Pulse 抽屉占屏宽的比例（右侧面板 80%，左侧露出 20% 概览）。
+const double kPulseDrawerWidthFactor = 0.8;
+
+/// 抽屉面板宽度：屏宽的 80%。
+double pulseDrawerPanelWidth(double screenWidth) =>
+    screenWidth * kPulseDrawerWidthFactor;
+
+/// 把「向左拖的累计位移」映射成 0..1 的展开进度。
 ///
-/// 为什么不用 GestureDetector：PageView 自己就是横向 Scrollable，横向拖拽
-/// 会先被它的手势竞技场吃掉，概览页里的 `onHorizontalDrag*` 根本收不到
-/// （0.3.0 实测：左滑/右滑都打不开 Pulse）。改成听 PageView 在左边界产生
-/// 的 overscroll：手指还在往右拖、页面却已经到头的这段「拖不动」的位移
-/// 才代表用户想拉负一屏。
-bool pulseSwipeShouldOpen({required double dragDx, required double velocity}) =>
-    dragDx > 96 || velocity > 350;
-
-/// 包在 `PageView` 外面，只在第一页向右拖出 overscroll 时触发 [onOpen]。
-///
-/// 只接受 `depth == 0` 的通知（PageView 自己），避免概览里横向滚动的胶囊行
-/// 到边界时也冒出 overscroll 把负一屏误拉出来。
-class PulseSwipeEntry extends StatefulWidget {
-  const PulseSwipeEntry({
-    super.key,
-    required this.enabled,
-    required this.onOpen,
-    required this.child,
-  });
-
-  /// 只有回到第一页（概览）时才允许触发。
-  final bool enabled;
-
-  final VoidCallback onOpen;
-  final Widget child;
-
-  @override
-  State<PulseSwipeEntry> createState() => _PulseSwipeEntryState();
+/// 只在左滑打开时使用：拖得越远越接近 1，超过面板宽度后夹住。
+double pulseDrawerProgress({
+  required double dragDx,
+  required double panelWidth,
+}) {
+  if (panelWidth <= 0) return 0;
+  return (-dragDx / panelWidth).clamp(0.0, 1.0);
 }
 
-class _PulseSwipeEntryState extends State<PulseSwipeEntry> {
-  double _dragged = 0;
-  bool _fired = false;
+/// 松手时是否完成打开：过半或者向左甩得够快。
+bool pulseDrawerShouldOpen({
+  required double progress,
+  required double velocity,
+}) => progress > 0.35 || velocity < -300;
 
-  void _reset() {
-    _dragged = 0;
-    _fired = false;
-  }
+/// 面板已打开时，向右拖收起的判定：退回超过 35% 或者向右甩得够快。
+bool pulseDrawerShouldClose({
+  required double progress,
+  required double velocity,
+}) => progress < 0.65 || velocity > 300;
 
-  bool _onNotification(ScrollNotification notification) {
-    // 只认 PageView 自己的通知：嵌套滚动（横向胶囊行等）深度 > 0，忽略。
-    if (notification.depth != 0) return false;
-    if (notification is ScrollStartNotification) {
-      _reset();
-      return false;
-    }
-    if (notification is ScrollEndNotification) {
-      _reset();
-      return false;
-    }
-    if (!widget.enabled || _fired || notification is! OverscrollNotification) {
-      return false;
-    }
-    // 第一页再往右拖，PageView 的 offset 会尝试小于 0；用累加位移判断
-    // 方向，避免依赖不同 physics 下 overscroll 的正负号。
-    final delta = notification.dragDetails?.delta.dx ?? 0;
-    if (delta > 0) {
-      _dragged += delta;
-    } else if (delta == 0 && notification.overscroll < 0) {
-      _dragged += -notification.overscroll;
-    }
-    final velocity = notification.velocity;
-    if (pulseSwipeShouldOpen(dragDx: _dragged, velocity: velocity)) {
-      _fired = true;
-      widget.onOpen();
-    }
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      NotificationListener<ScrollNotification>(
-        onNotification: _onNotification,
-        child: widget.child,
-      );
-}
+/// PageView 的滚动物理：概览页（第 0 页）固定关闭横向滚动，
+/// 否则左滑会被 PageView 的手势竞技场吃掉，抽屉永远打不开。
+/// 配置页 / 设置页保留左右滑。
+ScrollPhysics pulsePagerPhysics(int index) => index == 0
+    ? const NeverScrollableScrollPhysics()
+    : const PageScrollPhysics();

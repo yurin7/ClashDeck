@@ -1,16 +1,20 @@
 /// UI 约定自检：扫码 `lib/ui`，拦「绕过共享封装」的写法。
 ///
-/// 规则见 `docs/DESIGN_SYSTEM.md` 第 6 节：
-/// 1. 禁止 `Checkbox(` / `CheckboxListTile(`；
-/// 2. 只允许 `lib/ui/sheets.dart` 直接调 `showModalBottomSheet(`；
-/// 3. 禁止 `showDialog<`；
-/// 4. `AlertDialog(` 只允许共享封装 + 基线里已有的历史文件（只减不增）；
-/// 5. `showAppDialog(` 必须带 `width:`（同样按基线只减不增）。
+/// 规则见 `docs/DESIGN_SYSTEM.md` 第 6 节，全部为 **0 基线**（不留历史欠账）：
+/// 1. `AlertDialog(` → `EditDialog` / `ConfirmDialog` / `NoticeDialog`；
+/// 2. `InkWell(` / `InkResponse(` → `AppInkWell`；
+/// 3. `MaterialPageRoute(` → `appRoute`；
+/// 4. `DropdownButton(` → `AppDropdown`；
+/// 5. 裸 `TextField(` → `AppTextField` / `AppSearchField`；
+/// 6. `Checkbox(` / `CheckboxListTile(` → `SelectableTile`；
+/// 6b. `SimpleDialog(` / `SimpleDialogOption(` → `showSelectSheet`；
+/// 6c. 裸 `Dialog(` → `showAppDialog` + 共享弹窗封装；
+/// 7. 只允许 `lib/ui/sheets.dart` 直接调 `showModalBottomSheet(`；
+/// 8. 禁止 `showDialog<`；
+/// 9. `showAppDialog(` 必须带 `width:`；
+/// 10. 目标组输入不得用 `AppDropdown(label: '目标…')`，统一 `TargetSelectorField`。
 ///
-/// 基线文件：`tool/ui_conventions_baseline.txt`（只减不增）。
-/// allowlist 常量在本文件内（`alertAllowlist` / `sheetAllowlist`），
-/// **只放共享封装文件**（`lib/ui/app_dialog.dart`、`lib/ui/widgets/edit_dialog.dart`、
-/// `lib/ui/sheets.dart`、`lib/ui/widgets/selectable_tile.dart`），业务文件不得加入。
+/// allowlist 只放共享封装文件，业务文件不得加入。
 ///
 /// CI：`.github/workflows/release.yml` 在 Analyze 之后、Test 之前跑
 ///   dart run tool/check_ui_conventions.dart --check
@@ -18,7 +22,6 @@
 ///
 /// 用法：
 ///   dart run tool/check_ui_conventions.dart --check
-///   dart run tool/check_ui_conventions.dart --update-baseline
 library;
 
 import 'dart:io';
@@ -42,35 +45,105 @@ class Violation implements Comparable<Violation> {
   }
 }
 
-/// `AlertDialog(` 允许出现的共享封装文件。
-///
-/// allowlist = 共享封装文件（`lib/ui/app_dialog.dart`、`lib/ui/widgets/edit_dialog.dart`、
-/// `lib/ui/sheets.dart`、`lib/ui/widgets/selectable_tile.dart`），业务文件不得加入。
-const Set<String> alertAllowlist = <String>{
-  'lib/ui/app_dialog.dart',
-  'lib/ui/widgets/edit_dialog.dart',
-};
+/// 裸组件禁用表：`pattern` 不能出现在 `allow` 以外的文件里。
+const List<({String pattern, String rule, String message, Set<String> allow})>
+bannedPatterns =
+    <({String pattern, String rule, String message, Set<String> allow})>[
+      (
+        pattern: 'AlertDialog(',
+        rule: 'no-raw-alert',
+        message: 'AlertDialog 只放在共享封装里（EditDialog/ConfirmDialog/NoticeDialog）',
+        allow: <String>{'lib/ui/widgets/edit_dialog.dart'},
+      ),
+      (
+        pattern: 'InkWell(',
+        rule: 'no-raw-inkwell',
+        message: '点击行统一用 AppInkWell（lib/ui/widgets/app_ink.dart）',
+        allow: <String>{'lib/ui/widgets/app_ink.dart'},
+      ),
+      (
+        pattern: 'InkResponse(',
+        rule: 'no-raw-inkresponse',
+        message: '点击行统一用 AppInkWell（lib/ui/widgets/app_ink.dart）',
+        allow: <String>{'lib/ui/widgets/app_ink.dart'},
+      ),
+      (
+        pattern: 'MaterialPageRoute(',
+        rule: 'no-raw-route',
+        message: '页面跳转统一用 appRoute（lib/ui/navigation.dart）',
+        allow: <String>{'lib/ui/navigation.dart'},
+      ),
+      (
+        pattern: 'MaterialPageRoute<',
+        rule: 'no-raw-route',
+        message: '页面跳转统一用 appRoute（lib/ui/navigation.dart）',
+        allow: <String>{'lib/ui/navigation.dart'},
+      ),
+      (
+        pattern: 'DropdownButton(',
+        rule: 'no-raw-dropdown',
+        message: '下拉统一用 AppDropdown（lib/ui/dropdown.dart）',
+        allow: <String>{'lib/ui/dropdown.dart'},
+      ),
+      (
+        pattern: 'DropdownButton<',
+        rule: 'no-raw-dropdown',
+        message: '下拉统一用 AppDropdown（lib/ui/dropdown.dart）',
+        allow: <String>{'lib/ui/dropdown.dart'},
+      ),
+      (
+        pattern: 'SimpleDialog(',
+        rule: 'no-raw-simpledialog',
+        message: '选择类弹窗统一走 showSelectSheet',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'SimpleDialogOption(',
+        rule: 'no-raw-simpledialog',
+        message: '选择类弹窗统一走 showSelectSheet',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'Dialog(',
+        rule: 'no-raw-dialog',
+        message:
+            '弹窗统一走 showAppDialog + 共享封装（EditDialog/ConfirmDialog/BusyDialog）',
+        allow: <String>{'lib/ui/widgets/busy_dialog.dart'},
+      ),
+      (
+        pattern: 'TextField(',
+        rule: 'no-raw-textfield',
+        message: '输入框统一用 AppTextField / AppSearchField',
+        allow: <String>{'lib/ui/fields.dart'},
+      ),
+      (
+        pattern: 'Checkbox(',
+        rule: 'no-checkbox',
+        message: '多选改用 SelectableTile',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'Checkbox.adaptive(',
+        rule: 'no-checkbox',
+        message: '多选改用 SelectableTile',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'CheckboxListTile(',
+        rule: 'no-checkbox',
+        message: '多选改用 SelectableTile',
+        allow: <String>{},
+      ),
+      (
+        pattern: 'CheckboxListTile.adaptive(',
+        rule: 'no-checkbox',
+        message: '多选改用 SelectableTile',
+        allow: <String>{},
+      ),
+    ];
 
 /// `showModalBottomSheet(` 允许出现的共享封装文件。
 const Set<String> sheetAllowlist = <String>{'lib/ui/sheets.dart'};
-
-const String baselinePath = 'tool/ui_conventions_baseline.txt';
-
-/// 读取基线：`路径 数量` 每行一条，`#` 开头为注释。
-Map<String, int> loadBaseline(File file) {
-  if (!file.existsSync()) return <String, int>{};
-  final result = <String, int>{};
-  for (final raw in file.readAsLinesSync()) {
-    final line = raw.trim();
-    if (line.isEmpty || line.startsWith('#')) continue;
-    final parts = line.split(RegExp(r'\s+'));
-    if (parts.length < 2) continue;
-    final count = int.tryParse(parts.last);
-    if (count == null) continue;
-    result[parts.first] = count;
-  }
-  return result;
-}
 
 /// 去掉行尾注释，避免注释里的示例触发误报。
 String stripLineComment(String source) {
@@ -80,16 +153,6 @@ String stripLineComment(String source) {
     buffer.writeln(index < 0 ? line : line.substring(0, index));
   }
   return buffer.toString();
-}
-
-int _occurrences(String source, String pattern) {
-  var count = 0;
-  var index = source.indexOf(pattern);
-  while (index >= 0) {
-    count += 1;
-    index = source.indexOf(pattern, index + pattern.length);
-  }
-  return count;
 }
 
 int _lineOf(String source, int index) {
@@ -140,31 +203,24 @@ bool _looksLikeDeclaration(String source, int nameIndex) {
   return RegExp(r'(Future|Widget|void|T)\s*(<[^()]*>)?\s*$').hasMatch(before);
 }
 
-/// 扫一个文件，返回硬性违规与按文件计数的两类软指标。
-({List<Violation> violations, int alertCount, int widthlessCount}) scanSource(
-  String path,
-  String raw,
-) {
+/// 扫一个文件，返回硬性违规（全部 0 基线，不存在「历史欠账」）。
+List<Violation> scanSource(String path, String raw) {
   final source = stripLineComment(raw);
   final violations = <Violation>[];
 
-  for (final pattern in <String>[
-    'Checkbox(',
-    'Checkbox.adaptive(',
-    'CheckboxListTile(',
-    'CheckboxListTile.adaptive(',
-  ]) {
-    var index = source.indexOf(pattern);
-    while (index >= 0) {
+  for (final entry in bannedPatterns) {
+    if (entry.allow.contains(path)) continue;
+    // 负向回顾：`AppInkWell(` / `AppTextField(` 这类共享封装自身的调用不算。
+    final regex = RegExp('(?<![A-Za-z0-9_\$])${RegExp.escape(entry.pattern)}');
+    for (final match in regex.allMatches(source)) {
       violations.add(
         Violation(
           path,
-          _lineOf(source, index),
-          'no-checkbox',
-          '多选改用 SelectableTile',
+          _lineOf(source, match.start),
+          entry.rule,
+          entry.message,
         ),
       );
-      index = source.indexOf(pattern, index + pattern.length);
     }
   }
 
@@ -204,9 +260,6 @@ bool _looksLikeDeclaration(String source, int nameIndex) {
     sheetIndex = source.indexOf('showModalBottomSheet', sheetIndex + 20);
   }
 
-  final alertCount = _occurrences(source, 'AlertDialog(');
-
-  var widthless = 0;
   var callIndex = source.indexOf('showAppDialog');
   while (callIndex >= 0) {
     final open = _callOpenParen(source, callIndex, 'showAppDialog'.length);
@@ -214,7 +267,6 @@ bool _looksLikeDeclaration(String source, int nameIndex) {
       final close = _matchingParen(source, open);
       final call = source.substring(callIndex, close ?? source.length);
       if (!call.contains('width:')) {
-        widthless += 1;
         violations.add(
           Violation(
             path,
@@ -248,18 +300,11 @@ bool _looksLikeDeclaration(String source, int nameIndex) {
     dropdownIndex = source.indexOf('AppDropdown<', dropdownIndex + 1);
   }
 
-  return (
-    violations: violations,
-    alertCount: alertCount,
-    widthlessCount: widthless,
-  );
+  return violations;
 }
 
 /// 递归扫 `lib/ui` 下的 dart 文件。
-List<Violation> scanTree(
-  Directory root, {
-  Map<String, int> baseline = const {},
-}) {
+List<Violation> scanTree(Directory root) {
   final violations = <Violation>[];
   final files =
       root
@@ -271,61 +316,10 @@ List<Violation> scanTree(
 
   for (final file in files) {
     final relative = file.path.replaceAll('\\', '/');
-    final scanned = scanSource(relative, file.readAsStringSync());
-    final allowedAlert = alertAllowlist.contains(relative)
-        ? 100000
-        : baseline['$relative#alert'] ?? 0;
-    final allowedWidthless = baseline['$relative#widthless'] ?? 0;
-    for (final violation in scanned.violations) {
-      switch (violation.rule) {
-        case 'dialog-width':
-          if (scanned.widthlessCount > allowedWidthless) {
-            violations.add(violation);
-          }
-        default:
-          violations.add(violation);
-      }
-    }
-    if (scanned.alertCount > allowedAlert) {
-      violations.add(
-        Violation(relative, 1, 'no-raw-alert', 'AlertDialog 只放在共享封装里'),
-      );
-    }
+    violations.addAll(scanSource(relative, file.readAsStringSync()));
   }
   violations.sort();
   return violations;
-}
-
-/// 统计当前基线（`--update-baseline` 用）。
-Map<String, int> currentBaseline(Directory root) {
-  final counts = <String, int>{};
-  final files = root
-      .listSync(recursive: true)
-      .whereType<File>()
-      .where((file) => file.path.endsWith('.dart'));
-  for (final file in files) {
-    final relative = file.path.replaceAll('\\', '/');
-    final scanned = scanSource(relative, file.readAsStringSync());
-    if (scanned.alertCount > 0 && !alertAllowlist.contains(relative)) {
-      counts['$relative#alert'] = scanned.alertCount;
-    }
-    if (scanned.widthlessCount > 0) {
-      counts['$relative#widthless'] = scanned.widthlessCount;
-    }
-  }
-  return counts;
-}
-
-void writeBaseline(File file, Map<String, int> counts) {
-  final keys = counts.keys.toList()..sort();
-  final buffer = StringBuffer()
-    ..writeln('# UI 约定基线：只减不增。改完跑 --update-baseline 收敛。')
-    ..writeln('# 格式：<文件>#<规则> <数量>');
-  for (final key in keys) {
-    buffer.writeln('$key ${counts[key]}');
-  }
-  file.parent.createSync(recursive: true);
-  file.writeAsStringSync(buffer.toString());
 }
 
 void main(List<String> args) {
@@ -335,16 +329,13 @@ void main(List<String> args) {
     stderr.writeln('找不到目录：$rootPath');
     exit(2);
   }
-  final update = args.contains('--update-baseline');
-  final baselineFile = File(baselinePath);
-  if (update) {
-    writeBaseline(baselineFile, currentBaseline(root));
-    stdout.writeln('已更新基线：$baselinePath');
+  if (args.contains('--update-baseline')) {
+    stdout.writeln('全部规则为 0 基线，无需更新基线文件。');
     return;
   }
-  final violations = scanTree(root, baseline: loadBaseline(baselineFile));
+  final violations = scanTree(root);
   if (violations.isEmpty) {
-    stdout.writeln('UI 约定检查通过（$rootPath）。');
+    stdout.writeln('UI 约定检查通过（$rootPath，0 基线）。');
     return;
   }
   stderr.writeln('UI 约定检查失败，共 ${violations.length} 处：');
@@ -353,7 +344,9 @@ void main(List<String> args) {
   }
   stderr.writeln(
     '\n规范见 docs/DESIGN_SYSTEM.md；共享封装见 lib/ui/sheets.dart、'
-    'lib/ui/widgets/selectable_tile.dart、lib/ui/app_dialog.dart。',
+    'lib/ui/widgets/selectable_tile.dart、lib/ui/app_dialog.dart、'
+    'lib/ui/widgets/edit_dialog.dart、lib/ui/widgets/app_ink.dart、'
+    'lib/ui/navigation.dart。',
   );
   exit(1);
 }

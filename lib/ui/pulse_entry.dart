@@ -45,6 +45,18 @@ bool pulseShouldBlockPager({required bool open, required double reveal}) =>
 ScrollPhysics pulsePagerPhysics({required bool open}) =>
     open ? const NeverScrollableScrollPhysics() : const PageScrollPhysics();
 
+/// 抽屉滑出后向左回收：只允许减小累计位移，不会变成负值。
+///
+/// 「半开时向左拖」不应产生任何页面移动，只是把抽屉收回去。
+double pulseBackDrag({
+  required double dx,
+  required double delta,
+  required bool active,
+}) {
+  if (!active || delta >= 0) return dx;
+  return (dx + delta).clamp(0.0, double.infinity);
+}
+
 /// PageView 是否应该禁滑：只有「已打开且不在拖拽中」才禁。
 ///
 /// 拖拽过程中切 physics 会打断当前 drag，让抽屉刚滑出就弹回。

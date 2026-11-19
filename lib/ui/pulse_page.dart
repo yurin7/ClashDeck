@@ -564,11 +564,13 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
             const SizedBox(height: Insets.sm),
             const Hairline(),
             const SizedBox(height: Insets.sm),
-            Row(
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('测速线路', style: monoStyle(context, size: 11)),
-                const SizedBox(width: 10),
-                for (final source in SpeedSource.values) ...[
+                for (final source in SpeedSource.values)
                   ChipShell(
                     selected: _source.source == source,
                     onTap: _speedTesting ? null : () => _selectSource(source),
@@ -577,19 +579,24 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
                       style: monoStyle(context, size: 11),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                ],
               ],
             ),
-            if (_source.source == SpeedSource.custom) ...[
-              const SizedBox(height: Insets.sm),
-              AppTextField(
-                controller: _customUrlCtrl,
-                hint: 'https://example.com/10mb.bin',
-                error: customError,
-                onChanged: _setCustomUrl,
-              ),
-            ],
+            AnimatedSize(
+              duration: Motion.of(context).expand,
+              curve: Motion.of(context).enter,
+              alignment: Alignment.topCenter,
+              child: _source.source == SpeedSource.custom
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: Insets.sm),
+                      child: AppTextField(
+                        controller: _customUrlCtrl,
+                        hint: 'https://example.com/10mb.bin',
+                        error: customError,
+                        onChanged: _setCustomUrl,
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
             const SizedBox(height: Insets.sm),
             if (_speedTesting)
               Row(
@@ -614,14 +621,10 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
                 children: [
                   Expanded(
                     child: Text(
-                      selected == null
-                          ? '先选择一个节点'
-                          : (customError ?? '本次将测：$selected'),
+                      selected == null ? '先选择一个节点' : '本次将测：$selected',
                       style: TextStyle(
                         fontSize: 12,
-                        color: customError != null
-                            ? scheme.error
-                            : scheme.onSurfaceVariant,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ),

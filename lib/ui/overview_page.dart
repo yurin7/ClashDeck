@@ -111,24 +111,7 @@ class _OverviewPageState extends State<OverviewPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: MicroLabel(
-                        'OVERVIEW',
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '刷新',
-                      onPressed: () async {
-                        await widget.onRefreshProfiles();
-                        await runtime.refreshStatus();
-                      },
-                      icon: const Icon(Icons.refresh, size: 20),
-                    ),
-                  ],
-                ),
+                MicroLabel('OVERVIEW', color: scheme.onSurfaceVariant),
                 const SizedBox(height: Insets.sm),
                 _StatusCard(
                   runtime: runtime,

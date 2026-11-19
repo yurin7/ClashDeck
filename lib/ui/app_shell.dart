@@ -450,6 +450,46 @@ class _AppShellState extends State<AppShell>
     if (pulsePagerLocked(open: _pulseOpen, dragging: _pulseOverscrollActive)) {
       return true;
     }
+    // 半开或滑出过程中：底页完全不许动。向左拖只回收抽屉进度。
+    if (_pulseOverscrollActive || _pulseReveal.value > 0) {
+      final width = MediaQuery.sizeOf(context).width;
+      if (notification is OverscrollNotification && notification.depth == 0) {
+        final delta = notification.dragDetails?.delta.dx ?? 0;
+        if (delta < 0) {
+          _pulseOverscrollDx = pulseBackDrag(
+            dx: _pulseOverscrollDx,
+            delta: delta,
+            active: _pulseOverscrollActive,
+          );
+          _pulseReveal.value = pulseDrawerProgress(
+            dragDx: _pulseOverscrollDx,
+            panelWidth: pulseDrawerPanelWidth(width),
+          );
+          if (_pulseOverscrollDx == 0) {
+            _pulseOverscrollActive = false;
+            unawaited(_settlePulse(0));
+          }
+        }
+        return true;
+      }
+      if (notification is ScrollEndNotification &&
+          notification.depth == 0 &&
+          _pulseOverscrollActive) {
+        _pulseOverscrollActive = false;
+        final velocity =
+            notification.dragDetails?.velocity.pixelsPerSecond.dx ?? 0;
+        final open = pulseDrawerShouldOpen(
+          progress: _pulseReveal.value,
+          velocity: velocity,
+        );
+        unawaited(_settlePulse(open ? 1 : 0));
+        return true;
+      }
+      if (notification is ScrollStartNotification && notification.depth == 0) {
+        return true;
+      }
+      return true;
+    }
     if (notification is ScrollStartNotification && notification.depth == 0) {
       _pulseOverscrollDx = 0;
       _pulseOverscrollActive = false;
@@ -478,7 +518,7 @@ class _AppShellState extends State<AppShell>
       _pulseOverscrollActive = false;
       final open = pulseDrawerShouldOpen(
         progress: _pulseReveal.value,
-        velocity: 0,
+        velocity: notification.dragDetails?.velocity.pixelsPerSecond.dx ?? 0,
       );
       unawaited(_settlePulse(open ? 1 : 0));
       return true;

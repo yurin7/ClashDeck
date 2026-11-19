@@ -19,6 +19,7 @@ class Motion {
     required this.arrow,
     required this.expand,
     required this.page,
+    required this.snapBack,
     required this.reduceMotion,
   });
 
@@ -37,6 +38,9 @@ class Motion {
   /// 页面转场（仅记录，实际由 `appRoute` 使用）。
   final Duration page;
 
+  /// 拖拽被拒绝后的「滑回原位」回弹。
+  final Duration snapBack;
+
   /// 当前是否处于「减少动画」。
   final bool reduceMotion;
 
@@ -46,6 +50,7 @@ class Motion {
     arrow: Duration(milliseconds: 180),
     expand: Duration(milliseconds: 220),
     page: Duration(milliseconds: 300),
+    snapBack: Duration(milliseconds: 240),
     reduceMotion: false,
   );
 
@@ -56,6 +61,7 @@ class Motion {
     arrow: Duration(milliseconds: 60),
     expand: Duration(milliseconds: 60),
     page: Duration(milliseconds: 60),
+    snapBack: Duration(milliseconds: 60),
     reduceMotion: true,
   );
 

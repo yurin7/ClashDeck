@@ -14,9 +14,14 @@ dns:
 tun:
   stack: system
   mtu: 8600
-proxies: []
+proxies:
+  - {name: A, type: ss, server: 1.2.3.4, port: 8388, cipher: aes-128-gcm, password: pw}
+proxy-groups:
+  - name: DEFAULT
+    type: select
+    proxies: [A, DIRECT]
 rules:
-  - MATCH,DIRECT
+  - MATCH,DEFAULT
 ''';
 
   test('诊断文本包含模式、DNS、TUN 参数与日志占位', () {
@@ -38,8 +43,10 @@ rules:
     expect(report, contains('dns.enable：false'));
     expect(report, contains('TUN stack：system'));
     expect(report, contains('TUN mtu：8600'));
-    expect(report, contains('DEFAULT 当前出口：—'));
-    expect(report, contains('TUN 已建立：未知'));
+    expect(report, contains('DEFAULT 当前出口：A'));
+    expect(report, contains('TUN 已建立：否'));
+    expect(report, contains('最后错误：—'));
+    expect(report, contains('代理流量：↑0B ↓0B'));
     expect(report, contains('（暂无日志）'));
   });
 

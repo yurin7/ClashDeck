@@ -705,6 +705,7 @@ class _AppShellState extends State<AppShell>
                     child: SafeArea(
                       bottom: false,
                       child: OverviewPage(
+                        appVersion: _appVersion,
                         runtime: _runtime,
                         settings: _settings,
                         activeProfile: _activeFileName,

@@ -69,36 +69,6 @@ class ClashVpnService : VpnService() {
         var lastError: String? = null
             private set
 
-        /**
-         * 读取内核里 tun 网卡的收发字节数，用于「内核已启动但流量没进来」的诊断。
-         * 读不到 stats（部分 ROM 限制 /sys）或没有 tun 网卡时返回 null，不要让它影响概览。
-         */
-        fun tunStats(): Map<String, Any?>? {
-            return try {
-                val dirs = File("/sys/class/net").listFiles { f -> f.name.startsWith("tun") }
-                    ?: return null
-                if (dirs.isEmpty()) return null
-                var rx = 0L
-                var tx = 0L
-                var picked: String? = null
-                for (dir in dirs) {
-                    val rxText = File(dir, "statistics/rx_bytes").takeIf { it.canRead() }
-                        ?.readText()?.trim() ?: continue
-                    val txText = File(dir, "statistics/tx_bytes").takeIf { it.canRead() }
-                        ?.readText()?.trim() ?: continue
-                    val rxValue = rxText.toLongOrNull() ?: continue
-                    val txValue = txText.toLongOrNull() ?: continue
-                    rx += rxValue
-                    tx += txValue
-                    picked = dir.name
-                }
-                val iface = picked ?: return null
-                mapOf("up" to running, "iface" to iface, "rx" to rx, "tx" to tx)
-            } catch (t: Throwable) {
-                MihomoCore.log("读取 tun 统计失败：${t.message}")
-                null
-            }
-        }
     }
 
     private var bootThread: Thread? = null

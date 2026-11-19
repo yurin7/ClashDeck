@@ -16,49 +16,6 @@ import 'mihomo_api.dart';
 import 'runtime_config.dart';
 
 /// 内核 + VPN 的生命周期阶段。
-/// tun 网卡的实时收发计数（Kotlin 读 `/sys/class/net/tun*/statistics`）。
-///
-/// 读不到 stats 时整体为 null——部分 ROM 限制 /sys，诊断不能因此崩掉。
-class TunStats {
-  const TunStats({
-    required this.up,
-    required this.rx,
-    required this.tx,
-    this.iface,
-  });
-
-  final bool up;
-  final int rx;
-  final int tx;
-  final String? iface;
-
-  int get total => rx + tx;
-
-  static TunStats? fromMap(Map<Object?, Object?>? raw) {
-    if (raw == null) return null;
-    final rx = (raw['rx'] as num?)?.toInt();
-    final tx = (raw['tx'] as num?)?.toInt();
-    if (rx == null || tx == null) return null;
-    return TunStats(
-      up: raw['up'] == true,
-      rx: rx,
-      tx: tx,
-      iface: raw['iface'] as String?,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is TunStats &&
-      other.up == up &&
-      other.rx == rx &&
-      other.tx == tx &&
-      other.iface == iface;
-
-  @override
-  int get hashCode => Object.hash(up, rx, tx, iface);
-}
-
 enum RuntimePhase { idle, starting, running, stopping, error }
 
 /// 运行期控制器：把 Dart 侧的配置生成、REST 观察、Android 侧 VpnService
@@ -117,9 +74,11 @@ class RuntimeController extends ChangeNotifier {
 
   /// 规则集缓存缺失（补拉也失败）的个数，供 UI 提示「N 个规则集未生效」。
   int _missingRuleCaches = 0;
-  TunStats? _tunStats;
   int _up = 0;
   int _down = 0;
+
+  /// VpnService 是否在运行（Kotlin 侧 `ClashVpnService.running`）。
+  bool _serviceRunning = false;
 
   Timer? _pollTimer;
 
@@ -280,32 +239,16 @@ class RuntimeController extends ChangeNotifier {
     _setPhase(RuntimePhase.stopping);
     try {
       await _channel.invokeMethod<void>('stop');
-      _tunStats = null;
     } catch (error) {
       _setError('停止失败：$error');
     }
   }
 
-  /// 最近一次读到的 tun 收发计数；端口模式或读不到时为 null。
-  TunStats? get tunStats => _tunStats;
-
-  /// 读一次 tun 统计。失败（非 Android / ROM 限制）返回 null，不报错。
-  Future<TunStats?> loadTunStats() async {
-    if (!(androidOverride ?? supported)) return null;
-    try {
-      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
-        'tunStats',
-      );
-      final stats = TunStats.fromMap(raw);
-      if (stats != _tunStats) {
-        _tunStats = stats;
-        notifyListeners();
-      }
-      return stats;
-    } catch (_) {
-      return null;
-    }
-  }
+  /// VpnService 是否在运行（Kotlin 侧 ClashVpnService.running）。
+  ///
+  /// 与 [phase] 不同：phase 看内核进程，serviceRunning 看 VPN 服务；
+  /// 诊断面板用它区分「服务没起来」和「内核起来了但隧道没接管」。
+  bool get serviceRunning => _serviceRunning;
 
   /// 从 Android 侧同步一次真实状态（进入页面时用）。
   Future<void> refreshStatus() async {
@@ -320,6 +263,7 @@ class RuntimeController extends ChangeNotifier {
       }
       _pid = (status['pid'] as num?)?.toInt();
       final error = status['error'] as String?;
+      _serviceRunning = status['running'] == true;
       // 以内核进程为准：即便服务的静态标记没更新，只要有 pid 就说明内核活着。
       final running =
           status['running'] == true || ((_pid ?? 0) > 0 && error == null);
@@ -628,17 +572,20 @@ class RuntimeController extends ChangeNotifier {
             _setPhase(RuntimePhase.starting);
             break;
           case 'running':
+            _serviceRunning = true;
             _setPhase(RuntimePhase.running);
             unawaited(_refreshRuntimeView());
             _startPolling();
             break;
           case 'stopped':
             _stopPolling();
+            _serviceRunning = false;
             _setPhase(RuntimePhase.idle);
             break;
           case 'exited':
           case 'error':
             _stopPolling();
+            _serviceRunning = false;
             if (message != null) _lastError = message;
             _setPhase(RuntimePhase.error);
             break;

@@ -31,7 +31,7 @@ String buildRuntimeDiagnostic({
   final tunMtu = settings?.tunMtu ?? (docMtu is num ? docMtu.toInt() : 9000);
   final mode =
       settings?.mode ?? (doc.plainAt(['mode']) as String?)?.trim() ?? 'rule';
-  final groups = doc.plainAt(['groups']);
+  final groups = doc.plainAt(['proxy-groups']);
   String? defaultExit;
   if (groups is List) {
     for (final raw in groups) {
@@ -48,13 +48,8 @@ String buildRuntimeDiagnostic({
       break;
     }
   }
-  final tunStats = runtime.tunStats;
-  final tunEstablished = tunStats == null
-      ? '未知（读不到 /sys 或未启用）'
-      : (tunStats.up ? '是（${tunStats.iface ?? 'tun'}）' : '否');
-  final tunTraffic = tunStats == null
-      ? '未知'
-      : 'rx=${tunStats.rx} tx=${tunStats.tx}';
+  final tunEstablished = runtime.serviceRunning ? '是（VpnService 运行中）' : '否';
+  final traffic = '↑${_bytes(runtime.up)} ↓${_bytes(runtime.down)}';
   final lines = runtime.logs.length > 20
       ? runtime.logs.sublist(runtime.logs.length - 20)
       : runtime.logs;
@@ -70,7 +65,8 @@ String buildRuntimeDiagnostic({
     ..writeln('TUN stack：$tunStack')
     ..writeln('TUN mtu：$tunMtu')
     ..writeln('TUN 已建立：$tunEstablished')
-    ..writeln('tun 流量：$tunTraffic')
+    ..writeln('最后错误：${runtime.lastError ?? '—'}')
+    ..writeln('代理流量：$traffic')
     ..writeln('—— 日志（最后 ${lines.length} 行）——');
   if (lines.isEmpty) {
     buffer.writeln('（暂无日志）');
@@ -80,6 +76,13 @@ String buildRuntimeDiagnostic({
     }
   }
   return buffer.toString();
+}
+
+String _bytes(int value) {
+  if (value < 1024) return '${value}B';
+  final kb = value / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(1)}KB';
+  return '${(kb / 1024).toStringAsFixed(2)}MB';
 }
 
 /// 内核日志卡「诊断」入口：显示 [buildRuntimeDiagnostic] 的内容并可复制。

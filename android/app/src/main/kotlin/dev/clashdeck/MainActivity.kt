@@ -75,8 +75,6 @@ class MainActivity : FlutterActivity() {
 
             "listAppIcons" -> listAppIcons(arguments, result)
 
-            "tunStats" -> result.success(ClashVpnService.tunStats())
-
             else -> result.notImplemented()
         }
     }

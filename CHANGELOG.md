@@ -13,15 +13,19 @@
 
 ### Added
 
-- 内核日志卡新增「诊断」入口：版本、运行模式、分流模式、全局出口、DEFAULT 当前出口、应用路由、DNS/TUN 关键项、tun 收发计数与最后 20 行日志，可一键复制（不含节点密码与订阅地址）。
-- 概览新增一条轻提示：TUN 启动 3 秒后 tun 收发仍为 0 时提示隧道可能没有接管流量（读不到 stats 时不提示）。
-- 运行诊断读取 `/sys/class/net/tun*/statistics` 的收发计数；ROM 限制读不到时返回 null，不影响概览。
+- 内核日志卡新增「诊断」入口：版本、运行模式、分流模式、全局出口、DEFAULT 当前出口、应用路由、DNS/TUN 关键项、TUN 服务状态、代理流量与最后 20 行日志，可一键复制（不含节点密码与订阅地址）。
+
+### Fixed
+
+- 概览页没有把版本号传给诊断面板，导致显示「未知版本」。
+- 诊断面板读错 YAML key（`groups`），DEFAULT 当前出口一直显示「—」；改读 `proxy-groups`。
+- 诊断面板不再依赖 `/sys/class/net/tun*/statistics`（应用 UID 被 SELinux 拒绝，真机恒为未知）：TUN 是否建立改看 `ClashVpnService.running`，流量改看内核 REST 的代理流量；删除对应的 tunStats 通道与概览黄条。
 
 ### Tests
 
 - `test/runtime_config_test.dart`：TUN 强制开启 DNS、仅端口保留用户关闭、无 dns 段时补默认段。
 - `test/settings_dns_guard_test.dart`：TUN 下点开关不写 false 且出现提示。
-- `test/runtime_diagnostic_test.dart`：诊断文本字段（含 DEFAULT 出口与 tun 统计）。
+- `test/runtime_diagnostic_test.dart`：诊断文本字段（含 DEFAULT 出口、VpnService 状态、代理流量）。
 - `test/pulse_entry_test.dart`：右缘手势带边界与阈值。
 ## [0.3.2] - 2026-11-19
 

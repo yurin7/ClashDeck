@@ -18,6 +18,7 @@ import 'sheets.dart';
 import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
 import 'widgets/delete_confirm.dart';
+import 'widgets/delay_badge.dart';
 import 'widgets/edit_dialog.dart';
 import 'widgets/node_row.dart';
 import 'widgets/selectable_tile.dart';
@@ -76,10 +77,6 @@ class _ProxyBoardState extends State<ProxyBoard> {
   Future<void> _testNodes(List<String> names) async {
     final runtime = widget.runtime;
     if (runtime == null || names.isEmpty) return;
-    if (runtime.phase != RuntimePhase.running) {
-      _toast('先启动内核再测速');
-      return;
-    }
     if (_testing) return;
     setState(() {
       _testing = true;
@@ -100,7 +97,13 @@ class _ProxyBoardState extends State<ProxyBoard> {
     } finally {
       if (mounted) setState(() => _testing = false);
     }
-    if (mounted) _toast('测速完成：${names.length} 个节点');
+    if (!mounted) return;
+    final approx = names.any(runtime.delayApprox);
+    _toast(
+      approx
+          ? '测速完成：${names.length} 个节点（≈ 为 TCP 近似值）'
+          : '测速完成：${names.length} 个节点',
+    );
   }
 
   void _fail() {
@@ -519,6 +522,9 @@ class _ProxyBoardState extends State<ProxyBoard> {
         if (merged[group.name] case final String name)
           if (group.members.contains(name)) group.name: name,
     };
+    final approx = <String>{...?widget.runtime?.approxDelays};
+    // 有节点就能测速：内核在跑走精确接口，未运行走 TCP 近似。
+    // 「测速中是否可点」由卡片按 testing 统一禁用（canTestDelay 的判据）。
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
@@ -535,9 +541,11 @@ class _ProxyBoardState extends State<ProxyBoard> {
         _NodeListCard(
           nodes: profile.proxies,
           delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
+          approx: approx,
           currentName: selection[kDefaultGroupName],
-          onTestAll: () =>
-              _testNodes([for (final p in profile.proxies) p.name]),
+          onTestAll: profile.proxies.isEmpty
+              ? null
+              : () => _testNodes([for (final p in profile.proxies) p.name]),
           testing: _testing,
           testProgress: _testing ? '测速中 $_testDone/$_testTotal' : null,
           onOpen: _editNode,
@@ -576,9 +584,12 @@ class _ProxyBoardState extends State<ProxyBoard> {
                   : (name) => _selectNodeForGroup(group.name, name),
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
-              onTestGroup: () => _testNodes([...group.members]),
+              onTestGroup: group.members.isEmpty
+                  ? null
+                  : () => _testNodes([...group.members]),
               testing: _testing,
               delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
+              approx: approx,
               onAddMember: () async {
                 final picked = await _pickMembers(profile, group);
                 if (picked == null || picked.isEmpty) return;
@@ -667,6 +678,7 @@ class _NodeListCard extends StatefulWidget {
     required this.onAdd,
     this.onMenuNode,
     this.delays = const <String, int?>{},
+    this.approx = const <String>{},
     this.currentName,
     this.onTestAll,
     this.testing = false,
@@ -686,6 +698,9 @@ class _NodeListCard extends StatefulWidget {
 
   /// 最近一次测速结果；`containsKey` 区分「未测速」与「超时」。
   final Map<String, int?> delays;
+
+  /// 结果为 TCP 近似值（内核未运行或回退）的节点名，文案加 `≈`。
+  final Set<String> approx;
 
   /// 当前 DEFAULT 组的出口节点（节点行右侧显示「当前」徽章）。
   final String? currentName;
@@ -710,8 +725,7 @@ class _NodeListCardState extends State<_NodeListCard> {
   String _delayText(String name) {
     final delays = widget.delays;
     if (!delays.containsKey(name)) return '未测速';
-    final delay = delays[name];
-    return delay == null ? '超时' : '$delay ms';
+    return formatDelay(delays[name], approx: widget.approx.contains(name));
   }
 
   @override
@@ -904,6 +918,7 @@ class _GroupCard extends StatelessWidget {
     this.onTestGroup,
     this.testing = false,
     this.delays = const <String, int?>{},
+    this.approx = const <String>{},
   });
 
   final GroupEntry group;
@@ -940,6 +955,9 @@ class _GroupCard extends StatelessWidget {
 
   /// 成员芯片上的延迟胶囊数据；`containsKey` 区分「未测速」与「超时」。
   final Map<String, int?> delays;
+
+  /// 结果为 TCP 近似值（内核未运行或回退）的节点名，文案加 `≈`。
+  final Set<String> approx;
 
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1143,9 +1161,10 @@ class _GroupCard extends StatelessWidget {
                                 onRemove: isAuto ? null : () => onRemove(name),
                                 selected: selectedName == node.name,
                                 delayText: delays.containsKey(name)
-                                    ? (delays[name] == null
-                                          ? '超时'
-                                          : '${delays[name]}ms')
+                                    ? formatDelay(
+                                        delays[name],
+                                        approx: approx.contains(name),
+                                      )
                                     : null,
                                 onSelect: onSelectMember == null
                                     ? null

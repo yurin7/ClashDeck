@@ -21,6 +21,11 @@ rules:
   - MATCH,PROXY
 ''';
 
+class _FakeSocket extends Fake implements Socket {
+  @override
+  void destroy() {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -117,5 +122,29 @@ void main() {
     await tester.pump();
     await feedState('stopped');
     await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('内核未运行时入口可用，结果带 ≈ 标记', (tester) async {
+    controller = RuntimeController(
+      configProvider: () => YamlDoc.parse(_yaml),
+      channel: const MethodChannel(channelName),
+      androidOverride: true,
+      workDirProvider: () async => dir.path,
+      tcpConnector: (host, port, {timeout}) async => _FakeSocket(),
+    );
+    await pumpBoard(tester, controller!);
+
+    final icon = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.speed).first,
+    );
+    expect(icon.onPressed, isNotNull);
+
+    await tester.tap(find.byTooltip('测速全部'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('测速完成：2 个节点（≈ 为 TCP 近似值）'), findsOneWidget);
+    expect(find.textContaining('≈'), findsWidgets);
+    expect(controller!.approxDelays, containsAll(<String>['A', 'B']));
   });
 }

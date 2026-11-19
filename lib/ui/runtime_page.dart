@@ -4,6 +4,7 @@ import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'widgets/delay_badge.dart';
 import 'widgets/start_stop_button.dart';
 import './widgets/app_ink.dart';
 import './widgets/select_sheet.dart';
@@ -370,7 +371,9 @@ class _RuntimePageState extends State<RuntimePage> {
         : delay > 350
         ? scheme.tertiary
         : scheme.primary;
-    final text = !hasResult ? '未测速' : (delay == null ? '超时' : '$delay ms');
+    final text = !hasResult
+        ? '未测速'
+        : formatDelay(delay, approx: _controller.delayApprox(node));
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: Insets.sm),

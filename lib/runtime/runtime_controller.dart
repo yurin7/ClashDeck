@@ -16,6 +16,7 @@ import 'mihomo_api.dart';
 import 'delay_targets.dart';
 import 'runtime_config.dart';
 import 'runtime_template.dart';
+import 'tcp_delay_probe.dart';
 
 /// 内核 + VPN 的生命周期阶段。
 enum RuntimePhase { idle, starting, running, stopping, error }
@@ -40,6 +41,7 @@ class RuntimeController extends ChangeNotifier {
     this.androidOverride,
     this.workDirProvider,
     this.delayProbe,
+    this.tcpConnector,
     this.displayProvider,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleDartCall);
@@ -62,6 +64,9 @@ class RuntimeController extends ChangeNotifier {
   /// 测试注入：替代真实 REST 的单节点测速。
   final Future<int?> Function(String name)? delayProbe;
 
+  /// 测试注入：替代真实 socket 的 TCP 连接工厂。
+  final TcpConnector? tcpConnector;
+
   /// 供 Kotlin 快照用的展示信息（当前配置名 / 全局出口）。
   /// 磁贴、通知、小组件在 Flutter 不在时只能读这份快照。
   final ({String profile, String exit}) Function()? displayProvider;
@@ -79,6 +84,9 @@ class RuntimeController extends ChangeNotifier {
   Map<String, String> _selected = const {};
   Map<String, List<String>> _members = const {};
   Map<String, int?> _delays = const {};
+
+  /// 通过 TCP 探针测出的近似值（内核未运行或回退时使用）；UI 用 `≈` 标记。
+  Set<String> _approxDelays = const <String>{};
 
   /// 本次启动是否已经把设置里的全局出口应用过（只做一次）。
   bool _globalExitApplied = false;
@@ -128,6 +136,12 @@ class RuntimeController extends ChangeNotifier {
 
   /// 延迟测试结果：节点名 → 毫秒（null 表示超时/失败）。
   Map<String, int?> get delays => _delays;
+
+  /// [name] 的最近一次延迟是否来自 TCP 探针（近似值，UI 加 `≈`）。
+  bool delayApprox(String name) => _approxDelays.contains(name);
+
+  /// 当前所有近似延迟的节点名。
+  Set<String> get approxDelays => _approxDelays;
 
   /// 本次启动时间；内核未运行时为 null。
   DateTime? get startedAt => _startedAt;
@@ -483,6 +497,12 @@ class RuntimeController extends ChangeNotifier {
 
   /// 并发测一批节点的延迟，返回 节点名 → 毫秒（超时/失败为 null）。
   ///
+  /// 通道选择：
+  /// - 注入了 [delayProbe]（测试或 Pulse 注入）时优先使用；
+  /// - 内核 running / starting 时走 mihomo `/proxies/{name}/delay`；
+  /// - 内核没跑、或内核通道报错（刚启动 API 还没监听）时，用 TCP 探针测
+  ///   `server:port`，结果标记为近似值（UI 显示 `≈`）。
+  ///
   /// [isCancelled] 返回 true 时停止派发新任务，已发出的请求会自然结束。
   Future<Map<String, int?>> testDelays(
     List<String> names, {
@@ -494,6 +514,7 @@ class RuntimeController extends ChangeNotifier {
   }) async {
     final results = <String, int?>{};
     final total = names.length;
+    final targets = tcpTargetsFrom(configProvider());
     var next = 0;
     var done = 0;
     final limit = concurrency < 1 ? 1 : concurrency;
@@ -505,21 +526,23 @@ class RuntimeController extends ChangeNotifier {
         final index = next++;
         if (index >= total) return;
         final name = names[index];
-        int? value;
-        final client = api;
-        try {
-          final probe = delayProbe;
-          value = probe != null
-              ? await probe(name)
-              : await client.delay(name, url: url, timeoutMs: timeoutMs);
-        } catch (_) {
-          value = null;
-        } finally {
-          client.close();
-        }
-        results[name] = value;
+        final measured = await _measureOne(
+          name,
+          target: targets[name],
+          url: url,
+          timeoutMs: timeoutMs,
+          isCancelled: isCancelled,
+        );
+        results[name] = measured.value;
         done += 1;
-        _delays = {..._delays, name: value};
+        _delays = {..._delays, name: measured.value};
+        final approx = {..._approxDelays};
+        if (measured.approx) {
+          approx.add(name);
+        } else {
+          approx.remove(name);
+        }
+        _approxDelays = approx;
         if (!_disposed) notifyListeners();
         onProgress?.call(done, total);
       }
@@ -534,6 +557,56 @@ class RuntimeController extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     }
     return results;
+  }
+
+  /// 该阶段是否走内核 REST 的精确延迟（starting 也试一次，失败再回退 TCP）。
+  static bool kernelDelayChannel(RuntimePhase phase) =>
+      phase == RuntimePhase.running || phase == RuntimePhase.starting;
+
+  /// 单个节点的一次测量：返回毫秒值与「是否 TCP 近似」。
+  Future<({int? value, bool approx})> _measureOne(
+    String name, {
+    ({String host, int port})? target,
+    required String url,
+    required int timeoutMs,
+    bool Function()? isCancelled,
+  }) async {
+    final probe = delayProbe;
+    if (probe != null) {
+      try {
+        return (value: await probe(name), approx: false);
+      } catch (_) {
+        return (value: null, approx: false);
+      }
+    }
+    final viaKernel = kernelDelayChannel(_phase);
+    if (viaKernel) {
+      final client = api;
+      try {
+        final value = await client.delay(name, url: url, timeoutMs: timeoutMs);
+        return (value: value, approx: false);
+      } catch (_) {
+        // starting 时 API 可能还没监听：不直接判超时，回退 TCP 一次。
+      } finally {
+        client.close();
+      }
+    }
+    final tcp = await _tcpDelay(target, isCancelled: isCancelled);
+    return (value: tcp, approx: tcp != null);
+  }
+
+  Future<int?> _tcpDelay(
+    ({String host, int port})? target, {
+    bool Function()? isCancelled,
+  }) async {
+    if (target == null) return null;
+    final result = await probeTcpDelay(
+      target.host,
+      target.port,
+      connector: tcpConnector,
+      isCancelled: isCancelled,
+    );
+    return result?.milliseconds;
   }
 
   /// 当前连接数（`/connections` 的条数）；内核没跑或请求失败返回 null。
@@ -552,20 +625,25 @@ class RuntimeController extends ChangeNotifier {
     }
   }
 
-  /// 测一个节点的延迟。
+  /// 测一个节点的延迟（内核运行走接口，未运行走 TCP 探针）。
   Future<int?> testDelay(String name) async {
-    final client = api;
-    try {
-      final value = await client.delay(name);
-      _delays = {..._delays, name: value};
-      notifyListeners();
-      return value;
-    } catch (error) {
-      _setError('测速失败：$error');
-      return null;
-    } finally {
-      client.close();
+    final target = tcpTargetsFrom(configProvider())[name];
+    final measured = await _measureOne(
+      name,
+      target: target,
+      url: 'http://www.gstatic.com/generate_204',
+      timeoutMs: 5000,
+    );
+    _delays = {..._delays, name: measured.value};
+    final approx = {..._approxDelays};
+    if (measured.approx) {
+      approx.add(name);
+    } else {
+      approx.remove(name);
     }
+    _approxDelays = approx;
+    if (!_disposed) notifyListeners();
+    return measured.value;
   }
 
   // -------------------------------------------------------------------- 内部

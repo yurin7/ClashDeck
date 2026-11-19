@@ -23,6 +23,10 @@ val hasReleaseKeystore =
         releaseKeystoreFile != null &&
         releaseKeystoreFile.exists()
 
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}
+
 android {
     namespace = "dev.clashdeck"
     compileSdk = flutter.compileSdkVersion

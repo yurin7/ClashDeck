@@ -44,11 +44,16 @@ class ClashActionActivity : Activity() {
             finish()
             return
         }
-        if (RuntimePrefs.kernelState(this) == RuntimePrefs.STATE_RUNNING ||
-            RuntimePrefs.kernelState(this) == RuntimePrefs.STATE_STARTING
+        val state = RuntimePrefs.kernelState(this)
+        // prefs 可能因 force-stop / 系统回收而残留 running：只有进程真的活着才 no-op。
+        if (RuntimePrefs.isKernelAlive(this) &&
+            (state == RuntimePrefs.STATE_RUNNING || state == RuntimePrefs.STATE_STARTING)
         ) {
             finish()
             return
+        }
+        if (state != RuntimePrefs.STATE_STOPPED) {
+            RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STOPPED)
         }
         val proxyMode = arguments["proxyMode"] as? String ?: "tun"
         if (proxyMode == "port") {

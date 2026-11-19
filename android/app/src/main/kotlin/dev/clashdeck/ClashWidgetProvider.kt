@@ -24,7 +24,7 @@ class ClashWidgetProvider : AppWidgetProvider() {
     }
 
     private fun buildViews(context: Context): RemoteViews {
-        val running = RuntimePrefs.isRunning(context)
+        val running = RuntimePrefs.isActive(context)
         val state = RuntimePrefs.kernelState(context)
         val profile = RuntimePrefs.profileName(context)?.takeIf { it.isNotBlank() }
         val exit = RuntimePrefs.globalExit(context)?.takeIf { it.isNotBlank() }

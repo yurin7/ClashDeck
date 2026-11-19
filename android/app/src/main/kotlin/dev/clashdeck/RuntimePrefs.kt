@@ -1,6 +1,7 @@
 package dev.clashdeck
 
 import android.content.Context
+import java.io.File
 import android.content.SharedPreferences
 
 /**
@@ -119,4 +120,22 @@ object RuntimePrefs {
     fun kernelPid(context: Context): Int = prefs(context).getInt(KEY_KERNEL_PID, -1)
 
     fun isRunning(context: Context): Boolean = kernelState(context) == STATE_RUNNING
+
+    /** 服务实例还在，或快照里的 pid 进程仍然存在。 */
+    fun isKernelAlive(context: Context): Boolean {
+        if (ClashVpnService.instance != null) return true
+        val pid = kernelPid(context)
+        return pid > 0 && File("/proc/$pid").exists()
+    }
+
+    /** 磁贴 / 小组件 / 通知的 active 判定：状态 + 真实存活。 */
+    fun isActive(context: Context): Boolean {
+        val state = kernelState(context)
+        return KernelGate.isActive(state, ClashVpnService.instance != null, kernelPid(context), isPidAlive(context))
+    }
+
+    private fun isPidAlive(context: Context): Boolean {
+        val pid = kernelPid(context)
+        return pid > 0 && File("/proc/$pid").exists()
+    }
 }

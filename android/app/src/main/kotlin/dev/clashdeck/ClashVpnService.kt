@@ -26,6 +26,10 @@ class ClashVpnService : VpnService() {
         const val ACTION_START = "dev.clashdeck.action.START"
         const val ACTION_STOP = "dev.clashdeck.action.STOP"
 
+        /** 服务实例：force-stop 不走 onDestroy，判断存活不能只信 prefs。 */
+        @Volatile
+        var instance: ClashVpnService? = null
+
         const val EXTRA_WORK_DIR = "workDir"
         const val EXTRA_PORT = "port"
         const val EXTRA_SECRET = "secret"
@@ -154,6 +158,11 @@ class ClashVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
     override fun onRevoke() {
         shutdown("系统撤销了 VPN 授权")
         super.onRevoke()
@@ -164,6 +173,7 @@ class ClashVpnService : VpnService() {
         MihomoCore.stop()
         closeTun()
         running = false
+        if (instance === this) instance = null
         if (!RuntimePrefs.isRunning(this) && RuntimePrefs.kernelState(this) != RuntimePrefs.STATE_ERROR) {
             RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STOPPED)
         }
@@ -219,12 +229,19 @@ class ClashVpnService : VpnService() {
             try {
                 // Flutter engine 不在（从磁贴 / 小组件冷启动）时拿不到 Dart 现算的
                 // 配置：用 App 内启动时留下的 tpl + 本次真实 fd 回填。
-                val resolved = yaml?.takeIf { it.isNotBlank() }
-                    ?: RuntimeTemplate.materialize(workDir, tunFd)
+                val fromEngine = yaml?.takeIf { it.isNotBlank() }
+                val resolved = fromEngine ?: RuntimeTemplate.materialize(workDir, tunFd)
                 if (resolved == null) {
                     fail("缺少运行配置模板，请先在 App 内启动一次内核")
                     return@Thread
                 }
+                MihomoCore.log(
+                    if (fromEngine != null) {
+                        "运行配置来自 Dart 回调（tun fd=$tunFd）"
+                    } else {
+                        "冷启动：Dart 引擎不可用，改用 runtime.yaml.tpl（tun fd=$tunFd）"
+                    },
+                )
                 val configFile = File(workDir, "runtime.yaml")
                 configFile.writeText(resolved)
                 val binary = File(applicationInfo.nativeLibraryDir, "libmihomo.so")

@@ -24,8 +24,7 @@ class ClashTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val running = RuntimePrefs.isRunning(this) ||
-            RuntimePrefs.kernelState(this) == RuntimePrefs.STATE_STARTING
+        val running = RuntimePrefs.isActive(this)
         val action = if (running) ClashActionActivity.ACTION_STOP else ClashActionActivity.ACTION_START
         val intent = Intent(this, ClashActionActivity::class.java).apply {
             this.action = action
@@ -48,7 +47,7 @@ class ClashTileService : TileService() {
 
     private fun refreshTile() {
         val tile = qsTile ?: return
-        val running = RuntimePrefs.isRunning(this)
+        val running = RuntimePrefs.isActive(this)
         tile.state = if (running) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = "ClashDeck"
         tile.subtitle = if (running) {

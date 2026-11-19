@@ -22,6 +22,7 @@ import 'import_dialogs.dart';
 import 'overview_page.dart';
 import 'pulse_drawer.dart';
 import 'pulse_entry.dart';
+import 'pulse_auto_delay.dart';
 import 'pulse_page.dart';
 import 'settings_page.dart';
 import 'sheets.dart';
@@ -429,6 +430,9 @@ class _AppShellState extends State<AppShell>
   }
 
   bool _pulseOpen = false;
+
+  /// Pulse 打开时自动补一轮延迟测速：每次 App 运行只判断一次。
+  final PulseAutoDelayGate _pulseAutoDelay = PulseAutoDelayGate();
   late final AnimationController _pulseReveal;
   String? _pulseFileName;
   Profile? _pulseProfile;
@@ -509,6 +513,21 @@ class _AppShellState extends State<AppShell>
       _pulseProfile = Profile.from(settings.doc);
       _pulsePrefs = prefs;
     });
+    _maybeAutoDelay(settings.doc, prefs);
+  }
+
+  /// 打开 Pulse 时若还没有任何延迟数据，自动补测一轮（仅一次会话）。
+  void _maybeAutoDelay(YamlDoc doc, AppPrefs prefs) {
+    final profile = Profile.from(doc);
+    if (profile.proxies.isEmpty) return;
+    final trigger = _pulseAutoDelay.shouldTrigger(
+      delays: _runtime.delays,
+      measuring: _runtime.delayTesting,
+    );
+    if (!trigger) return;
+    unawaited(
+      _runtime.testDelays([for (final proxy in profile.proxies) proxy.name]),
+    );
   }
 
   Future<void> _settlePulse(double target) async {
@@ -817,6 +836,7 @@ class _AppShellState extends State<AppShell>
                     runtime: _runtime,
                     globalExit: _settings?.globalNode,
                     startKernel: _runtime.start,
+                    speedTest: _runtime.runSpeedTest,
                     onClose: () => unawaited(_closePulse()),
                     onLatencyCached: (name, values) {
                       if (!mounted) return;

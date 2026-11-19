@@ -9,12 +9,13 @@ import '../core/model/profile.dart';
 import '../core/update/update_check.dart';
 import '../data/app_prefs.dart';
 import '../runtime/runtime_controller.dart';
+import '../runtime/speed_test.dart';
 import 'motion.dart';
+import 'chips.dart';
+import 'fields.dart';
 import 'theme.dart';
 import 'widgets.dart';
-import 'widgets/app_ink.dart';
-import 'widgets/selectable_tile.dart';
-import 'widgets/select_sheet.dart';
+import 'widgets/delay_badge.dart';
 
 /// 批量测速的注入点（测试用假实现替换真实内核请求）。
 typedef PulseMeasure = Future<Map<String, int?>> Function(
@@ -26,6 +27,14 @@ typedef PulseMeasure = Future<Map<String, int?>> Function(
 /// 负一屏 Pulse：概览左滑进来的一页，放「状态、测速、更新、运行信息」。
 ///
 /// 刻意不放快捷开关（启动/停止/模式切换仍在概览页），这里只读 + 测速。
+typedef PulseSpeedTest = Future<SpeedTestResult> Function(
+  String node, {
+  SpeedSourceChoice source,
+  void Function(SpeedTestProgress progress)? onProgress,
+  void Function(SpeedTestStage stage)? onStage,
+  SpeedTestCancelToken? cancelToken,
+});
+
 class PulsePage extends StatefulWidget {
   const PulsePage({
     super.key,
@@ -41,6 +50,7 @@ class PulsePage extends StatefulWidget {
     this.startKernel,
     this.globalExit,
     this.onLatencyCached,
+    this.speedTest,
     required this.onClose,
   });
 
@@ -50,6 +60,9 @@ class PulsePage extends StatefulWidget {
   final AppPrefs prefs;
   final RuntimeController? runtime;
   final PulseMeasure? measure;
+
+  /// 下载测速（Pulse 测速卡用）。
+  final PulseSpeedTest? speedTest;
   final Future<int?> Function()? connectionCount;
   final Future<UpdateCheckResult> Function(String currentVersion)? checkUpdate;
   final Future<bool> Function(String url)? openUrl;
@@ -67,15 +80,18 @@ class PulsePage extends StatefulWidget {
 
 class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
   late final List<String> _allNodes;
-  final Set<String> _selected = <String>{};
-  String? _groupFilter;
-  Map<String, int?> _results = <String, int?>{};
-  DateTime? _lastAt;
+  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _customUrlCtrl = TextEditingController();
+  String? _node;
+  late SpeedSourceChoice _source;
 
-  bool _measuring = false;
-  bool _cancelled = false;
-  int _done = 0;
-  int _total = 0;
+  SpeedTestResult? _speedResult;
+  DateTime? _speedAt;
+  SpeedTestStage? _speedStage;
+  SpeedTestProgress? _speedProgress;
+  SpeedTestCancelToken? _speedCancel;
+  bool _speedTesting = false;
+  bool _tempStartNotified = false;
 
   Timer? _uptimeTimer;
   Timer? _connTimer;
@@ -98,9 +114,14 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _allNodes = widget.profile.proxies.map((p) => p.name).toList();
-    _selected.addAll(_allNodes);
-    _results = widget.prefs.latenciesOf(widget.profileName);
-    _lastAt = widget.prefs.lastLatencyAt(widget.profileName);
+    _node = _allNodes.isEmpty ? null : _allNodes.first;
+    final sourceName = widget.prefs.speedTestSourceName;
+    final source = SpeedSource.values.firstWhere(
+      (value) => value.name == sourceName,
+      orElse: () => SpeedSource.fast,
+    );
+    _source = SpeedSourceChoice(source, widget.prefs.speedTestCustomUrl);
+    _customUrlCtrl.text = _source.customUrl;
     _float = AnimationController(vsync: this, duration: kMascotFloatDuration);
     _backdrop = AnimationController(
       vsync: this,
@@ -201,80 +222,128 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
 
   // ------------------------------------------------------------------ 测速
 
-  List<String> get _visibleNodes {
-    final group = _groupFilter;
-    if (group == null) return _allNodes;
-    final entry = widget.profile.groups.where((g) => g.name == group).toList();
-    if (entry.isEmpty) return _allNodes;
-    final members = entry.first.members.toSet();
-    return _allNodes.where(members.contains).toList();
+  List<String> get _filteredNodes {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return _allNodes;
+    return [
+      for (final name in _allNodes)
+        if (name.toLowerCase().contains(query)) name,
+    ];
   }
 
-  List<String> get _selectedVisible =>
-      _visibleNodes.where(_selected.contains).toList();
+  int? _delayOf(String name) {
+    final runtimeDelay = widget.runtime?.delays[name];
+    if (runtimeDelay != null) return runtimeDelay;
+    return widget.prefs.latenciesOf(widget.profileName)[name];
+  }
 
-  Future<void> _startMeasure() async {
-    final names = _selectedVisible;
-    if (names.isEmpty || _measuring) return;
+  bool _approxOf(String name) => widget.runtime?.delayApprox(name) ?? false;
+
+  String? get _customUrlError {
+    if (_source.source != SpeedSource.custom) return null;
+    final text = _customUrlCtrl.text.trim();
+    if (text.isEmpty) return '请输入测速地址';
+    if (!_source.hasValidCustomUrl) return '只支持 http/https 地址';
+    return null;
+  }
+
+  bool get _canStartSpeedTest =>
+      !_speedTesting && _node != null && _source.url != null;
+
+  void _selectNode(String name) {
+    if (_speedTesting) return;
     setState(() {
-      _measuring = true;
-      _cancelled = false;
-      _done = 0;
-      _total = names.length;
+      _node = name;
+      _speedResult = null;
+      _speedAt = null;
+      _speedProgress = null;
     });
-    final measure = widget.measure;
-    final runtime = widget.runtime;
+  }
+
+  void _selectSource(SpeedSource source) {
+    if (_speedTesting) return;
+    setState(() {
+      _source = _source.withSource(source);
+      _speedResult = null;
+      _speedAt = null;
+      _speedProgress = null;
+    });
+    widget.prefs.setSpeedTestSourceName(_source.source.name);
+  }
+
+  void _setCustomUrl(String value) {
+    if (_speedTesting) return;
+    setState(() {
+      _source = _source.withCustomUrl(value);
+      _speedResult = null;
+      _speedAt = null;
+    });
+    widget.prefs.setSpeedTestCustomUrl(value.trim());
+  }
+
+  Future<void> _startSpeedTest() async {
+    final node = _node;
+    final test = widget.speedTest;
+    final url = _source.url;
+    if (node == null || test == null || url == null || _speedTesting) return;
+    final token = SpeedTestCancelToken();
+    setState(() {
+      _speedTesting = true;
+      _speedResult = null;
+      _speedAt = null;
+      _speedProgress = null;
+      _speedStage = SpeedTestStage.starting;
+      _speedCancel = token;
+      _tempStartNotified = false;
+    });
     try {
-      final result = measure != null
-          ? await measure(
-              names,
-              onProgress: _onProgress,
-              isCancelled: () => _cancelled,
-            )
-          : await runtime!.testDelays(
-              names,
-              onProgress: _onProgress,
-              isCancelled: () => _cancelled,
-            );
+      final result = await test(
+        node,
+        source: _source,
+        cancelToken: token,
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() => _speedProgress = progress);
+        },
+        onStage: (stage) {
+          if (!mounted) return;
+          if (stage == SpeedTestStage.starting &&
+              !_tempStartNotified &&
+              !_kernelRunning) {
+            _tempStartNotified = true;
+            showToast(context, '内核未运行，已临时用仅端口模式启动测速');
+          }
+          setState(() => _speedStage = stage);
+        },
+      );
       if (!mounted) return;
-      setState(() {
-        _results = {..._results, ...result};
-        _lastAt = DateTime.now();
-      });
-      await widget.prefs.setLatencies(widget.profileName, result);
-      widget.onLatencyCached?.call(widget.profileName, result);
+      if (!result.cancelled) {
+        setState(() {
+          _speedResult = result;
+          _speedAt = DateTime.now();
+        });
+      }
     } catch (error) {
-      if (!mounted) return;
-      showToast(context, '测速失败：$error');
+      if (mounted) showToast(context, '测速失败：$error');
     } finally {
-      if (mounted) setState(() => _measuring = false);
+      if (mounted) {
+        setState(() {
+          _speedTesting = false;
+          _speedStage = null;
+          _speedProgress = null;
+          _speedCancel = null;
+        });
+      }
     }
   }
 
-  void _onProgress(int done, int total) {
-    if (!mounted) return;
+  void _cancelSpeedTest() {
+    _speedCancel?.cancel();
     setState(() {
-      _done = done;
-      _total = total;
+      _speedStage = SpeedTestStage.restoring;
+      _speedResult = null;
+      _speedAt = null;
     });
-  }
-
-  void _cancelMeasure() {
-    if (!_measuring) return;
-    setState(() => _cancelled = true);
-  }
-
-  Future<void> _startKernel() async {
-    final start = widget.startKernel;
-    if (start == null) return;
-    try {
-      await start();
-      if (!mounted) return;
-      _startRuntimeTimers();
-    } catch (error) {
-      if (!mounted) return;
-      showToast(context, '启动失败：$error');
-    }
   }
 
   // ------------------------------------------------------------------ 更新
@@ -325,37 +394,6 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _pickGroup() async {
-    final groups = widget.profile.groups
-        .where((g) => g.members.any(_allNodes.contains))
-        .map((g) => g.name)
-        .toList();
-    final choice = await showSelectSheet<String>(
-      context,
-      title: '按策略组筛选',
-      subtitle: '只影响这一次的测速范围',
-      body: (_) => ListView(
-        shrinkWrap: true,
-        children: [
-          SelectableTile(
-            title: const Text('全部节点'),
-            subtitle: Text('${_allNodes.length} 个', style: hintStyle(context)),
-            selected: _groupFilter == null,
-            onTap: () => Navigator.of(context).pop(''),
-          ),
-          for (final name in groups)
-            SelectableTile(
-              title: Text(name),
-              selected: _groupFilter == name,
-              onTap: () => Navigator.of(context).pop(name),
-            ),
-        ],
-      ),
-    );
-    if (choice == null || !mounted) return;
-    setState(() => _groupFilter = choice.isEmpty ? null : choice);
-  }
-
   // -------------------------------------------------------------------- UI
 
   @override
@@ -366,7 +404,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     final cards = <Widget>[
       _PulseHeader(onClose: widget.onClose, motion: motion),
       _infoCard(context, motion, disableAnimations),
-      _latencyCard(context),
+      _speedCard(context),
       _updateCard(context),
       _runtimeCard(context),
     ];
@@ -481,25 +519,14 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _latencyCard(BuildContext context) {
+  Widget _speedCard(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final running = _kernelRunning;
-    final visible = _visibleNodes;
-    final selected = _selectedVisible;
-    final measured = [
-      for (final name in _results.keys)
-        if (_results[name] != null && _allNodes.contains(name))
-          MapEntry(name, _results[name]),
-    ]..sort((a, b) => a.value!.compareTo(b.value!));
-    final failed = [
-      for (final name in _results.keys)
-        if (_results[name] == null && _allNodes.contains(name)) name,
-    ];
-    final hasCache = _lastAt != null || _results.isNotEmpty;
-    final showList = running || hasCache;
-    final maxMs = measured.isEmpty
-        ? 1
-        : math.max(1, measured.map((e) => e.value!).reduce(math.max));
+    final nodes = _filteredNodes;
+    final selected = _node;
+    final stage = _speedStage;
+    final result = _speedResult;
+    final progress = _speedProgress;
+    final customError = _customUrlError;
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,137 +534,143 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
           Row(
             children: [
               const Expanded(child: SectionTitle(title: '节点测速')),
-              if (_lastAt != null)
-                Text('上次结果 · ${_stamp(_lastAt!)}', style: hintStyle(context)),
+              Text('下载测速', style: hintStyle(context)),
             ],
           ),
-          if (showList) ...[
-            const SizedBox(height: Insets.sm),
-            Row(
-              children: [
-                AppInkWell(
-                  onTap: _measuring ? null : _pickGroup,
-                  borderRadius: BorderRadius.circular(Radiuses.sm),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.filter_alt_outlined,
-                          size: 15,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _groupFilter ?? '全部节点',
-                          style: monoStyle(context, size: 11),
-                        ),
-                        Icon(
-                          Icons.expand_more,
-                          size: 15,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _measuring
-                      ? null
-                      : () {
-                          setState(() {
-                            if (selected.length == visible.length) {
-                              _selected.removeAll(visible);
-                            } else {
-                              _selected.addAll(visible);
-                            }
-                          });
-                        },
-                  child: Text(
-                    selected.length == visible.length
-                        ? '全选 ${visible.length} 个'
-                        : '已选 ${selected.length} 个',
-                  ),
-                ),
-              ],
-            ),
-          ],
+          if (stage == SpeedTestStage.starting)
+            const _SpeedBanner(text: '内核未运行，已临时用仅端口模式启动测速（不会申请 VPN）')
+          else if (stage == SpeedTestStage.waiting)
+            const _SpeedBanner(text: '等待内核就绪…')
+          else if (stage == SpeedTestStage.restoring)
+            const _SpeedBanner(text: '正在恢复连接…'),
           const SizedBox(height: Insets.sm),
-          if (!running)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Insets.sm),
-              child: Row(
+          if (_allNodes.isEmpty)
+            Text('还没有节点。去「配置」页添加或导入节点后再来测速。', style: hintStyle(context))
+          else ...[
+            AppSearchField(
+              controller: _searchCtrl,
+              hint: '搜索节点',
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: Insets.sm),
+            if (nodes.isEmpty)
+              Text('没有匹配的节点', style: hintStyle(context))
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  Expanded(child: Text('启动内核后可测速', style: hintStyle(context))),
-                  if (widget.startKernel != null)
-                    FilledButton.tonal(
-                      onPressed: _startKernel,
-                      child: const Text('启动内核'),
+                  for (final name in nodes)
+                    _SpeedNodeChip(
+                      name: name,
+                      delay: _delayOf(name),
+                      approx: _approxOf(name),
+                      selected: name == selected,
+                      onTap: _speedTesting ? null : () => _selectNode(name),
                     ),
                 ],
               ),
-            ),
-          if (_measuring)
-            Padding(
-              padding: const EdgeInsets.only(top: Insets.sm),
-              child: _RadarPulse(
-                animation: _radar,
-                done: _done,
-                total: _total,
-                color: scheme.primary,
-                onCancel: _cancelMeasure,
-              ),
-            ),
-          if (!_measuring && running)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    selected.isEmpty
-                        ? '先选择要测速的节点'
-                        : '本次将测 ${selected.length} 个节点',
-                    style: hintStyle(context),
-                  ),
-                ),
-                _Breathing(
-                  animation: _radar,
-                  color: scheme.primary,
-                  enabled: running && selected.isNotEmpty,
-                  child: FilledButton(
-                    onPressed: running && selected.isNotEmpty
-                        ? _startMeasure
-                        : null,
-                    child: const Text('开始测速'),
-                  ),
-                ),
-              ],
-            ),
-          if (measured.isNotEmpty || failed.isNotEmpty) ...[
             const SizedBox(height: Insets.sm),
             const Hairline(),
-            for (var i = 0; i < measured.length; i++)
-              _LatencyRow(
-                key: ValueKey('latency-${measured[i].key}'),
-                name: measured[i].key,
-                ms: measured[i].value!,
-                ratio: measured[i].value! / maxMs,
-                highlight: i == 0,
+            const SizedBox(height: Insets.sm),
+            Row(
+              children: [
+                Text('测速线路', style: monoStyle(context, size: 11)),
+                const SizedBox(width: 10),
+                for (final source in SpeedSource.values) ...[
+                  ChipShell(
+                    selected: _source.source == source,
+                    onTap: _speedTesting ? null : () => _selectSource(source),
+                    child: Text(
+                      SpeedSourceChoice(source).label,
+                      style: monoStyle(context, size: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+            if (_source.source == SpeedSource.custom) ...[
+              const SizedBox(height: Insets.sm),
+              AppTextField(
+                controller: _customUrlCtrl,
+                hint: 'https://example.com/10mb.bin',
+                error: customError,
+                onChanged: _setCustomUrl,
               ),
-            for (final name in failed)
-              _LatencyRow(
-                key: ValueKey('latency-$name'),
-                name: name,
-                ms: null,
-                ratio: 0,
+            ],
+            const SizedBox(height: Insets.sm),
+            if (_speedTesting)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(switch (stage) {
+                      SpeedTestStage.starting => '正在临时启动内核…',
+                      SpeedTestStage.waiting => '等待内核就绪…',
+                      SpeedTestStage.downloading => _progressText(progress),
+                      SpeedTestStage.restoring => '正在恢复连接…',
+                      _ => '准备中…',
+                    }, style: hintStyle(context)),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: _cancelSpeedTest,
+                    child: const Text('取消'),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      selected == null
+                          ? '先选择一个节点'
+                          : (customError ?? '本次将测：$selected'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: customError != null
+                            ? scheme.error
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: _canStartSpeedTest ? _startSpeedTest : null,
+                    child: Text(result == null ? '开始测速' : '重新测速'),
+                  ),
+                ],
+              ),
+            if (result != null) ...[
+              const SizedBox(height: Insets.sm),
+              _SpeedResultRow(result: result, node: selected ?? ''),
+            ],
+            if (result != null && !result.ok && !result.cancelled)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _canStartSpeedTest ? _startSpeedTest : null,
+                  child: const Text('重测'),
+                ),
+              ),
+            if (_speedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '上次测速 ${_stamp(_speedAt!)}',
+                  style: hintStyle(context),
+                ),
               ),
           ],
         ],
       ),
     );
+  }
+
+  String _progressText(SpeedTestProgress? progress) {
+    if (progress == null) return '正在下载…';
+    final mb = progress.bytes / (1024 * 1024);
+    return '已下载 ${mb.toStringAsFixed(1)} MB · '
+        '${progress.megabytesPerSecond.toStringAsFixed(1)} MB/s';
   }
 
   Widget _updateCard(BuildContext context) {
@@ -844,6 +877,123 @@ class _GlassCard extends StatelessWidget {
 }
 
 /// 卡片入场：按 40ms 阶梯淡入 + 上移 + 轻微缩放。
+class _SpeedBanner extends StatelessWidget {
+  const _SpeedBanner({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: Insets.sm),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: scheme.primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(Radiuses.sm),
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpeedResultRow extends StatelessWidget {
+  const _SpeedResultRow({required this.result, required this.node});
+
+  final SpeedTestResult result;
+  final String node;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ok = result.ok;
+    final color = ok ? const Color(0xFF3FB950) : scheme.error;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(Radiuses.md),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(node, style: monoStyle(context, size: 11)),
+          const SizedBox(height: 4),
+          if (ok)
+            Text(
+              result.summary,
+              style: monoStyle(context, size: 15, color: color),
+            )
+          else
+            Text(
+              result.failure ?? '测速失败',
+              style: TextStyle(fontSize: 12.5, color: color),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedNodeChip extends StatelessWidget {
+  const _SpeedNodeChip({
+    required this.name,
+    required this.delay,
+    required this.approx,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final int? delay;
+  final bool approx;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = delay == null ? null : formatDelay(delay, approx: approx);
+    return ChipShell(
+      selected: selected,
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: monoStyle(
+              context,
+              size: 11,
+              color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+            ),
+          ),
+          if (text != null) ...[
+            const SizedBox(width: 5),
+            Text(
+              text,
+              style: monoStyle(
+                context,
+                size: 10.5,
+                color: DelayBadge.colorOf(text, scheme),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _PulseIntro extends StatelessWidget {
   const _PulseIntro({
     required this.index,
@@ -1105,340 +1255,6 @@ class _Mascot extends StatelessWidget {
   }
 }
 
-class _LatencyRow extends StatefulWidget {
-  const _LatencyRow({
-    super.key,
-    required this.name,
-    required this.ms,
-    required this.ratio,
-    this.highlight = false,
-  });
-
-  final String name;
-  final int? ms;
-  final double ratio;
-  final bool highlight;
-
-  @override
-  State<_LatencyRow> createState() => _LatencyRowState();
-}
-
-class _LatencyRowState extends State<_LatencyRow>
-    with TickerProviderStateMixin {
-  late final AnimationController _shake;
-  late final AnimationController _sheen;
-
-  @override
-  void initState() {
-    super.initState();
-    _shake = AnimationController(vsync: this, duration: kLatencyShakeDuration)
-      ..value = 1;
-    _sheen = AnimationController(vsync: this, duration: kSheenDuration);
-    if (widget.ms == null) _shake.forward(from: 0);
-    if (widget.highlight) _sheen.forward(from: 0);
-  }
-
-  @override
-  void didUpdateWidget(covariant _LatencyRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.ms != widget.ms && widget.ms == null) {
-      _shake.forward(from: 0);
-    }
-    if (!oldWidget.highlight && widget.highlight) {
-      _sheen.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _shake.dispose();
-    _sheen.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final ms = widget.ms;
-    final color = switch (ms) {
-      null => scheme.outline,
-      < 200 => const Color(0xFF3FB950),
-      < 500 => const Color(0xFFD29922),
-      _ => scheme.error,
-    };
-    final target = ms == null ? 0.0 : widget.ratio.clamp(0.02, 1.0);
-    final row = Container(
-      height: 44,
-      padding: const EdgeInsets.only(right: 2),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.4),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 5,
-            child: Text(
-              widget.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12.5),
-            ),
-          ),
-          const SizedBox(width: Insets.sm),
-          Expanded(
-            flex: 6,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(end: target),
-                duration: kLatencyBarDuration,
-                curve: Curves.easeOutCubic,
-                builder: (context, value, _) => LinearProgressIndicator(
-                  value: value,
-                  minHeight: 6,
-                  backgroundColor: Colors.white.withValues(alpha: 0.06),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            width: 64,
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: ms == null ? 0.10 : 0.16),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: color.withValues(alpha: 0.35)),
-            ),
-            child: ms == null
-                ? Text('超时', style: monoStyle(context, size: 11, color: color))
-                : TweenAnimationBuilder<double>(
-                    tween: Tween<double>(end: ms.toDouble()),
-                    duration: kLatencyCountDuration,
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, _) => Text(
-                      '${value.round()} ms',
-                      style: monoStyle(context, size: 11, color: color),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-    return AnimatedBuilder(
-      animation: _shake,
-      builder: (context, child) {
-        final t = 1 - _shake.value;
-        final dx = math.sin(t * math.pi * 4) * 4 * t;
-        return Transform.translate(offset: Offset(dx, 0), child: child);
-      },
-      child: Stack(
-        children: [
-          row,
-          if (widget.highlight)
-            Positioned.fill(
-              child: IgnorePointer(child: _Sheen(animation: _sheen)),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 测速进行中的雷达脉冲：三圈外扩环 + 中心环形进度。
-class _RadarPulse extends StatelessWidget {
-  const _RadarPulse({
-    required this.animation,
-    required this.done,
-    required this.total,
-    required this.color,
-    required this.onCancel,
-  });
-
-  final Animation<double> animation;
-  final int done;
-  final int total;
-  final Color color;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = total == 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-    return SizedBox(
-      height: 150,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: animation,
-              builder: (context, _) => CustomPaint(
-                painter: _RadarPulsePainter(
-                  value: animation.value,
-                  progress: progress,
-                  color: color,
-                  ring: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('已测 $done/$total', style: monoStyle(context, size: 13)),
-              const SizedBox(height: Insets.xs),
-              TextButton(onPressed: onCancel, child: const Text('取消')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RadarPulsePainter extends CustomPainter {
-  const _RadarPulsePainter({
-    required this.value,
-    required this.progress,
-    required this.color,
-    required this.ring,
-  });
-
-  final double value;
-  final double progress;
-  final Color color;
-  final Color ring;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final maxR = size.shortestSide * 0.42;
-    final base = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    for (var i = 0; i < 3; i++) {
-      final t = (value + i / 3) % 1;
-      final r = maxR * (0.34 + 0.66 * t);
-      canvas.drawCircle(
-        center,
-        r,
-        base..color = color.withValues(alpha: (1 - t) * 0.35),
-      );
-    }
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = ring.withValues(alpha: 0.35);
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: maxR * 0.26),
-      -math.pi / 2,
-      math.pi * 2,
-      false,
-      track,
-    );
-    final arc = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..color = color;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: maxR * 0.26),
-      -math.pi / 2,
-      math.pi * 2 * progress,
-      false,
-      arc,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarPulsePainter old) =>
-      old.value != value ||
-      old.progress != progress ||
-      old.color != color ||
-      old.ring != ring;
-}
-
-/// 「开始测速」按钮的呼吸光晕。
-class _Breathing extends StatelessWidget {
-  const _Breathing({
-    required this.animation,
-    required this.color,
-    required this.enabled,
-    required this.child,
-  });
-
-  final Animation<double> animation;
-  final Color color;
-  final bool enabled;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!enabled) return child;
-    final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (reduced) return child;
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final t = 0.5 + 0.5 * math.sin(animation.value * math.pi * 2);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.10 + 0.14 * t),
-                blurRadius: 14 + 8 * t,
-                spreadRadius: 1 + 2 * t,
-              ),
-            ],
-          ),
-          child: child,
-        );
-      },
-    );
-  }
-}
-
-/// 第一名结果的一次性扫光。
-class _Sheen extends StatelessWidget {
-  const _Sheen({required this.animation});
-
-  final Animation<double> animation;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final t = animation.value;
-        return FractionalTranslation(
-          translation: Offset(-1.2 + 2.4 * t, 0),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.0),
-                  Colors.white.withValues(alpha: 0.16 * (1 - t)),
-                  Colors.white.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 运行状态的两列 key-value：标签小号灰、值右对齐等宽。
 class _Kv extends StatelessWidget {
   const _Kv({
     required this.label,

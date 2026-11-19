@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/update/update_check.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
 import 'package:clashdeck/data/app_prefs.dart';
+import 'package:clashdeck/runtime/speed_test.dart';
+import 'package:clashdeck/ui/fields.dart';
 import 'package:clashdeck/ui/pulse_page.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +43,33 @@ UpdateInfo _info() => UpdateInfo(
   notes: '- 新增 Pulse\n- 修复 A',
   publishedAt: DateTime(2026, 11, 19),
 );
+
+SpeedTestResult _result() => SpeedTestResult(
+  ok: true,
+  bytes: (12.3 * 1024 * 1024).round(),
+  elapsed: const Duration(milliseconds: 1000),
+);
+
+SpeedSource? _usedSource;
+
+Future<SpeedTestResult> _okSpeedTest(
+  String node, {
+  SpeedSourceChoice source = SpeedSourceChoice.defaultChoice,
+  void Function(SpeedTestProgress progress)? onProgress,
+  void Function(SpeedTestStage stage)? onStage,
+  SpeedTestCancelToken? cancelToken,
+}) async => _result();
+
+Future<SpeedTestResult> _recordingSpeedTest(
+  String node, {
+  SpeedSourceChoice source = SpeedSourceChoice.defaultChoice,
+  void Function(SpeedTestProgress progress)? onProgress,
+  void Function(SpeedTestStage stage)? onStage,
+  SpeedTestCancelToken? cancelToken,
+}) async {
+  _usedSource = source.source;
+  return _result();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +108,7 @@ void main() {
   PulsePage page({
     Future<UpdateCheckResult> Function(String)? checkUpdate,
     Future<bool> Function(String)? openUrl,
-    Future<void> Function()? startKernel,
+    PulseSpeedTest? speedTest,
   }) => PulsePage(
     appVersion: '0.2.1',
     profileName: 'demo',
@@ -87,7 +117,7 @@ void main() {
     onClose: () {},
     checkUpdate: checkUpdate,
     openUrl: openUrl,
-    startKernel: startKernel,
+    speedTest: speedTest ?? _okSpeedTest,
   );
 
   testWidgets('右上角 × 会触发 onClose', (tester) async {
@@ -109,42 +139,113 @@ void main() {
     await tester.pump();
     expect(closed, 1);
   });
-  testWidgets('四张卡都在，内核未运行时提示先启动', (tester) async {
+
+  testWidgets('测速卡只列节点、单选，没有全选和延迟列表', (tester) async {
     await loadPrefs(tester);
     await tester.pumpWidget(host(page()));
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('ClashDeck'), findsOneWidget);
     expect(find.text('节点测速'), findsOneWidget);
-    expect(find.text('启动内核后可测速'), findsOneWidget);
-    expect(find.text('检查更新'), findsWidgets);
+    expect(find.text('下载测速'), findsOneWidget);
+    expect(find.text('测速线路'), findsOneWidget);
+    expect(find.text('HK-01'), findsOneWidget);
+    expect(find.text('JP-01'), findsOneWidget);
+    expect(find.textContaining('全选'), findsNothing);
+    expect(find.textContaining('上次结果'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '开始测速'), findsOneWidget);
+  });
+
+  testWidgets('测速完成显示单行结果，切换节点后清空', (tester) async {
+    await loadPrefs(tester);
+    await tester.pumpWidget(host(page()));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text('开始测速'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.textContaining('12.3 MB/s'), findsOneWidget);
+    expect(find.textContaining('12 MB'), findsOneWidget);
+    expect(find.textContaining('上次测速'), findsOneWidget);
+
+    await tester.tap(find.text('JP-01'));
+    await tester.pump();
+    expect(find.textContaining('12.3 MB/s'), findsNothing);
+  });
+
+  testWidgets('切换线路会清空结果并按新线路请求', (tester) async {
+    await loadPrefs(tester);
+    _usedSource = null;
+    await tester.pumpWidget(host(page(speedTest: _recordingSpeedTest)));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text('开始测速'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(_usedSource, SpeedSource.fast);
+
+    await tester.tap(find.text('Google'));
+    await tester.pump();
+    expect(find.textContaining('12.3 MB/s'), findsNothing);
+
+    await tester.tap(find.text('开始测速'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(_usedSource, SpeedSource.google);
+  });
+
+  testWidgets('自定义地址非法时提示并禁用测速', (tester) async {
+    await loadPrefs(tester);
+    await tester.pumpWidget(host(page()));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text('自定义'));
+    await tester.pump();
+    await tester.enterText(find.byType(AppTextField).last, 'not-a-url');
+    await tester.pump();
+
+    expect(find.text('只支持 http/https 地址'), findsWidgets);
+    final button = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '开始测速'),
+    );
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('测速中可取消，取消后不显示结果', (tester) async {
+    await loadPrefs(tester);
+    final completer = Completer<SpeedTestResult>();
+    Future<SpeedTestResult> pending(
+      String node, {
+      SpeedSourceChoice source = SpeedSourceChoice.defaultChoice,
+      void Function(SpeedTestProgress progress)? onProgress,
+      void Function(SpeedTestStage stage)? onStage,
+      SpeedTestCancelToken? cancelToken,
+    }) => completer.future;
+
+    await tester.pumpWidget(host(page(speedTest: pending)));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.text('开始测速'));
+    await tester.pump();
+    expect(find.text('取消'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pump();
+    completer.complete(const SpeedTestResult(ok: false, cancelled: true));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('MB/s'), findsNothing);
+    expect(find.text('开始测速'), findsOneWidget);
+  });
+
+  testWidgets('运行状态卡显示配置与出口', (tester) async {
+    await loadPrefs(tester);
+    await tester.pumpWidget(host(page()));
+    await tester.pump(const Duration(milliseconds: 50));
+
     expect(find.text('运行状态'), findsOneWidget);
     expect(find.text('当前配置'), findsOneWidget);
     expect(find.text('demo'), findsWidgets);
-    // 内核未运行且没有缓存：不给选择器/节点列表，只留说明和启动按钮。
-    expect(find.textContaining('全选'), findsNothing);
-    expect(find.text('HK-01'), findsNothing);
-  });
-
-  testWidgets('缓存里的延迟按升序排列，超时排在最后', (tester) async {
-    await loadPrefs(tester);
-    await tester.runAsync(() async {
-      await prefs.setLatencies('demo', {
-        'HK-01': 320,
-        'JP-01': null,
-      }, at: DateTime(2026, 11, 19, 1, 2));
-    });
-    await tester.pumpWidget(host(page()));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('320 ms'), findsOneWidget);
-    expect(find.text('超时'), findsOneWidget);
-    expect(find.textContaining('上次结果'), findsOneWidget);
-    expect(find.text('全选 2 个'), findsOneWidget);
-
-    final slow = tester.getTopLeft(find.text('320 ms')).dy;
-    final timeout = tester.getTopLeft(find.text('超时')).dy;
-    expect(slow, lessThan(timeout));
   });
 
   testWidgets('检查更新发现新版显示去查看，点击打开浏览器', (tester) async {
@@ -183,16 +284,5 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('已是最新版本'), findsWidgets);
-  });
-
-  testWidgets('启动内核按钮回调注入的 startKernel', (tester) async {
-    await loadPrefs(tester);
-    var started = 0;
-    await tester.pumpWidget(host(page(startKernel: () async => started++)));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.tap(find.text('启动内核'));
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(started, 1);
   });
 }

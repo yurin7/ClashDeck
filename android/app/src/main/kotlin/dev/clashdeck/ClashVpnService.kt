@@ -234,7 +234,7 @@ class ClashVpnService : VpnService() {
                 } else {
                     running = true
                     RuntimePrefs.setKernel(this, RuntimePrefs.STATE_RUNNING, pid = MihomoCore.pid)
-                    runCatching { refreshNotification() }
+                    runCatching { refreshNotification(); ClashWidgetProvider.refresh(this) }
                     RuntimeBridge.notifyState("running", pid = MihomoCore.pid)
                 }
             } catch (t: Throwable) {
@@ -342,7 +342,7 @@ class ClashVpnService : VpnService() {
         lastError = message
         running = false
         RuntimePrefs.setKernel(this, RuntimePrefs.STATE_ERROR, error = message)
-        runCatching { refreshNotification() }
+        runCatching { refreshNotification(); ClashWidgetProvider.refresh(this) }
         MihomoCore.log("启动失败：$message")
         RuntimeBridge.notifyState("error", message = message)
         // 失败后的收尾不再发 "stopped"，否则会把刚报的错误状态冲掉。

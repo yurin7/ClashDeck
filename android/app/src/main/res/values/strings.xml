@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClashDeck</string>
+    <string name="widget_description">显示内核状态，一键启停</string>
+</resources>

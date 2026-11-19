@@ -99,12 +99,8 @@ class RuntimeConfig {
       next = _set(next, ['tun'], tunOptions);
       if (ensureDns) {
         next = _ensureDns(next);
-        // TUN 模式下域名解析完全依赖内核 DNS：VpnService 把系统 DNS 指到
-        // 198.18.0.2，再由 `dns-hijack: any:53` 截获并交给 fake-ip；一旦
-        // `dns.enable: false`，198.18.0.2 无人应答，表现为「能 ping / 测延迟
-        // 正常，但所有域名打不开」。设置页允许在「仅代理端口」模式关 DNS，
-        // 这里必须强制打开，不能沿用 setIfAbsent。
-        next = _set(next, ['dns', 'enable'], true);
+        // 不覆盖用户显式写的 `dns.enable`：TUN 下关掉 DNS 是用户的选择，
+        // 只在完全没写 dns 段时补默认值（见 `_ensureDns`）。
       }
     } else {
       // 仅代理端口模式：显式关掉 TUN，避免内核去读一个不存在的 fd。

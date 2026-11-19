@@ -3,8 +3,7 @@ import 'package:clashdeck/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// TUN 模式下 DNS 被强制开启：设置页不能把 `dns.enable` 写成 false，
-/// 否则运行配置里的 `dns-hijack` 会失效、域名全部解析失败。
+/// DNS 不强制：TUN 下也能关，只在关闭时提醒一次，不阻止回写。
 void main() {
   Future<void> pumpSwitch(
     WidgetTester tester, {
@@ -27,38 +26,51 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('TUN 下点关闭被拦下并提示，不回写 false', (tester) async {
+  testWidgets('TUN 下可以关闭，弹一次提醒并回写 false', (tester) async {
     var calls = 0;
+    bool? value;
     await pumpSwitch(
       tester,
       tun: true,
-      enabled: false,
-      onChanged: (_) => calls++,
+      enabled: true,
+      onChanged: (v) {
+        calls++;
+        value = v;
+      },
     );
 
     final tile = find.byType(SwitchListTile);
-    expect(tile, findsOneWidget);
     expect(tester.widget<SwitchListTile>(tile).value, isTrue);
 
     await tester.tap(tile);
     await tester.pump();
 
-    expect(find.text('TUN 模式必须开启 DNS；要关闭请切到「仅代理端口」模式'), findsOneWidget);
-    expect(calls, 0);
+    expect(find.text('关闭 DNS 后 TUN 内域名可能无法解析，排障时可重新打开'), findsOneWidget);
+    expect(calls, 1);
+    expect(value, isFalse);
   });
 
-  testWidgets('仅端口模式允许关闭并回写', (tester) async {
-    var value = true;
+  testWidgets('仅端口模式直接关闭、不弹提醒', (tester) async {
+    var calls = 0;
     await pumpSwitch(
       tester,
       tun: false,
       enabled: true,
-      onChanged: (v) => value = v,
+      onChanged: (_) => calls++,
     );
 
     await tester.tap(find.byType(SwitchListTile));
     await tester.pump();
 
-    expect(value, isFalse);
+    expect(find.textContaining('关闭 DNS 后'), findsNothing);
+    expect(calls, 1);
+  });
+
+  testWidgets('开关显示配置里的真实值（不强制 true）', (tester) async {
+    await pumpSwitch(tester, tun: true, enabled: false, onChanged: (_) {});
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isFalse,
+    );
   });
 }

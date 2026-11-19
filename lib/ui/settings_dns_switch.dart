@@ -5,9 +5,9 @@ import 'widgets.dart';
 
 /// 「启用 DNS」开关。
 ///
-/// TUN 模式下强制显示为开启并拒绝关闭：VpnService 把系统 DNS 指到
-/// 198.18.0.2，`dns-hijack` 依赖内核 DNS；关掉后域名解析全废，但延迟
-/// 测速（走 REST）仍然正常，极难自查。要关闭只能切到「仅代理端口」。
+/// 不做任何强制：TUN 模式下也可以关闭。关闭时系统 DNS 会指向
+/// 198.18.0.2，但没有内核 DNS 应答，域名可能无法解析（延迟测试仍正常），
+/// 因此在 TUN 模式下关闭时给一次非阻塞提醒，方便排障时快速找回。
 class DnsEnabledSwitch extends StatelessWidget {
   const DnsEnabledSwitch({
     super.key,
@@ -16,7 +16,7 @@ class DnsEnabledSwitch extends StatelessWidget {
     required this.onEnabledChanged,
   });
 
-  /// 当前是否 TUN 模式（TUN 下锁死为开启）。
+  /// 当前是否 TUN 模式（只影响关闭时的提醒文案）。
   final bool tun;
 
   /// 配置里真实的 `dns.enable`。
@@ -27,20 +27,16 @@ class DnsEnabledSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SwitchListTile.adaptive(
-      value: tun ? true : enabled,
+      value: enabled,
       onChanged: (value) {
         if (tun && !value) {
-          showToast(context, 'TUN 模式必须开启 DNS；要关闭请切到「仅代理端口」模式');
-          return;
+          showToast(context, '关闭 DNS 后 TUN 内域名可能无法解析，排障时可重新打开');
         }
         onEnabledChanged(value);
       },
       contentPadding: const EdgeInsets.fromLTRB(0, 0, Insets.md, 0),
       title: Text('启用 DNS', style: display(14, weight: 600)),
-      subtitle: Text(
-        tun ? 'TUN 模式强制开启：域名解析依赖内核 DNS，关掉会静默断域名' : '仅代理端口模式可关闭；TUN 模式下会被强制开启',
-        style: hintStyle(context),
-      ),
+      subtitle: Text('域名解析依赖内核 DNS，关闭后可能无法解析域名', style: hintStyle(context)),
     );
   }
 }

@@ -13,6 +13,10 @@ dependencies:
   yaml: ^3.1.4
   yaml_edit: ^2.2.4
   path_provider: ^2.1.5
+  # 固定 2.2.x：path_provider_android 2.3.x 改用 jni/jni_flutter 走 FFI，
+  # 在部分设备上首次启动会抛 `ClassNotFoundException: Landroid/content/Context;`，
+  # 让「打开配置目录」直接失败。2.2.23 是最后一个纯 MethodChannel 版本。
+  path_provider_android: 2.2.23
   file_picker: ^13.4.0
   package_info_plus: 10.2.2
   url_launcher: 6.3.3

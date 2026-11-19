@@ -59,7 +59,7 @@ class ClashTileService : TileService() {
         val tile = qsTile ?: return
         val running = RuntimePrefs.isActive(this)
         tile.state = if (running) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = "ClashDeck"
+        tile.label = "clashdeck"
         tile.subtitle = if (running) {
             RuntimePrefs.profileName(this)?.takeIf { it.isNotBlank() } ?: "已连接"
         } else {

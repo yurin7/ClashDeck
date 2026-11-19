@@ -127,17 +127,18 @@ proxy-groups:
       expect(issue.severity, IssueSeverity.warning);
     });
 
-    test('成员不存在是警告；computed 组降级为提示', () {
-      final warn = run('''
+    test('字面成员不存在是错误；computed 组降级为提示', () {
+      final bad = run('''
 proxy-groups:
   - name: G
     type: select
     proxies: [GHOST]
 ''');
       expect(
-        warn.issues.firstWhere((e) => e.code == 'dangling-member').severity,
-        IssueSeverity.warning,
+        bad.issues.firstWhere((e) => e.code == 'dangling-member').severity,
+        IssueSeverity.error,
       );
+      expect(bad.hasErrors, isTrue);
 
       final info = run('''
 proxy-groups:
@@ -150,6 +151,7 @@ proxy-groups:
         info.issues.firstWhere((e) => e.code == 'dangling-member').severity,
         IssueSeverity.info,
       );
+      expect(info.hasErrors, isFalse);
     });
 
     test('use 引用未定义的 provider', () {
@@ -191,11 +193,60 @@ proxy-groups:
       );
     });
 
-    test('目标不存在', () {
-      expect(
-        codes('rules:\n  - DOMAIN-SUFFIX,google.com,NOPE\n'),
-        contains('unknown-rule-target'),
+    test('目标不存在是错误（mihomo 会直接退出）', () {
+      final report = run('rules:\n  - DOMAIN-SUFFIX,google.com,NOPE\n');
+      final issue = report.issues.firstWhere(
+        (e) => e.code == 'unknown-rule-target',
       );
+      expect(issue.severity, IssueSeverity.error);
+      expect(report.hasErrors, isTrue);
+    });
+
+    test('RULE-SET 引用了未定义的规则集是错误', () {
+      final report = run('''
+rules:
+  - RULE-SET,ghost,DIRECT
+  - MATCH,DIRECT
+''');
+      final issue = report.issues.firstWhere(
+        (e) => e.code == 'rule-set-provider-missing',
+      );
+      expect(issue.severity, IssueSeverity.error);
+      expect(issue.message, contains('ghost'));
+      expect(report.hasErrors, isTrue);
+    });
+
+    test('RULE-SET 引用了已定义的规则集才通过', () {
+      final report = run('''
+rule-providers:
+  ok:
+    type: http
+    behavior: domain
+    url: https://example.com/r.yaml
+rules:
+  - RULE-SET,ok,DIRECT
+  - MATCH,DIRECT
+''');
+      expect(
+        report.issues.any((e) => e.code == 'rule-set-provider-missing'),
+        isFalse,
+      );
+      expect(report.hasErrors, isFalse);
+    });
+
+    test('合法配置没有错误', () {
+      final report = run('''
+proxies:
+  - {name: N, type: vless, server: a, port: 1, uuid: u}
+proxy-groups:
+  - name: G
+    type: select
+    proxies: [N, DIRECT]
+rules:
+  - DOMAIN,a.com,G
+  - MATCH,G
+''');
+      expect(report.hasErrors, isFalse);
     });
 
     test('内置策略与节点都算合法目标', () {

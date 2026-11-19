@@ -363,9 +363,12 @@ class ConfigValidator {
         if (providerNames.contains(m)) continue;
         issues.add(
           Issue(
+            // 字面成员不存在时 mihomo 会直接退出（proxy group ... not found），
+            // 必须按错误拦下，不能只给警告。computed 组（include-all/filter）
+            // 的成员由内核动态生成，缺项不致命。
             severity: g.computedMembers
                 ? IssueSeverity.info
-                : IssueSeverity.warning,
+                : IssueSeverity.error,
             code: 'dangling-member',
             message: '策略组 ${g.name} 里的成员「$m」不存在',
             subject: g.name,
@@ -412,6 +415,7 @@ class ConfigValidator {
   }
 
   static void _checkRules(Profile p, List<Issue> issues) {
+    final ruleProviderNames = _ruleProviderNames(p);
     for (var i = 0; i < p.rules.length; i++) {
       final r = p.rules[i];
       final path = ['rules', i];
@@ -440,15 +444,28 @@ class ConfigValidator {
       final known =
           p.proxy(r.target) != null ||
           p.group(r.target) != null ||
-          Profile.builtinTargets.contains(r.target) ||
-          _providerNames(p).contains(r.target);
+          Profile.builtinTargets.contains(r.target);
       if (!known) {
         issues.add(
           Issue(
-            severity: IssueSeverity.warning,
+            // mihomo 加载规则时找不到目标策略会直接退出（proxy [...] not found）。
+            severity: IssueSeverity.error,
             code: 'unknown-rule-target',
             message: '规则「${r.raw}」的目标「${r.target}」不存在',
             subject: r.target,
+            path: path,
+          ),
+        );
+      }
+      // RULE-SET 的规则集名必须在 rule-providers 里定义；未定义时 mihomo
+      // 报 `rule set [x] not found` 并退出。
+      if (r.type == 'RULE-SET' && !ruleProviderNames.contains(r.payload)) {
+        issues.add(
+          Issue(
+            severity: IssueSeverity.error,
+            code: 'rule-set-provider-missing',
+            message: '规则「${r.raw}」引用的规则集「${r.payload}」未定义',
+            subject: r.payload,
             path: path,
           ),
         );
@@ -532,5 +549,11 @@ class ConfigValidator {
       if (v is Map) out.addAll(v.keys.map((e) => '$e'));
     }
     return out;
+  }
+
+  /// 只取 rule-providers 的键：RULE-SET 的规则集只能来自这里。
+  static Set<String> _ruleProviderNames(Profile p) {
+    final v = p.root['rule-providers'];
+    return v is Map ? v.keys.map((e) => '$e').toSet() : <String>{};
   }
 }

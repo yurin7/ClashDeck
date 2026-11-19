@@ -12,6 +12,7 @@ import 'sheets/sectioned_picker.dart';
 import 'widgets.dart';
 import 'widgets/start_stop_button.dart';
 import 'motion.dart';
+import 'startup_issues_dialog.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
 class OverviewPage extends StatefulWidget {
@@ -195,6 +196,15 @@ class _StatusCard extends StatelessWidget {
   final List<double> history;
   final bool running;
 
+  /// 启动前校验有错误时，先弹清单让用户确认；确认后强制启动。
+  Future<void> _startKernel(BuildContext context) async {
+    if (await runtime.start()) return;
+    final report = runtime.startupReport;
+    if (report == null || !context.mounted) return;
+    final force = await showStartupIssuesDialog(context, report);
+    if (force) await runtime.start(force: true);
+  }
+
   String get _phaseLabel => switch (runtime.phase) {
     RuntimePhase.idle => 'IDLE · 未运行',
     RuntimePhase.starting => 'STARTING · 启动中',
@@ -285,7 +295,7 @@ class _StatusCard extends StatelessWidget {
             running: running,
             busy: runtime.isBusy,
             busySpinner: true,
-            onStart: () => runtime.start(),
+            onStart: () => _startKernel(context),
             onStop: () => runtime.stop(),
           ),
           if (runtime.lastError != null) ...[

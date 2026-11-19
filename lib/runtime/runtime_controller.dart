@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/edit/import_rules.dart';
 import '../core/model/app_settings.dart';
 import '../core/net/fetch_text.dart';
+import '../core/validate/validator.dart';
 import '../data/rule_cache.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'geodata.dart';
@@ -34,6 +35,8 @@ class RuntimeController extends ChangeNotifier {
     this.port = 9090,
     this.secret,
     this.pollInterval = const Duration(seconds: 3),
+    this.androidOverride,
+    this.workDirProvider,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleDartCall);
   }
@@ -41,7 +44,7 @@ class RuntimeController extends ChangeNotifier {
   /// 通道名必须与 `android/app/src/main/kotlin/dev/clashdeck/RuntimeBridge.kt` 一致。
   static const String channelName = 'dev.clashdeck/runtime';
 
-  /// 只有 Android 才有 VpnService 实现。
+  /// 只有 Android 才有 VpnService 实现。测试里可用 [androidOverride] 覆盖。
   static bool get supported => Platform.isAndroid;
 
   final YamlDoc Function() configProvider;
@@ -49,12 +52,15 @@ class RuntimeController extends ChangeNotifier {
   /// 运行参数（代理模式 / 分应用名单 / TUN MTU）的来源。缺省按默认设置。
   final AppSettings Function()? settingsProvider;
   final MethodChannel _channel;
+  final bool? androidOverride;
+  final Future<String> Function()? workDirProvider;
   final int port;
   final String? secret;
   final Duration pollInterval;
 
   RuntimePhase _phase = RuntimePhase.idle;
   String? _lastError;
+  ValidationReport? _startupReport;
   int? _pid;
   String? _workDir;
   int _lastFd = 0;
@@ -80,6 +86,9 @@ class RuntimeController extends ChangeNotifier {
 
   RuntimePhase get phase => _phase;
   String? get lastError => _lastError;
+
+  /// 启动前校验未通过时的 issue 列表（供「仍然启动」弹窗展示）。
+  ValidationReport? get startupReport => _startupReport;
   int? get pid => _pid;
   String? get workDir => _workDir;
 
@@ -166,19 +175,33 @@ class RuntimeController extends ChangeNotifier {
     }
   }
 
-  Future<void> start() async {
-    if (!supported) {
+  /// 启动内核。返回 false 表示被启动前校验拦下（issues 在 [startupReport]），
+  /// 没有真正 spawn；[force] 用于用户在弹窗里确认「仍然启动」。
+  Future<bool> start({bool force = false}) async {
+    if (!(androidOverride ?? supported)) {
       _setError('运行内核只支持 Android 设备');
-      return;
+      return false;
     }
     if (_phase == RuntimePhase.starting || _phase == RuntimePhase.running) {
-      return;
+      return true;
     }
     _lastError = null;
+    _startupReport = null;
     _globalExitApplied = false;
     _setPhase(RuntimePhase.starting);
     try {
-      _workDir ??= await _resolveWorkDir();
+      // 先做语义自检：组成员/规则目标/规则集引用不存在时 mihomo 会直接退出，
+      // 与其让用户看到「启动失败」再猜，不如在 spawn 前拦下并列出问题。
+      final config = configProvider();
+      if (!force) {
+        final report = ConfigValidator.validate(config);
+        if (report.hasErrors) {
+          _startupReport = report;
+          _setError('配置无法启动：${report.errors.length} 个错误');
+          return false;
+        }
+      }
+      _workDir ??= await (workDirProvider?.call() ?? _resolveWorkDir());
       // 先把 GEOIP/GEOSITE 数据铺进工作目录：内核缺数据会同步去 GitHub 下载，
       // 国内基本必定超时，带 GEOIP 规则的配置会直接启动失败。
       await Geodata.ensure(Directory(_workDir!));
@@ -186,7 +209,6 @@ class RuntimeController extends ChangeNotifier {
       // 补不上也不阻塞启动，只把个数报给 UI。
       await _backfillRuleCaches();
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
-      final config = configProvider();
       final rawMtu = config.plainAt(['tun', 'mtu']);
       await _channel.invokeMethod<Map<Object?, Object?>>('start', {
         'workDir': _workDir,
@@ -199,8 +221,10 @@ class RuntimeController extends ChangeNotifier {
         ...settings.toStartArgs(),
       });
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。
+      return true;
     } catch (error) {
       _setError('启动失败：$error');
+      return false;
     }
   }
 

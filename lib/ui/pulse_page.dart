@@ -108,8 +108,6 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
   late final AnimationController _radar;
   bool _reducedMotion = false;
   bool _motionReady = false;
-  Timer? _blinkTimer;
-  bool _blink = false;
 
   @override
   void initState() {
@@ -134,13 +132,6 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     );
     _radar = AnimationController(vsync: this, duration: kPulseRadarPeriod)
       ..value = 1;
-    _blinkTimer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted) return;
-      setState(() => _blink = true);
-      Timer(const Duration(milliseconds: 150), () {
-        if (mounted) setState(() => _blink = false);
-      });
-    });
     _startRuntimeTimers();
     widget.runtime?.addListener(_onRuntimeChanged);
   }
@@ -179,7 +170,6 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     widget.runtime?.removeListener(_onRuntimeChanged);
     _uptimeTimer?.cancel();
     _connTimer?.cancel();
-    _blinkTimer?.cancel();
     _float.dispose();
     _backdrop.dispose();
     _enter.dispose();
@@ -468,7 +458,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     return _GlassCard(
       child: Row(
         children: [
-          _Mascot(animation: _float, blink: _blink, disabled: disable),
+          _Mascot(animation: _float, disabled: disable),
           const SizedBox(width: Insets.md),
           Expanded(
             child: Column(
@@ -1209,14 +1199,9 @@ class _PulseHeader extends StatelessWidget {
 }
 
 class _Mascot extends StatelessWidget {
-  const _Mascot({
-    required this.animation,
-    required this.blink,
-    required this.disabled,
-  });
+  const _Mascot({required this.animation, required this.disabled});
 
   final Animation<double> animation;
-  final bool blink;
   final bool disabled;
 
   @override
@@ -1238,14 +1223,7 @@ class _Mascot extends StatelessWidget {
       animation: animation,
       builder: (context, child) {
         final dy = (animation.value - 0.5) * 4;
-        return Transform.translate(
-          offset: Offset(0, dy),
-          child: Transform.scale(
-            scaleY: blink ? 0.16 : 1,
-            alignment: Alignment.center,
-            child: child,
-          ),
-        );
+        return Transform.translate(offset: Offset(0, dy), child: child);
       },
       child: image,
     );

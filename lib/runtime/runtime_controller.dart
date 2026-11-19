@@ -957,6 +957,7 @@ class RuntimeController extends ChangeNotifier {
         final state = args['state'] as String? ?? '';
         final message = args['message'] as String?;
         _pid = (args['pid'] as num?)?.toInt() ?? _pid;
+        var reloadLogs = true;
         switch (state) {
           case 'starting':
             _setPhase(RuntimePhase.starting);
@@ -971,17 +972,25 @@ class RuntimeController extends ChangeNotifier {
           case 'stopped':
             _stopPolling();
             _serviceRunning = false;
+            // 停内核后概览不能还挂着上一次的 PID、速率和日志。
+            _pid = null;
+            _up = 0;
+            _down = 0;
+            _logs = const <String>[];
+            reloadLogs = false;
             _setPhase(RuntimePhase.idle);
             break;
           case 'exited':
           case 'error':
             _stopPolling();
             _serviceRunning = false;
+            _up = 0;
+            _down = 0;
             if (message != null) _lastError = message;
             _setPhase(RuntimePhase.error);
             break;
         }
-        await loadLogs();
+        if (reloadLogs) await loadLogs();
         break;
     }
     return null;

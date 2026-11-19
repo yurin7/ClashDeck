@@ -11,6 +11,7 @@ import '../state/settings_state.dart';
 import 'app_picker_page.dart';
 import 'dropdown.dart';
 import 'theme.dart';
+import 'settings_dns_switch.dart';
 import 'update_dialog.dart';
 import 'widgets.dart';
 import './widgets/app_ink.dart';
@@ -371,11 +372,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: 'DNS',
                   icon: Icons.dns_outlined,
                   children: [
-                    _SwitchRow(
-                      label: '启用 DNS',
-                      description: 'TUN 模式下建议开启，否则域名解析交给系统',
-                      value: state.dnsEnabled,
-                      onChanged: (v) => _apply(() => state.setDnsEnabled(v)),
+                    DnsEnabledSwitch(
+                      tun: state.app.proxyMode == ProxyMode.tun,
+                      enabled: state.dnsEnabled,
+                      onEnabledChanged: (v) =>
+                          _apply(() => state.setDnsEnabled(v)),
                     ),
                     _ChoiceRow<String>(
                       label: '增强模式',

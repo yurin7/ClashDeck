@@ -97,7 +97,15 @@ class RuntimeConfig {
       // 用户没写 mtu 就交给内核默认值，不要强行塞一个数进去。
       if (effectiveMtu != null) tunOptions['mtu'] = effectiveMtu;
       next = _set(next, ['tun'], tunOptions);
-      if (ensureDns) next = _ensureDns(next);
+      if (ensureDns) {
+        next = _ensureDns(next);
+        // TUN 模式下域名解析完全依赖内核 DNS：VpnService 把系统 DNS 指到
+        // 198.18.0.2，再由 `dns-hijack: any:53` 截获并交给 fake-ip；一旦
+        // `dns.enable: false`，198.18.0.2 无人应答，表现为「能 ping / 测延迟
+        // 正常，但所有域名打不开」。设置页允许在「仅代理端口」模式关 DNS，
+        // 这里必须强制打开，不能沿用 setIfAbsent。
+        next = _set(next, ['dns', 'enable'], true);
+      }
     } else {
       // 仅代理端口模式：显式关掉 TUN，避免内核去读一个不存在的 fd。
       next = _set(next, ['tun', 'enable'], false);

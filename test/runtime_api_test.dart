@@ -270,7 +270,7 @@ ipv6: true
       expect((tun! as Map)['enable'], isFalse);
     });
 
-    test('已有 dns 段的用户设置不被覆盖，只补缺', () {
+    test('TUN 模式强制 dns.enable，其余 dns 用户设置不被覆盖', () {
       const src = '''
 dns:
   enable: false
@@ -284,7 +284,7 @@ rules:
         tunFileDescriptor: 3,
       );
       final dns = YamlDoc.parse(out).plainRoot['dns'] as Map<String, Object?>;
-      expect(dns['enable'], isFalse); // 尊重用户
+      expect(dns['enable'], isTrue); // TUN 强制开启，否则 198.18.0.2 无人应答
       expect(dns['nameserver'], ['1.1.1.1']);
       expect(dns['enhanced-mode'], 'fake-ip'); // 补上缺失的
     });

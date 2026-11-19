@@ -1,6 +1,43 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../core/edit/config_ops.dart';
+import '../core/yaml/yaml_doc.dart';
+
+/// 可作为测速跳板的组类型：测速会把组临时指向目标节点，只认手动选择的组。
+const Set<String> kSpeedTestSelectableGroupTypes = {'select', 'selector'};
+
+/// 选一个能临时切到 [node] 的组：优先 `DEFAULT`，否则取第一个包含该节点的
+/// `select` / `selector` 组；没有则返回 null。
+///
+/// 组员取 `proxies`（兼容 `use` 形式的 provider 引用）。
+({String group, String? node})? pickSpeedTestSelector(
+  YamlDoc doc,
+  String node,
+) {
+  final raw = doc.plainAt(['proxy-groups']);
+  if (raw is! List) return null;
+  ({String group, String? node})? first;
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    final name = entry['name'];
+    final type = entry['type'];
+    if (name is! String ||
+        type is! String ||
+        !kSpeedTestSelectableGroupTypes.contains(type)) {
+      continue;
+    }
+    final proxies = entry['proxies'];
+    final use = entry['use'];
+    final members = proxies is List ? proxies : (use is List ? use : null);
+    if (members == null || !members.contains(node)) continue;
+    final candidate = (group: name, node: node);
+    if (name == kDefaultGroupName) return candidate;
+    first ??= candidate;
+  }
+  return first;
+}
+
 /// 节点下载测速：纯 Dart（不依赖 Flutter），下载器与会话状态机都可注入。
 ///
 /// 会话做的事：

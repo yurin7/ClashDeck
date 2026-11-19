@@ -11,6 +11,7 @@ import '../data/app_prefs.dart';
 import '../runtime/runtime_controller.dart';
 import '../runtime/speed_test.dart';
 import 'motion.dart';
+import 'pulse_time.dart';
 import 'chips.dart';
 import 'fields.dart';
 import 'theme.dart';
@@ -802,11 +803,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     return '${s}s';
   }
 
-  String _stamp(DateTime time) {
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(time.month)}-${two(time.day)} '
-        '${two(time.hour)}:${two(time.minute)}';
-  }
+  String _stamp(DateTime time) => pulseSpeedStamp(time);
 }
 
 /// 大号渐变态字标：只在 Pulse 层使用，主界面保持克制。

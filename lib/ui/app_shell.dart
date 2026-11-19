@@ -513,14 +513,15 @@ class _AppShellState extends State<AppShell>
       _pulseProfile = Profile.from(settings.doc);
       _pulsePrefs = prefs;
     });
-    _maybeAutoDelay(settings.doc, prefs);
+    _maybeAutoDelay(settings.doc, prefs, _activeFileName);
   }
 
-  /// 打开 Pulse 时若还没有任何延迟数据，自动补测一轮（仅一次会话）。
-  void _maybeAutoDelay(YamlDoc doc, AppPrefs prefs) {
+  /// 打开 Pulse 时若还没有任何延迟数据，自动补测一轮（每份配置每会话一次）。
+  void _maybeAutoDelay(YamlDoc doc, AppPrefs prefs, String? fileName) {
     final profile = Profile.from(doc);
     if (profile.proxies.isEmpty) return;
     final trigger = _pulseAutoDelay.shouldTrigger(
+      profile: fileName,
       delays: _runtime.delays,
       measuring: _runtime.delayTesting,
     );

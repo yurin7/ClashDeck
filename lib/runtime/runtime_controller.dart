@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../core/edit/config_ops.dart';
 import '../core/edit/import_rules.dart';
 import '../core/model/app_settings.dart';
 import '../core/net/fetch_text.dart';
@@ -545,21 +544,9 @@ class RuntimeController extends ChangeNotifier {
     YamlDoc doc,
     String node,
   ) {
-    final raw = doc.plainAt(['proxy-groups']);
-    if (raw is! List) return null;
-    ({String group, String? current, String? node})? first;
-    for (final entry in raw) {
-      if (entry is! Map) continue;
-      final name = entry['name'];
-      final type = entry['type'];
-      final members = entry['members'];
-      if (name is! String || type != 'selector' || members is! List) continue;
-      if (!members.contains(node)) continue;
-      final candidate = (group: name, current: null, node: node);
-      if (name == kDefaultGroupName) return candidate;
-      first ??= candidate;
-    }
-    return first;
+    final picked = pickSpeedTestSelector(doc, node);
+    if (picked == null) return null;
+    return (group: picked.group, current: null, node: picked.node);
   }
 
   /// 读 selector 当前选中的节点（内核 API）；失败返回 null。

@@ -207,6 +207,9 @@ class Pill extends StatelessWidget {
           ],
           Text(
             label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
             style: display(
               dense ? 10.5 : 11.5,
               weight: 600,

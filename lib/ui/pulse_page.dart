@@ -436,7 +436,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _GradientWordmark(),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Container(
@@ -467,10 +467,14 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               ],
             ),
           ),
-          Pill(
-            label: widget.profileName,
-            color: scheme.onSurfaceVariant,
-            dense: true,
+          const SizedBox(width: Insets.sm),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: Pill(
+              label: widget.profileName,
+              color: scheme.onSurfaceVariant,
+              dense: true,
+            ),
           ),
         ],
       ),
@@ -779,13 +783,22 @@ class _GradientWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ShaderMask(
-      shaderCallback: (bounds) => LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [scheme.primary, scheme.tertiary],
-      ).createShader(bounds),
-      child: Text('ClashDeck', style: display(24, color: Colors.white)),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: ShaderMask(
+        shaderCallback: (bounds) => LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [scheme.primary, scheme.tertiary],
+        ).createShader(bounds),
+        child: Text(
+          'ClashDeck',
+          maxLines: 1,
+          softWrap: false,
+          style: display(24, color: Colors.white),
+        ),
+      ),
     );
   }
 }

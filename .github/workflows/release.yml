@@ -61,15 +61,25 @@ jobs:
             PREFIX="ClashDeck-dev"
           fi
 
+          # build-number 统一取 pubspec 的 +NNNN，release 与 nightly 同源：
+          # 这样 CI 产物的 versionCode 与本机构建一致（arm64 +2000 / x86_64 +4000），
+          # 已装测试包也能被同码或更高码的包覆盖，不会互相卡降级。
+          BUILD_NUMBER="$(sed -nE 's/^version:.*\+([0-9]+).*/\1/p' pubspec.yaml | head -1)"
+          if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::warning::pubspec.yaml 里没有 \`+NNNN\` build number，回退 github.run_number"
+            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          fi
+
           {
             echo "kind=$KIND"
             echo "tag=$TAG"
             echo "name=$NAME"
             echo "prefix=$PREFIX"
             echo "short_sha=${GITHUB_SHA:0:7}"
+            echo "build_number=$BUILD_NUMBER"
           } >> "$GITHUB_OUTPUT"
 
-          echo "类型：$KIND，版本：$NAME，发布标签：$TAG"
+          echo "类型：$KIND，版本：$NAME，发布标签：$TAG，build-number：$BUILD_NUMBER"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -165,7 +175,7 @@ jobs:
           flutter build apk --release --split-per-abi \
             --target-platform android-arm64,android-x64 \
             --build-name="${{ steps.v.outputs.name }}" \
-            --build-number="${{ github.run_number }}"
+            --build-number="${{ steps.v.outputs.build_number }}"
 
       - name: Collect artifacts
         run: |
@@ -188,6 +198,16 @@ jobs:
           name: apk-${{ steps.v.outputs.name }}
           path: dist/*.apk
           retention-days: 14
+
+      - name: Show version
+        run: |
+          set -euo pipefail
+          aapt="$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)"
+          echo "期望 build-number：${{ steps.v.outputs.build_number }}（pubspec 的 +NNNN）"
+          for f in dist/*.apk; do
+            echo "== $f"
+            "$aapt" dump badging "$f" | grep -E '^package:' || true
+          done
 
       - name: Show signer
         run: |

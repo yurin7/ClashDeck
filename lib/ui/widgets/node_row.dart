@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'delay_badge.dart';
+
 import '../../core/model/profile.dart';
 import '../chips.dart';
 import '../theme.dart';
@@ -110,7 +112,7 @@ class NodeRow extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${node.type} · $delayText',
+                        node.type,
                         style: mono(
                           10.5,
                           color: scheme.onSurfaceVariant,
@@ -122,6 +124,8 @@ class NodeRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: Insets.xs),
+                DelayBadge(text: delayText),
                 if (selected) ...[
                   const SizedBox(width: Insets.xs),
                   Pill(label: '当前', color: scheme.primary, dense: true),

@@ -36,7 +36,8 @@ void main() {
     );
 
     expect(find.text('香港 01'), findsOneWidget);
-    expect(find.text('vless · 120 ms'), findsOneWidget);
+    expect(find.text('vless'), findsOneWidget);
+    expect(find.text('120 ms'), findsOneWidget);
     expect(find.text('当前'), findsOneWidget);
     expect(find.byTooltip('节点操作'), findsOneWidget);
 
@@ -63,7 +64,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('vless · 超时'), findsOneWidget);
+    expect(find.text('vless'), findsOneWidget);
+    expect(find.text('超时'), findsOneWidget);
     expect(find.text('当前'), findsNothing);
     expect(find.byTooltip('节点操作'), findsNothing);
   });

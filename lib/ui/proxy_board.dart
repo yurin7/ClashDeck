@@ -68,6 +68,41 @@ class _ProxyBoardState extends State<ProxyBoard> {
   /// 当前左滑露出「删除」的组名。
   String? _swipedGroup;
 
+  /// 手动测速进行中（禁用入口并显示进度）。
+  bool _testing = false;
+  int _testDone = 0;
+  int _testTotal = 0;
+
+  Future<void> _testNodes(List<String> names) async {
+    final runtime = widget.runtime;
+    if (runtime == null || names.isEmpty) return;
+    if (runtime.phase != RuntimePhase.running) {
+      _toast('先启动内核再测速');
+      return;
+    }
+    if (_testing) return;
+    setState(() {
+      _testing = true;
+      _testDone = 0;
+      _testTotal = names.length;
+    });
+    try {
+      await runtime.testDelays(
+        names,
+        onProgress: (done, total) {
+          if (!mounted) return;
+          setState(() {
+            _testDone = done;
+            _testTotal = total;
+          });
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+    if (mounted) _toast('测速完成： 个节点');
+  }
+
   void _fail() {
     final msg = s.lastError;
     if (msg == null) return;
@@ -501,6 +536,10 @@ class _ProxyBoardState extends State<ProxyBoard> {
           nodes: profile.proxies,
           delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
           currentName: selection[kDefaultGroupName],
+          onTestAll: () =>
+              _testNodes([for (final p in profile.proxies) p.name]),
+          testing: _testing,
+          testProgress: _testing ? '测速中 $_testDone/$_testTotal' : null,
           onOpen: _editNode,
           onDelete: _deleteNode,
           onMenuNode: (n) => _showNodeActions(n),
@@ -537,6 +576,9 @@ class _ProxyBoardState extends State<ProxyBoard> {
                   : (name) => _selectNodeForGroup(group.name, name),
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
+              onTestGroup: () => _testNodes([...group.members]),
+              testing: _testing,
+              delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
               onAddMember: () async {
                 final picked = await _pickMembers(profile, group);
                 if (picked == null || picked.isEmpty) return;
@@ -626,6 +668,9 @@ class _NodeListCard extends StatefulWidget {
     this.onMenuNode,
     this.delays = const <String, int?>{},
     this.currentName,
+    this.onTestAll,
+    this.testing = false,
+    this.testProgress,
   });
 
   final List<ProxyEntry> nodes;
@@ -644,6 +689,13 @@ class _NodeListCard extends StatefulWidget {
 
   /// 当前 DEFAULT 组的出口节点（节点行右侧显示「当前」徽章）。
   final String? currentName;
+
+  /// 「测速全部」入口；null 时不显示。
+  final VoidCallback? onTestAll;
+
+  /// 测速进行中：禁用入口并显示 [testProgress]。
+  final bool testing;
+  final String? testProgress;
 
   @override
   State<_NodeListCard> createState() => _NodeListCardState();
@@ -700,6 +752,15 @@ class _NodeListCardState extends State<_NodeListCard> {
                     style: mono(11.5, color: scheme.onSurfaceVariant),
                   ),
                   const Spacer(),
+                  if (widget.onTestAll != null)
+                    IconButton(
+                      tooltip: widget.testing
+                          ? (widget.testProgress ?? '测速中')
+                          : '测速全部',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: widget.testing ? null : widget.onTestAll,
+                      icon: const Icon(Icons.speed, size: 20),
+                    ),
                   // 添加节点放在区头，空列表时也是唯一可见入口，不用滚到底部按钮。
                   IconButton(
                     tooltip: '添加节点',
@@ -721,10 +782,13 @@ class _NodeListCardState extends State<_NodeListCard> {
               ),
               const SizedBox(height: 4),
               Text(
-                active
-                    ? '松手就从当前组移除'
-                    : (_expanded ? '点行编辑，长按拖到组卡' : '点这里展开；所有节点都在，不管有没有进组'),
-                style: hintStyle(context),
+                widget.testProgress ??
+                    (active
+                        ? '松手就从当前组移除'
+                        : (_expanded ? '点行编辑，长按拖到组卡' : '点这里展开；所有节点都在，不管有没有进组')),
+                style: widget.testProgress == null
+                    ? hintStyle(context)
+                    : mono(11, color: scheme.primary),
               ),
               AnimatedSize(
                 duration: motion.expand,
@@ -837,6 +901,9 @@ class _GroupCard extends StatelessWidget {
     this.selectedName,
     this.onSelectMember,
     this.isAuto = false,
+    this.onTestGroup,
+    this.testing = false,
+    this.delays = const <String, int?>{},
   });
 
   final GroupEntry group;
@@ -864,6 +931,15 @@ class _GroupCard extends StatelessWidget {
 
   /// true = 「自动选择」卡：成员随节点同步、只读、按测速选出口。
   final bool isAuto;
+
+  /// 「测本组」入口；null 时不显示。
+  final VoidCallback? onTestGroup;
+
+  /// 手动测速进行中（禁用入口）。
+  final bool testing;
+
+  /// 成员芯片上的延迟胶囊数据；`containsKey` 区分「未测速」与「超时」。
+  final Map<String, int?> delays;
 
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1002,6 +1078,13 @@ class _GroupCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (onTestGroup != null && group.members.isNotEmpty)
+                      IconButton(
+                        tooltip: testing ? '测速中…' : '测本组',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: testing ? null : onTestGroup,
+                        icon: const Icon(Icons.speed, size: 20),
+                      ),
                     if (!isAuto)
                       IconButton(
                         tooltip: group.computedMembers
@@ -1059,6 +1142,11 @@ class _GroupCard extends StatelessWidget {
                                 onDelete: () => onDeleteNode(node),
                                 onRemove: isAuto ? null : () => onRemove(name),
                                 selected: selectedName == node.name,
+                                delayText: delays.containsKey(name)
+                                    ? (delays[name] == null
+                                          ? '超时'
+                                          : '${delays[name]}ms')
+                                    : null,
                                 onSelect: onSelectMember == null
                                     ? null
                                     : () => onSelectMember!(node.name),

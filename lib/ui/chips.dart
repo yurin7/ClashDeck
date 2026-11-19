@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'widgets/delay_badge.dart';
+
 import '../core/edit/rule_labels.dart';
 import '../core/model/profile.dart';
 import 'motion.dart';
@@ -253,6 +255,7 @@ class NodeChip extends StatelessWidget {
     this.onMenu,
     this.onSelect,
     this.selected = false,
+    this.delayText,
   });
 
   final ProxyEntry node;
@@ -272,6 +275,9 @@ class NodeChip extends StatelessWidget {
 
   /// 该节点是否正是所属组当前选中的那个。
   final bool selected;
+
+  /// 延迟胶囊文本（`123 ms` / `超时`）；null 表示不显示。
+  final String? delayText;
 
   static String typeBadge(String type) => switch (type) {
     'vless' => 'V',
@@ -311,6 +317,10 @@ class NodeChip extends StatelessWidget {
               color: selected ? chipSelectionColor(scheme) : null,
             ),
           ),
+          if (delayText != null) ...[
+            const SizedBox(width: 6),
+            DelayBadge(text: delayText!),
+          ],
           if (onMenu != null)
             _ChipAction(icon: Icons.more_vert, tooltip: '节点操作', onTap: onMenu),
           if (onRemove != null)

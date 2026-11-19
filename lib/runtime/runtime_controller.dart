@@ -13,6 +13,7 @@ import '../data/rule_cache.dart';
 import '../core/yaml/yaml_doc.dart';
 import 'geodata.dart';
 import 'mihomo_api.dart';
+import 'delay_targets.dart';
 import 'runtime_config.dart';
 
 /// 内核 + VPN 的生命周期阶段。
@@ -37,6 +38,7 @@ class RuntimeController extends ChangeNotifier {
     this.pollInterval = const Duration(seconds: 3),
     this.androidOverride,
     this.workDirProvider,
+    this.delayProbe,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleDartCall);
   }
@@ -54,6 +56,9 @@ class RuntimeController extends ChangeNotifier {
   final MethodChannel _channel;
   final bool? androidOverride;
   final Future<String> Function()? workDirProvider;
+
+  /// 测试注入：替代真实 REST 的单节点测速。
+  final Future<int?> Function(String name)? delayProbe;
   final int port;
   final String? secret;
   final Duration pollInterval;
@@ -74,6 +79,12 @@ class RuntimeController extends ChangeNotifier {
 
   /// 规则集缓存缺失（补拉也失败）的个数，供 UI 提示「N 个规则集未生效」。
   int _missingRuleCaches = 0;
+
+  /// 是否有一次测速在跑（自动或手动），UI 用来禁用按钮/显示进度。
+  bool _delayTesting = false;
+
+  /// 本次启动是否已经自动测过一轮。
+  bool _autoDelayed = false;
   int _up = 0;
   int _down = 0;
 
@@ -114,6 +125,8 @@ class RuntimeController extends ChangeNotifier {
 
   /// 本次启动时间；内核未运行时为 null。
   DateTime? get startedAt => _startedAt;
+
+  bool get delayTesting => _delayTesting;
 
   int get up => _up;
   int get down => _down;
@@ -253,6 +266,8 @@ class RuntimeController extends ChangeNotifier {
     _lastError = null;
     _startupReport = null;
     _globalExitApplied = false;
+    _autoDelayed = false;
+    _delayTesting = false;
     _setPhase(RuntimePhase.starting);
     try {
       // 先做语义自检：组成员/规则目标/规则集引用不存在时 mihomo 会直接退出，
@@ -299,6 +314,7 @@ class RuntimeController extends ChangeNotifier {
   Future<void> stop() async {
     if (_phase == RuntimePhase.idle) return;
     _setPhase(RuntimePhase.stopping);
+    _autoDelayed = false;
     try {
       await _channel.invokeMethod<void>('stop');
     } catch (error) {
@@ -423,6 +439,8 @@ class RuntimeController extends ChangeNotifier {
     var next = 0;
     var done = 0;
     final limit = concurrency < 1 ? 1 : concurrency;
+    _delayTesting = total > 0;
+    if (!_disposed) notifyListeners();
     Future<void> worker() async {
       while (true) {
         if (isCancelled?.call() ?? false) return;
@@ -432,7 +450,10 @@ class RuntimeController extends ChangeNotifier {
         int? value;
         final client = api;
         try {
-          value = await client.delay(name, url: url, timeoutMs: timeoutMs);
+          final probe = delayProbe;
+          value = probe != null
+              ? await probe(name)
+              : await client.delay(name, url: url, timeoutMs: timeoutMs);
         } catch (_) {
           value = null;
         } finally {
@@ -446,7 +467,14 @@ class RuntimeController extends ChangeNotifier {
       }
     }
 
-    await Future.wait([for (var i = 0; i < limit && i < total; i++) worker()]);
+    try {
+      await Future.wait([
+        for (var i = 0; i < limit && i < total; i++) worker(),
+      ]);
+    } finally {
+      _delayTesting = false;
+      if (!_disposed) notifyListeners();
+    }
     return results;
   }
 
@@ -550,6 +578,18 @@ class RuntimeController extends ChangeNotifier {
     if (await selectNode('GLOBAL', node)) _globalExitApplied = true;
   }
 
+  /// 内核启动成功后自动测一轮速（每次启动只测一次）。
+  ///
+  /// 失败/超时都只是把 [delays] 写成 null，不影响内核；
+  /// 用户仍可随时手动「测速全部 / 测本组」。
+  Future<void> _autoDelayOnce() async {
+    if (_autoDelayed || _phase != RuntimePhase.running) return;
+    _autoDelayed = true;
+    final names = delayTargetsFrom(configProvider());
+    if (names.isEmpty) return;
+    await testDelays(names);
+  }
+
   void _startPolling() {
     _stopPolling();
     // 先只轮询探活；等到内核真的应答了再订阅流量流，避免对还没起来的
@@ -579,6 +619,7 @@ class RuntimeController extends ChangeNotifier {
       } else if (_phase != RuntimePhase.running) {
         _setPhase(RuntimePhase.running);
         if (_trafficSub == null) _subscribeTraffic();
+        unawaited(_autoDelayOnce());
       } else {
         if (_trafficSub == null) _subscribeTraffic();
         await _refreshRuntimeView();
@@ -638,6 +679,7 @@ class RuntimeController extends ChangeNotifier {
             _setPhase(RuntimePhase.running);
             unawaited(_refreshRuntimeView());
             _startPolling();
+            unawaited(_autoDelayOnce());
             break;
           case 'stopped':
             _stopPolling();

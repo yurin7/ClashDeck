@@ -53,13 +53,25 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
-            "status" -> result.success(
-                mapOf(
-                    "running" to MihomoCore.isRunning,
-                    "pid" to MihomoCore.pid,
-                    "error" to ClashVpnService.lastError,
-                ),
-            )
+            "status" -> {
+                // 快照可能比进程状态新：service 已经 spawn 但引擎还没回报时以快照
+                // 为准展示 running；service 明确报错时把 errorText 一起带回去。
+                val snapshot = RuntimePrefs.kernelState(this)
+                val serviceRunning = snapshot == RuntimePrefs.STATE_RUNNING ||
+                    snapshot == RuntimePrefs.STATE_STARTING
+                result.success(
+                    mapOf(
+                        "running" to (MihomoCore.isRunning || serviceRunning),
+                        "pid" to if (MihomoCore.isRunning) MihomoCore.pid else RuntimePrefs.kernelPid(this),
+                        "error" to (ClashVpnService.lastError ?: RuntimePrefs.kernelError(this)),
+                        "kernelState" to snapshot,
+                        "serviceRunning" to serviceRunning,
+                        "errorText" to RuntimePrefs.kernelError(this),
+                        "profileName" to (RuntimePrefs.loadStart(this)?.get("profileName") as? String ?: ""),
+                        "globalExit" to (RuntimePrefs.loadStart(this)?.get("globalExit") as? String ?: ""),
+                    ),
+                )
+            }
 
             "logs" -> {
                 val limit = (arguments as? Int) ?: 200
@@ -183,6 +195,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startServiceWith(arguments: Map<*, *>) {
+        // 先把参数落到快照：磁贴 / 小组件在引擎不在时要用它冷启动内核。
+        RuntimePrefs.saveStart(this, arguments)
         val workDir = arguments["workDir"] as? String ?: filesDir.absolutePath
         val port = (arguments["port"] as? Number)?.toInt() ?: 9090
         val secret = arguments["secret"] as? String
@@ -203,6 +217,8 @@ class MainActivity : FlutterActivity() {
             .putExtra(ClashVpnService.EXTRA_MTU, mtu)
             .putExtra(ClashVpnService.EXTRA_TUN_ADDRESS, tunAddress)
             .putExtra(ClashVpnService.EXTRA_IPV6, arguments["ipv6"] as? Boolean ?: false)
+            .putExtra(ClashVpnService.EXTRA_PROFILE_NAME, arguments["profileName"] as? String)
+            .putExtra(ClashVpnService.EXTRA_GLOBAL_EXIT, arguments["globalExit"] as? String)
             .putStringArrayListExtra(ClashVpnService.EXTRA_ROUTE_APPS, ArrayList(routeApps))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

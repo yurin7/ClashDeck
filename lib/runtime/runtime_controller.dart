@@ -15,6 +15,7 @@ import 'geodata.dart';
 import 'mihomo_api.dart';
 import 'delay_targets.dart';
 import 'runtime_config.dart';
+import 'runtime_template.dart';
 
 /// 内核 + VPN 的生命周期阶段。
 enum RuntimePhase { idle, starting, running, stopping, error }
@@ -39,6 +40,7 @@ class RuntimeController extends ChangeNotifier {
     this.androidOverride,
     this.workDirProvider,
     this.delayProbe,
+    this.displayProvider,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleDartCall);
   }
@@ -59,6 +61,10 @@ class RuntimeController extends ChangeNotifier {
 
   /// 测试注入：替代真实 REST 的单节点测速。
   final Future<int?> Function(String name)? delayProbe;
+
+  /// 供 Kotlin 快照用的展示信息（当前配置名 / 全局出口）。
+  /// 磁贴、通知、小组件在 Flutter 不在时只能读这份快照。
+  final ({String profile, String exit}) Function()? displayProvider;
   final int port;
   final String? secret;
   final Duration pollInterval;
@@ -289,6 +295,7 @@ class RuntimeController extends ChangeNotifier {
       // 补不上也不阻塞启动，只把个数报给 UI。
       await _backfillRuleCaches();
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
+      final display = displayProvider?.call();
       final rawMtu = config.plainAt(['tun', 'mtu']);
       await _channel.invokeMethod<Map<Object?, Object?>>('start', {
         'workDir': _workDir,
@@ -301,6 +308,8 @@ class RuntimeController extends ChangeNotifier {
         // 只有 YAML 里 ipv6: true 才让 VpnService 加 v6 地址/路由，否则 v6
         // 流量会被吸进 tun 后丢弃，部分网络下表现为「连不上」。
         'ipv6': config.plainAt(['ipv6']) == true,
+        'profileName': display?.profile ?? '',
+        'globalExit': display?.exit ?? '',
         ...settings.toStartArgs(),
       });
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。
@@ -330,7 +339,7 @@ class RuntimeController extends ChangeNotifier {
 
   /// 从 Android 侧同步一次真实状态（进入页面时用）。
   Future<void> refreshStatus() async {
-    if (!supported) return;
+    if (!(androidOverride ?? supported)) return;
     try {
       final status = await _channel.invokeMethod<Map<Object?, Object?>>(
         'status',
@@ -339,9 +348,24 @@ class RuntimeController extends ChangeNotifier {
         await loadLogs();
         return;
       }
+      await applyStatus(status);
+    } catch (_) {
+      // 通道异常时保持现状。
+    }
+  }
+
+  /// 把 Android 侧 `status` 的快照对齐到控制器状态。
+  ///
+  /// 独立出来便于单测：不依赖 MethodChannel 的 mock 时序。
+  @visibleForTesting
+  Future<void> applyStatus(Map<Object?, Object?> status) async {
+    try {
       _pid = (status['pid'] as num?)?.toInt();
-      final error = status['error'] as String?;
-      _serviceRunning = status['running'] == true;
+      final error =
+          (status['error'] as String?) ?? (status['errorText'] as String?);
+      final kernelState = status['kernelState'] as String?;
+      _serviceRunning =
+          status['serviceRunning'] == true || status['running'] == true;
       // 以内核进程为准：即便服务的静态标记没更新，只要有 pid 就说明内核活着。
       final running =
           status['running'] == true || ((_pid ?? 0) > 0 && error == null);
@@ -352,7 +376,17 @@ class RuntimeController extends ChangeNotifier {
       } else if (error != null) {
         _lastError = error;
         _phase = RuntimePhase.error;
-      } else if (_phase != RuntimePhase.starting) {
+      } else if (kernelState == 'running' && _phase != RuntimePhase.running) {
+        // App 冷启动后被打开：磁贴/小组件可能已经拉起了内核，这里对齐而不是
+        // 假设「刚启动 = 未运行」。
+        _setPhase(RuntimePhase.running);
+        unawaited(_refreshRuntimeView());
+        _startPolling();
+      } else if (kernelState == 'starting') {
+        _setPhase(RuntimePhase.starting);
+      } else if (kernelState == 'stopping') {
+        _setPhase(RuntimePhase.stopping);
+      } else if (_phase != RuntimePhase.starting && kernelState != 'running') {
         _phase = RuntimePhase.idle;
       }
       await loadLogs();
@@ -512,6 +546,20 @@ class RuntimeController extends ChangeNotifier {
 
   // -------------------------------------------------------------------- 内部
 
+  /// 原子写 runtime.yaml.tpl（临时文件 + rename），与真实配置同目录。
+  Future<void> _persistRuntimeTemplate(String yaml) async {
+    final dir = _workDir;
+    if (dir == null) return;
+    try {
+      final target = File('$dir/runtime.yaml.tpl');
+      final tmp = File('${target.path}.tmp');
+      await tmp.writeAsString(runtimeTemplateFrom(yaml), flush: true);
+      await tmp.rename(target.path);
+    } catch (_) {
+      // 私有目录写失败极少见；下次启动会再试。
+    }
+  }
+
   String _buildRuntimeYaml(int fd) {
     return RuntimeConfig.buildRuntimeYaml(
       configProvider(),
@@ -664,7 +712,11 @@ class RuntimeController extends ChangeNotifier {
         final args = (call.arguments as Map<Object?, Object?>?) ?? const {};
         final fd = (args['fd'] as num?)?.toInt() ?? 0;
         _lastFd = fd;
-        return _buildRuntimeYaml(fd);
+        final yaml = _buildRuntimeYaml(fd);
+        // 顺带落一份模板：Flutter 不在时（磁贴/小组件冷启动）Kotlin 用它
+        // 替换 file-descriptor 后 spawn。写失败不影响本次启动。
+        await _persistRuntimeTemplate(yaml);
+        return yaml;
       case 'onRuntimeState':
         final args = (call.arguments as Map<Object?, Object?>?) ?? const {};
         final state = args['state'] as String? ?? '';

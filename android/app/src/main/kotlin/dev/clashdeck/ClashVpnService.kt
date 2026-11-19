@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.system.Os
 import android.system.OsConstants
 import java.io.File
@@ -45,6 +46,13 @@ class ClashVpnService : VpnService() {
         /// Dart 侧按 `dns.fake-ip-range` 算出的 tun 地址（`ip/prefix`），要和内核一致。
         const val EXTRA_TUN_ADDRESS = "tunAddress"
 
+        /** 从磁贴 / 小组件 / 通知发起的启停：停止后直接结束进程。 */
+        const val EXTRA_FROM_ACTION = "fromAction"
+
+        /** 启动时顺便带上当前配置名与全局出口，供通知 / 磁贴展示。 */
+        const val EXTRA_PROFILE_NAME = "profileName"
+        const val EXTRA_GLOBAL_EXIT = "globalExit"
+
         private const val CHANNEL_ID = "clashdeck-core"
         private const val NOTIFICATION_ID = 0x4344
 
@@ -73,25 +81,65 @@ class ClashVpnService : VpnService() {
 
     private var bootThread: Thread? = null
     private var tunFd: Int = -1
+    private var fromAction: Boolean = false
+    private var profileName: String = ""
+    private var globalExit: String = ""
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                fromAction = intent.getBooleanExtra(EXTRA_FROM_ACTION, false)
                 shutdown("用户断开")
                 return START_NOT_STICKY
             }
 
             ACTION_START -> {
                 promoteToForeground()
-                val workDir = intent.getStringExtra(EXTRA_WORK_DIR) ?: filesDir.absolutePath
-                val port = intent.getIntExtra(EXTRA_PORT, 9090)
-                val secret = intent.getStringExtra(EXTRA_SECRET)
-                val proxyMode = intent.getStringExtra(EXTRA_PROXY_MODE) ?: "tun"
-                val routeMode = intent.getStringExtra(EXTRA_ROUTE_MODE) ?: "all"
-                val routeApps = intent.getStringArrayListExtra(EXTRA_ROUTE_APPS) ?: arrayListOf()
-                val mtu = intent.getIntExtra(EXTRA_MTU, TUN_MTU)
+                // 从磁贴 / 小组件 / 通知进来时 intent 里没有参数，读 App 内最后一次
+                // 启动时的快照；完全没有快照说明从没在 App 里启动过。
+                val stored = if (intent.getStringExtra(EXTRA_WORK_DIR) == null) {
+                    RuntimePrefs.loadStart(this)
+                } else {
+                    null
+                }
+                val workDir = intent.getStringExtra(EXTRA_WORK_DIR)
+                    ?: stored?.get("workDir") as? String
+                    ?: filesDir.absolutePath
+                val port = intent.getIntExtra(EXTRA_PORT, (stored?.get("port") as? Number)?.toInt() ?: 9090)
+                val secret = intent.getStringExtra(EXTRA_SECRET) ?: stored?.get("secret") as? String
+                val proxyMode = intent.getStringExtra(EXTRA_PROXY_MODE)
+                    ?: stored?.get("proxyMode") as? String ?: "tun"
+                val routeMode = intent.getStringExtra(EXTRA_ROUTE_MODE)
+                    ?: stored?.get("routeMode") as? String ?: "all"
+                val routeApps = intent.getStringArrayListExtra(EXTRA_ROUTE_APPS)
+                    ?: ((stored?.get("routeApps") as? List<*>)?.mapNotNull { it as? String }
+                        ?: emptyList())
+                val mtu = intent.getIntExtra(EXTRA_MTU, (stored?.get("mtu") as? Number)?.toInt() ?: TUN_MTU)
                 val tunAddress = intent.getStringExtra(EXTRA_TUN_ADDRESS)
-                val ipv6 = intent.getBooleanExtra(EXTRA_IPV6, false)
+                    ?: stored?.get("tunAddress") as? String
+                val ipv6 = intent.getBooleanExtra(EXTRA_IPV6, stored?.get("ipv6") as? Boolean ?: false)
+                fromAction = intent.getBooleanExtra(EXTRA_FROM_ACTION, false)
+                profileName = intent.getStringExtra(EXTRA_PROFILE_NAME)
+                    ?: stored?.get("profileName") as? String ?: ""
+                globalExit = intent.getStringExtra(EXTRA_GLOBAL_EXIT)
+                    ?: stored?.get("globalExit") as? String ?: ""
+                RuntimePrefs.saveStart(
+                    this,
+                    mapOf(
+                        "workDir" to workDir,
+                        "port" to port,
+                        "secret" to secret,
+                        "proxyMode" to proxyMode,
+                        "routeMode" to routeMode,
+                        "routeApps" to routeApps,
+                        "mtu" to mtu,
+                        "tunAddress" to tunAddress,
+                        "ipv6" to ipv6,
+                        "profileName" to profileName,
+                        "globalExit" to globalExit,
+                    ),
+                )
+                RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STARTING)
                 bootThread?.interrupt()
                 bootThread = Thread(
                     { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress, ipv6) },
@@ -116,6 +164,9 @@ class ClashVpnService : VpnService() {
         MihomoCore.stop()
         closeTun()
         running = false
+        if (!RuntimePrefs.isRunning(this) && RuntimePrefs.kernelState(this) != RuntimePrefs.STATE_ERROR) {
+            RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STOPPED)
+        }
         super.onDestroy()
     }
 
@@ -166,18 +217,23 @@ class ClashVpnService : VpnService() {
     private fun startCore(workDir: File, yaml: String?, tunFd: Int) {
         Thread({
             try {
-                if (yaml.isNullOrBlank()) {
-                    fail("运行配置生成失败")
+                // Flutter engine 不在（从磁贴 / 小组件冷启动）时拿不到 Dart 现算的
+                // 配置：用 App 内启动时留下的 tpl + 本次真实 fd 回填。
+                val resolved = yaml?.takeIf { it.isNotBlank() }
+                    ?: RuntimeTemplate.materialize(workDir, tunFd)
+                if (resolved == null) {
+                    fail("缺少运行配置模板，请先在 App 内启动一次内核")
                     return@Thread
                 }
                 val configFile = File(workDir, "runtime.yaml")
-                configFile.writeText(yaml)
+                configFile.writeText(resolved)
                 val binary = File(applicationInfo.nativeLibraryDir, "libmihomo.so")
                 val error = MihomoCore.start(binary, workDir, configFile, tunFd)
                 if (error != null) {
                     fail(error)
                 } else {
                     running = true
+                    RuntimePrefs.setKernel(this, RuntimePrefs.STATE_RUNNING, pid = MihomoCore.pid)
                     RuntimeBridge.notifyState("running", pid = MihomoCore.pid)
                 }
             } catch (t: Throwable) {
@@ -284,6 +340,7 @@ class ClashVpnService : VpnService() {
     private fun fail(message: String) {
         lastError = message
         running = false
+        RuntimePrefs.setKernel(this, RuntimePrefs.STATE_ERROR, error = message)
         MihomoCore.log("启动失败：$message")
         RuntimeBridge.notifyState("error", message = message)
         // 失败后的收尾不再发 "stopped"，否则会把刚报的错误状态冲掉。
@@ -296,8 +353,16 @@ class ClashVpnService : VpnService() {
         running = false
         if (reason != null) MihomoCore.log("内核停止：$reason")
         if (notify) RuntimeBridge.notifyState("stopped", message = reason)
+        if (lastError == null) {
+            RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STOPPED)
+        }
         stopForegroundCompat()
         stopSelf()
+        if (fromAction) {
+            // 磁贴 / 小组件 / 通知发起的停止：通知消失后直接结束进程。
+            fromAction = false
+            Process.killProcess(Process.myPid())
+        }
     }
 
     private fun closeTun() {

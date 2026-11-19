@@ -47,6 +47,14 @@
                 android:value="VPN tunnel core (mihomo)" />
         </service>
 
+        <!-- 无界面启停入口：桌面小组件 / 快捷设置磁贴 / 常驻通知共用。 -->
+        <activity
+            android:name=".ClashActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/ClashActionTheme" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

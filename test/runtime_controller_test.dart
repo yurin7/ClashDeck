@@ -125,5 +125,42 @@ void main() {
     test('refreshStatus 在通道不可用时静默失败', () async {
       await expectLater(controller.refreshStatus(), completes);
     });
+
+    test('applyStatus 按 Kotlin 快照对齐成 running', () async {
+      final local = RuntimeController(
+        configProvider: () => YamlDoc.parse(_sample),
+        channel: const MethodChannel(channelName),
+        secret: 'tok',
+        pollInterval: const Duration(hours: 1),
+        androidOverride: true,
+      );
+      addTearDown(local.dispose);
+      await local.applyStatus(<Object?, Object?>{
+        'running': true,
+        'kernelState': 'running',
+        'serviceRunning': true,
+        'pid': 4321,
+      });
+      expect(local.phase, RuntimePhase.running);
+      expect(local.pid, 4321);
+    });
+
+    test('applyStatus 把快照错误带到 lastError', () async {
+      final local = RuntimeController(
+        configProvider: () => YamlDoc.parse(_sample),
+        channel: const MethodChannel(channelName),
+        secret: 'tok',
+        pollInterval: const Duration(hours: 1),
+        androidOverride: true,
+      );
+      addTearDown(local.dispose);
+      await local.applyStatus(<Object?, Object?>{
+        'running': false,
+        'kernelState': 'error',
+        'errorText': '内核退出（code=1）',
+      });
+      expect(local.phase, RuntimePhase.error);
+      expect(local.lastError, contains('code=1'));
+    });
   });
 }

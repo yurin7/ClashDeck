@@ -87,6 +87,8 @@ class _AppShellState extends State<AppShell>
     _runtime = RuntimeController(
       configProvider: _currentDoc,
       settingsProvider: () => _settings?.app ?? AppSettings.defaults,
+      displayProvider: () =>
+          (profile: _activeFileName ?? '', exit: _settings?.globalNode ?? ''),
     );
     _pager = PageController()..addListener(_onPagerScroll);
     _pulseReveal = AnimationController(

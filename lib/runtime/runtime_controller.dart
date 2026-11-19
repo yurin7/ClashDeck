@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/edit/config_ops.dart';
 import '../core/edit/import_rules.dart';
 import '../core/model/app_settings.dart';
 import '../core/net/fetch_text.dart';
@@ -16,6 +17,7 @@ import 'mihomo_api.dart';
 import 'delay_targets.dart';
 import 'runtime_config.dart';
 import 'runtime_template.dart';
+import 'speed_test.dart';
 import 'tcp_delay_probe.dart';
 
 /// 内核 + VPN 的生命周期阶段。
@@ -275,7 +277,7 @@ class RuntimeController extends ChangeNotifier {
 
   /// 启动内核。返回 false 表示被启动前校验拦下（issues 在 [startupReport]），
   /// 没有真正 spawn；[force] 用于用户在弹窗里确认「仍然启动」。
-  Future<bool> start({bool force = false}) async {
+  Future<bool> start({bool force = false, String? proxyModeOverride}) async {
     if (!(androidOverride ?? supported)) {
       _setError('运行内核只支持 Android 设备');
       return false;
@@ -311,6 +313,10 @@ class RuntimeController extends ChangeNotifier {
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
       final display = displayProvider?.call();
       final rawMtu = config.plainAt(['tun', 'mtu']);
+      final startArgs = <String, Object?>{
+        ...settings.toStartArgs(),
+        'proxyMode': ?proxyModeOverride,
+      };
       await _channel.invokeMethod<Map<Object?, Object?>>('start', {
         'workDir': _workDir,
         'port': port,
@@ -324,7 +330,7 @@ class RuntimeController extends ChangeNotifier {
         'ipv6': config.plainAt(['ipv6']) == true,
         'profileName': display?.profile ?? '',
         'globalExit': display?.exit ?? '',
-        ...settings.toStartArgs(),
+        ...startArgs,
       });
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。
       return true;
@@ -493,6 +499,131 @@ class RuntimeController extends ChangeNotifier {
     } finally {
       client.close();
     }
+  }
+
+  /// 本地 HTTP 代理端口（运行配置里的 `mixed-port`，缺省 7890）。
+  int get proxyPort => RuntimeConfig.proxyPortFor(configProvider());
+
+  /// 仅端口模式临时启动：不申请 VPN，也不需要授权。
+  ///
+  /// 只用于「内核没跑时的下载测速」；结束后由调用方 [stop] 关闭。
+  Future<bool> startPortOnly() async {
+    if (_phase == RuntimePhase.running || _phase == RuntimePhase.starting) {
+      return true;
+    }
+    return start(proxyModeOverride: 'port');
+  }
+
+  /// 等内核进入 running；超时或 error 返回 false。
+  Future<bool> waitUntilRunning({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (_disposed) return false;
+      if (_phase == RuntimePhase.running) return true;
+      if (_phase == RuntimePhase.error) return false;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    return _phase == RuntimePhase.running;
+  }
+
+  /// 关掉本次临时启动的内核，并等它落地（最多 5s）。
+  Future<void> _stopTemporaryKernel() async {
+    if (_phase == RuntimePhase.idle) return;
+    await stop();
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (DateTime.now().isBefore(deadline)) {
+      if (_disposed) return;
+      if (_phase == RuntimePhase.idle || _phase == RuntimePhase.error) return;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  /// 挑测速用的 selector：DEFAULT 优先，其次第一个包含该节点的 selector。
+  ({String group, String? current, String? node})? _pickSelector(
+    YamlDoc doc,
+    String node,
+  ) {
+    final raw = doc.plainAt(['proxy-groups']);
+    if (raw is! List) return null;
+    ({String group, String? current, String? node})? first;
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final name = entry['name'];
+      final type = entry['type'];
+      final members = entry['members'];
+      if (name is! String || type != 'selector' || members is! List) continue;
+      if (!members.contains(node)) continue;
+      final candidate = (group: name, current: null, node: node);
+      if (name == kDefaultGroupName) return candidate;
+      first ??= candidate;
+    }
+    return first;
+  }
+
+  /// 读 selector 当前选中的节点（内核 API）；失败返回 null。
+  Future<String?> _currentSelection(String group) async {
+    final client = api;
+    try {
+      final proxies = await client.proxyMap();
+      final value = proxies[group]?['now'];
+      return value is String && value.isNotEmpty ? value : null;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  /// 单节点下载测速：内核没跑时临时仅端口启动，测完恢复 selector 并关内核。
+  ///
+  /// 只影响下载结果；不动 [testDelays] 的延迟缓存。
+  Future<SpeedTestResult> runSpeedTest(
+    String node, {
+    SpeedSourceChoice source = SpeedSourceChoice.defaultChoice,
+    SpeedDownloader? downloader,
+    void Function(SpeedTestProgress progress)? onProgress,
+    void Function(SpeedTestStage stage)? onStage,
+    SpeedTestCancelToken? cancelToken,
+  }) async {
+    final url = source.url;
+    if (url == null) {
+      return SpeedTestResult.failed('自定义地址不合法');
+    }
+    String? savedGroup;
+    String? savedNode;
+    final session = SpeedTestSession(
+      downloader: downloader ?? SpeedDownloader(),
+      kernelReady: () =>
+          _phase == RuntimePhase.running || _phase == RuntimePhase.starting,
+      startTemporary: () async {
+        final started = await startPortOnly();
+        return started && await waitUntilRunning();
+      },
+      stopTemporary: _stopTemporaryKernel,
+      proxyPort: () async => _phase == RuntimePhase.running ? proxyPort : null,
+      prepareProxy: (name) async {
+        final picked = _pickSelector(configProvider(), name);
+        if (picked == null) return false;
+        savedGroup = picked.group;
+        savedNode = await _currentSelection(picked.group);
+        return selectNode(picked.group, name);
+      },
+      restoreProxy: () async {
+        final group = savedGroup;
+        final current = savedNode;
+        if (group == null || current == null || current == node) return;
+        await selectNode(group, current);
+      },
+    );
+    return session.run(
+      node,
+      url: url,
+      onProgress: onProgress,
+      onStage: onStage,
+      cancelToken: cancelToken,
+    );
   }
 
   /// 并发测一批节点的延迟，返回 节点名 → 毫秒（超时/失败为 null）。

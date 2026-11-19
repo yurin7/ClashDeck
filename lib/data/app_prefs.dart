@@ -127,6 +127,21 @@ class AppPrefs {
     }
   }
 
+  // ------------------------------------------------------------ 下载测速线路
+
+  /// 测速线路名（`fast` / `google` / `github` / `custom`），默认 fast。
+  String get speedTestSourceName =>
+      _data['speedTestSource'] as String? ?? 'fast';
+
+  /// 自定义测速地址（仅线路为 custom 时有意义）。
+  String get speedTestCustomUrl => _data['speedTestCustomUrl'] as String? ?? '';
+
+  Future<void> setSpeedTestSourceName(String value) =>
+      _put('speedTestSource', value);
+
+  Future<void> setSpeedTestCustomUrl(String value) =>
+      _put('speedTestCustomUrl', value);
+
   Future<void> _put(String key, Object? value) async {
     if (value == null) {
       _data.remove(key);

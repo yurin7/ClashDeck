@@ -36,6 +36,18 @@ class RuntimeConfig {
 
   static const String tunAddress6 = 'fdfe:dcba:9876::1/126';
 
+  /// 本地 HTTP 代理端口：运行配置里的 `mixed-port`，缺省 7890。
+  ///
+  /// 下载测速要经这个端口把流量交给内核，所以必须和运行 YAML 用的是同一个值。
+  static int proxyPortFor(YamlDoc doc) {
+    final raw = doc.plainAt(['mixed-port']);
+    if (raw is num) {
+      final port = raw.toInt();
+      if (port > 0 && port <= 65535) return port;
+    }
+    return 7890;
+  }
+
   /// 默认用明文 UDP DNS：DoH 在内核里走 Go 自己的 TLS 栈，某些 ROM / 模拟器
   /// 上会匹配不到系统根证书（实测 `x509: certificate signed by unknown
   /// authority`），一旦 DNS 全废整条链路就废；UDP 53 由 mihomo 自己的

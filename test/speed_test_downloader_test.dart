@@ -157,7 +157,7 @@ void main() {
     );
     final result = await downloader.download(Uri.parse('https://x.test/'));
     expect(result.ok, isFalse);
-    expect(result.failure, '连接超时');
+    expect(result.failure, '测速失败：下载超时');
   });
 
   test('自定义地址校验', () {

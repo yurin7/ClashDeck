@@ -171,8 +171,8 @@
 | 导入（规则 / 规则集 / 订阅） | `showEditDialog` 或多行粘贴面板 | 目标统一 DEFAULT |
 | 导入配置（概览） | `_ImportDialog`（名称 + 多行文本域） | 底部操作行最左「从文件导入」按钮打开系统选择器，选中后回填名称与文本；文件只收 .yaml/.yml/.txt、≤2MB、UTF-8，文件名做配置名（重名自动 `-2`） |
 | 订阅地址 | `showSubscriptionDialog` | 只收地址；取消 / 保存；保存后再问「是否立即同步此订阅？」 |
-| Pulse 抽屉 | `PulseDrawer`（`lib/ui/pulse_drawer.dart`）+ 右缘把手（`lib/ui/widgets/pulse_edge_handle.dart`） | 面板宽 = 屏宽 × 0.8 贴右，左侧 20% 露出压暗概览（黑 45%、概览 scale 0.98）；**只有概览页右缘 28dp 手势带**（带内 24dp 半透明把手 + 左箭头）起手左滑才跟手拉抽屉，屏幕中部左右滑仍由 PageView 翻页；`progress > 0.35 || velocity < -300` 打开（240ms easeOutCubic），否则回弹；右拖 `progress < 0.65 || velocity > 300`、点左侧暗区、点右上 ×、系统返回均可收起；打开时隐藏底部悬浮岛，概览滚动位置保持 |
-| 节点测速（Pulse） | 测速卡（`lib/ui/pulse_page.dart`） | 只列节点（搜索 + 单选胶囊；胶囊右侧显示最近延迟，无数据不显示；点胶囊只选中、不触发测速）；「测速线路」Fast/Google/GitHub/自定义，记忆到 prefs，切线路或切节点清空结果；「开始测速」走节点真实下载（25MB / 10s 截断，显示 `x MB/s · y MB / z s`）；内核未运行先临时仅端口启动（不申请 VPN）并给横幅/提示，结束恢复原选择并关闭临时内核；结果单行 +「上次测速 MM-DD HH:mm」，失败给原因 +「重测」，测速中可取消；打开 Pulse 时若没有任何延迟数据自动补测一轮延迟（每会话一次），延迟胶囊带 `≈` 表示 TCP 近似值 |
+| Pulse 抽屉 | `PulseDrawer`（`lib/ui/pulse_drawer.dart`）+ 右缘把手（`lib/ui/widgets/pulse_edge_handle.dart`） | 面板宽 = 屏宽 × 0.8 贴右，左侧 20% 露出压暗概览（黑 45%、概览 scale 0.98）；**只有概览页右缘 28dp 手势带**（带内 24dp 半透明把手 + 左箭头）起手左滑才跟手拉抽屉，屏幕中部左右滑仍由 PageView 翻页；`progress > 0.35 || velocity < -300` 打开（240ms easeOutCubic），否则回弹；右拖 `progress < 0.65 || velocity > 300`、点左侧暗区、点右上 ×、系统返回均可收起；打开后遮罩盖住底部悬浮岛（岛不单独消失），概览滚动位置保持 |
+| 节点测速（Pulse） | 测速卡（`lib/ui/pulse_page.dart`） | 只列节点（搜索 + 单选胶囊；胶囊右侧显示最近延迟，无数据不显示；点胶囊只选中、不触发测速）；「测速线路」Fast/Google/GitHub/自定义，记忆到 prefs，切线路或切节点清空结果；「开始测速」用独立临时内核（最小配置：只含该节点 + `speed-probe` 组 + `MATCH`、关 DNS、日志静默；不依赖节点在策略组）跑真实下载（25MB / 10s 截断，显示 `x MB/s · y MB / z s`），结束恢复原配置与内核状态，不申请 VPN、不改用户配置；结果单行 +「上次测速 MM-DD HH:mm」，失败给中文原因（TLS 握手失败 / 无法连接到代理端口 / 下载超时）+「重测」，测速中可取消；打开 Pulse 时若没有任何延迟数据自动补测一轮延迟（每会话一次），延迟胶囊带 `≈` 表示 TCP 近似值 |
 | 运行状态（Pulse） | 运行状态卡 | 内核状态、运行时长、连接数（仅 Pulse 可见时 3s 轮询）、当前配置、GLOBAL 出口 |
 | 检查更新（设置页·其它） | `_ActionRow` + `showUpdateDialog` | 版本/发布日期/说明最多 6 行高滚动；「去下载」只跳浏览器 Release 页，不做应用内下载；自动检查默认关、24h 节流、失败静默 |
 | 多行文本（粘贴链接 / YAML） | `AppTextArea`（或 `showTextInputDialog(area: true)`） | 宽度撑满、高度 0.8×宽、框内滚动 |

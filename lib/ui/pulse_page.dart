@@ -312,7 +312,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               !_tempStartNotified &&
               !_kernelRunning) {
             _tempStartNotified = true;
-            showToast(context, '内核未运行，已临时用仅端口模式启动测速');
+            showToast(context, '测速会临时用独立内核，不影响当前配置');
           }
           setState(() => _speedStage = stage);
         },
@@ -325,7 +325,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
         });
       }
     } catch (error) {
-      if (mounted) showToast(context, '测速失败：$error');
+      if (mounted) showToast(context, describeSpeedTestError(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -539,7 +539,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
             ],
           ),
           if (stage == SpeedTestStage.starting)
-            const _SpeedBanner(text: '内核未运行，已临时用仅端口模式启动测速（不会申请 VPN）')
+            const _SpeedBanner(text: '测速会临时用独立内核，不影响当前配置')
           else if (stage == SpeedTestStage.waiting)
             const _SpeedBanner(text: '等待内核就绪…')
           else if (stage == SpeedTestStage.restoring)
@@ -606,7 +606,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
                 children: [
                   Expanded(
                     child: Text(switch (stage) {
-                      SpeedTestStage.starting => '正在临时启动内核…',
+                      SpeedTestStage.starting => '正在启动测速内核…',
                       SpeedTestStage.waiting => '等待内核就绪…',
                       SpeedTestStage.downloading => _progressText(progress),
                       SpeedTestStage.restoring => '正在恢复连接…',

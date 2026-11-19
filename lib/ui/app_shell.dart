@@ -444,6 +444,27 @@ class _AppShellState extends State<AppShell>
   /// 不在系统边缘也能拿到事件，用它跟手拉出左侧遮罩。
   bool _onPagerScrollNotification(ScrollNotification notification) {
     if (_index != 0) return false;
+    // 遮罩已打开或在滑出过程中：吞掉所有滚动，向左拖只回弹遮罩进度，
+    // 绝不能让后面的 PageView 借机翻页。
+    if (pulseShouldBlockPager(open: _pulseOpen, reveal: _pulseReveal.value)) {
+      if (notification is OverscrollNotification &&
+          notification.depth == 0 &&
+          _pulseOverscrollActive) {
+        final delta = notification.dragDetails?.delta.dx ?? 0;
+        if (delta < 0) {
+          _pulseOverscrollDx = (_pulseOverscrollDx + delta).clamp(
+            0.0,
+            double.infinity,
+          );
+          final width = MediaQuery.sizeOf(context).width;
+          _pulseReveal.value = pulseDrawerProgress(
+            dragDx: _pulseOverscrollDx,
+            panelWidth: pulseDrawerPanelWidth(width),
+          );
+        }
+      }
+      return true;
+    }
     if (notification is ScrollStartNotification && notification.depth == 0) {
       _pulseOverscrollDx = 0;
       _pulseOverscrollActive = false;
@@ -744,7 +765,8 @@ class _AppShellState extends State<AppShell>
                 ),
                 child: PageView(
                   controller: _pager,
-                  physics: const PageScrollPhysics(),
+                  // 遮罩打开期间禁止翻页：左滑只能回弹遮罩，不能切到下一页。
+                  physics: pulsePagerPhysics(open: _pulseOpen),
                   onPageChanged: (i) => setState(() => _index = i),
                   children: [
                     _KeepAlivePage(
@@ -802,14 +824,11 @@ class _AppShellState extends State<AppShell>
               left: Insets.xl,
               right: Insets.xl,
               bottom: Insets.lg,
-              child: Visibility(
-                visible: !_pulseOpen,
-                child: _FloatingIsland(
-                  height: _islandHeight,
-                  index: _index,
-                  page: _page,
-                  onChanged: (i) => unawaited(_goTo(i)),
-                ),
+              child: _FloatingIsland(
+                height: _islandHeight,
+                index: _index,
+                page: _page,
+                onChanged: (i) => unawaited(_goTo(i)),
               ),
             ),
             // 左侧 80% 遮罩层：跟手 progress 由拖拽/回弹动画驱动。

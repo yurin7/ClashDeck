@@ -160,6 +160,15 @@ const Duration kSpeedTestMaxDuration = Duration(seconds: 10);
 /// 连接超时 4 秒。
 const Duration kSpeedTestConnectTimeout = Duration(seconds: 4);
 
+/// 把测速异常转成给用户看的中文提示（已带「测速失败」前缀的原样返回）。
+String describeSpeedTestError(Object error) {
+  var text = error.toString();
+  if (text.startsWith('Exception: ')) {
+    text = text.substring('Exception: '.length);
+  }
+  return text.startsWith('测速失败') ? text : '测速失败：$text';
+}
+
 /// 会话失败原因（直接展示）。
 class SpeedTestFailure implements Exception {
   const SpeedTestFailure(this.message);
@@ -235,14 +244,13 @@ class SpeedDownloader {
         elapsed: elapsed,
       );
     } on TimeoutException {
-      return SpeedTestResult.failed('连接超时');
-    } on SocketException catch (error) {
-      final reason = (error.osError?.message ?? error.message).trim();
-      return SpeedTestResult.failed(
-        reason.isEmpty ? '代理连接失败' : '代理连接失败：$reason',
-      );
+      return SpeedTestResult.failed('测速失败：下载超时');
+    } on HandshakeException {
+      return SpeedTestResult.failed('测速失败：节点 TLS 握手失败（节点可能不可用）');
+    } on SocketException {
+      return SpeedTestResult.failed('测速失败：无法连接到代理端口');
     } on HttpException catch (error) {
-      return SpeedTestResult.failed('下载中断：${error.message}');
+      return SpeedTestResult.failed('测速失败：下载中断（${error.message}）');
     } catch (error) {
       return SpeedTestResult.failed('测速失败：$error');
     } finally {

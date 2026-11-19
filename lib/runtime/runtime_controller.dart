@@ -17,6 +17,7 @@ import 'delay_targets.dart';
 import 'runtime_config.dart';
 import 'runtime_template.dart';
 import 'speed_test.dart';
+import 'speed_test_config.dart';
 import 'tcp_delay_probe.dart';
 
 /// 内核 + VPN 的生命周期阶段。
@@ -75,6 +76,15 @@ class RuntimeController extends ChangeNotifier {
   final String? secret;
   final Duration pollInterval;
 
+  /// 测速期间临时内核使用的最小配置；为 null 时用当前配置。
+  YamlDoc? _speedTestConfig;
+
+  /// 临时测速内核期间不覆盖用户配置的冷启动快照。
+  bool _tempConfigActive = false;
+
+  /// 构建/校验内核配置时的来源：临时测速配置优先。
+  YamlDoc _activeConfig() => _speedTestConfig ?? configProvider();
+
   RuntimePhase _phase = RuntimePhase.idle;
   String? _lastError;
   ValidationReport? _startupReport;
@@ -119,6 +129,13 @@ class RuntimeController extends ChangeNotifier {
   String? _restartReason;
 
   RuntimePhase get phase => _phase;
+
+  /// 测试专用：驱动内部状态机（真实启动依赖 Android 通道）。
+  @visibleForTesting
+  void debugSetPhase(RuntimePhase phase) {
+    _phase = phase;
+  }
+
   String? get lastError => _lastError;
 
   /// 启动前校验未通过时的 issue 列表（供「仍然启动」弹窗展示）。
@@ -293,7 +310,7 @@ class RuntimeController extends ChangeNotifier {
     try {
       // 先做语义自检：组成员/规则目标/规则集引用不存在时 mihomo 会直接退出，
       // 与其让用户看到「启动失败」再猜，不如在 spawn 前拦下并列出问题。
-      final config = configProvider();
+      final config = _activeConfig();
       if (!force) {
         final report = ConfigValidator.validate(config);
         if (report.hasErrors) {
@@ -501,7 +518,7 @@ class RuntimeController extends ChangeNotifier {
   }
 
   /// 本地 HTTP 代理端口（运行配置里的 `mixed-port`，缺省 7890）。
-  int get proxyPort => RuntimeConfig.proxyPortFor(configProvider());
+  int get proxyPort => RuntimeConfig.proxyPortFor(_activeConfig());
 
   /// 仅端口模式临时启动：不申请 VPN，也不需要授权。
   ///
@@ -539,33 +556,10 @@ class RuntimeController extends ChangeNotifier {
     }
   }
 
-  /// 挑测速用的 selector：DEFAULT 优先，其次第一个包含该节点的 selector。
-  ({String group, String? current, String? node})? _pickSelector(
-    YamlDoc doc,
-    String node,
-  ) {
-    final picked = pickSpeedTestSelector(doc, node);
-    if (picked == null) return null;
-    return (group: picked.group, current: null, node: picked.node);
-  }
-
-  /// 读 selector 当前选中的节点（内核 API）；失败返回 null。
-  Future<String?> _currentSelection(String group) async {
-    final client = api;
-    try {
-      final proxies = await client.proxyMap();
-      final value = proxies[group]?['now'];
-      return value is String && value.isNotEmpty ? value : null;
-    } catch (_) {
-      return null;
-    } finally {
-      client.close();
-    }
-  }
-
-  /// 单节点下载测速：内核没跑时临时仅端口启动，测完恢复 selector 并关内核。
+  /// 单节点下载测速：临时用独立最小配置起一个 port-only 内核，测完恢复。
   ///
-  /// 只影响下载结果；不动 [testDelays] 的延迟缓存。
+  /// 不依赖用户配置里的策略组，也不改动用户配置；原本在跑的内核会先停下，
+  /// 测完用原配置重新启动。临时配置绝不写入冷启动模板。
   Future<SpeedTestResult> runSpeedTest(
     String node, {
     SpeedSourceChoice source = SpeedSourceChoice.defaultChoice,
@@ -578,39 +572,57 @@ class RuntimeController extends ChangeNotifier {
     if (url == null) {
       return SpeedTestResult.failed('自定义地址不合法');
     }
-    String? savedGroup;
-    String? savedNode;
+    final wasActive =
+        _phase == RuntimePhase.running || _phase == RuntimePhase.starting;
+    final String tempYaml;
+    try {
+      tempYaml = buildSpeedTestConfig(configProvider(), nodeName: node);
+    } on SpeedTestConfigException catch (error) {
+      return SpeedTestResult.failed(error.message);
+    }
     final session = SpeedTestSession(
       downloader: downloader ?? SpeedDownloader(),
-      kernelReady: () =>
-          _phase == RuntimePhase.running || _phase == RuntimePhase.starting,
+      kernelReady: () => false,
       startTemporary: () async {
-        final started = await startPortOnly();
-        return started && await waitUntilRunning();
+        await _stopTemporaryKernel();
+        _speedTestConfig = YamlDoc.parse(tempYaml);
+        _tempConfigActive = true;
+        final started = await start(proxyModeOverride: 'port', force: true);
+        if (!started) {
+          _speedTestConfig = null;
+          _tempConfigActive = false;
+          return false;
+        }
+        return waitUntilRunning();
       },
-      stopTemporary: _stopTemporaryKernel,
+      stopTemporary: () async {
+        await _stopTemporaryKernel();
+        _speedTestConfig = null;
+        _tempConfigActive = false;
+      },
       proxyPort: () async => _phase == RuntimePhase.running ? proxyPort : null,
-      prepareProxy: (name) async {
-        final picked = _pickSelector(configProvider(), name);
-        if (picked == null) return false;
-        savedGroup = picked.group;
-        savedNode = await _currentSelection(picked.group);
-        return selectNode(picked.group, name);
-      },
-      restoreProxy: () async {
-        final group = savedGroup;
-        final current = savedNode;
-        if (group == null || current == null || current == node) return;
-        await selectNode(group, current);
-      },
+      prepareProxy: (_) async => true,
+      restoreProxy: () async {},
     );
-    return session.run(
-      node,
-      url: url,
-      onProgress: onProgress,
-      onStage: onStage,
-      cancelToken: cancelToken,
-    );
+    try {
+      return await session.run(
+        node,
+        url: url,
+        onProgress: onProgress,
+        onStage: onStage,
+        cancelToken: cancelToken,
+      );
+    } finally {
+      if (_tempConfigActive) {
+        await _stopTemporaryKernel();
+        _speedTestConfig = null;
+        _tempConfigActive = false;
+      }
+      if (wasActive && !_disposed) {
+        final restarted = await start(force: true);
+        if (restarted) await waitUntilRunning();
+      }
+    }
   }
 
   /// 并发测一批节点的延迟，返回 节点名 → 毫秒（超时/失败为 null）。
@@ -782,7 +794,7 @@ class RuntimeController extends ChangeNotifier {
 
   String _buildRuntimeYaml(int fd) {
     return RuntimeConfig.buildRuntimeYaml(
-      configProvider(),
+      _activeConfig(),
       tunFileDescriptor: fd,
       controller: '127.0.0.1:$port',
       secret: secret,
@@ -935,7 +947,10 @@ class RuntimeController extends ChangeNotifier {
         final yaml = _buildRuntimeYaml(fd);
         // 顺带落一份模板：Flutter 不在时（磁贴/小组件冷启动）Kotlin 用它
         // 替换 file-descriptor 后 spawn。写失败不影响本次启动。
-        await _persistRuntimeTemplate(yaml);
+        // 临时测速内核的配置只服务这一次测速，绝不能覆盖用户模板。
+        if (!_tempConfigActive) {
+          await _persistRuntimeTemplate(yaml);
+        }
         return yaml;
       case 'onRuntimeState':
         final args = (call.arguments as Map<Object?, Object?>?) ?? const {};

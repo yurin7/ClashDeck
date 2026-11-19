@@ -6,12 +6,26 @@
 
 ### Added
 
+- Android 无界面启停入口：`ClashActionActivity` 可从通知、快捷磁贴或外部快捷方式直接启停内核；启动时写入 `runtime.yaml.tpl` 与 `RuntimePrefs` 快照，冷启动不必先打开 App。
+- 常驻通知显示当前配置与全局出口，并提供「停止」动作；Android 13+ 首次启动会申请通知权限，设置页可查看状态并跳系统设置。
+- 快捷设置磁贴：在 QS 面板直接启停内核，副标题显示当前配置。
+- 2×1 桌面小组件：运行状态点、配置与全局出口一目了然，圆形按钮一键启停。
 - 内核启动成功后自动测速一轮（每次启动只测一次，失败静默）；节点行与策略组成员芯片用延迟胶囊显示结果，节点列表区头新增「测速全部」，每个策略组卡新增「测本组」，手动测速保留。
+- 规则列表信息层级重构：4dp 目标色条（DIRECT 绿 / REJECT 红 / 策略组紫）、标题只放中文名、类型标签移到行尾、目标 chip 放到第二行，点行查看完整详情。
 
 ### Changed
 
 - 保存**当前运行配置**后自动重启内核，让节点/规则/启动参数一次生效；保存其它配置只写盘，不打断正在运行的内核。500ms 内连续保存合并为一次重启；设置页与订阅更新同样走重启而不是热重载。
+- 运行态切换「运行模式」或「分流模式」后自动重启内核，统一由重启让改动生效。
 - TUN 模式不再强制开启 DNS，可在设置里自由关闭（关闭时提醒「TUN 内域名可能无法解析」）；运行配置不再覆盖用户写的 `dns.enable`。
+- Pulse 最终形态：概览页任意位置右滑拉出左侧 80% 遮罩，点暗区或左滑面板收起；去掉右缘手柄与左缘手势带，屏幕中部横滑仍翻页。
+
+### Fixed
+
+- 冷启动不再被 stale 的 `kernelState/kernelPid` 吞掉：启停入口按进程存活判断，状态不真实时先回写 stopped 再启动。
+- 通知「停止」后状态同步落盘（`RuntimePrefs` 改同步 `commit`），磁贴与小组件随之刷新。
+- 固定 `path_provider_android 2.2.23`，修复首次安装后打开配置目录失败（`ClassNotFoundException: android.content.Context`）。
+- 快捷设置磁贴名称改为「clashdeck」，避免与系统开关混淆（应用与界面仍为 ClashDeck）。
 
 ### Tests
 
@@ -21,6 +35,8 @@
 - `test/runtime_auto_delay_test.dart`：启动后自动测一次、手动测速进行中标记、重启后再测一次。
 - `test/proxy_board_delay_test.dart`：测速完成 toast 数量、测速中入口禁用与 done/total 进度。
 - `test/rule_row_card_test.dart`：标题只放中文名、类型在行尾、目标在第二行、紧凑模式只留色条与标题。
+- Android：`KernelGate`、`WidgetCopy`、`RuntimePrefs` 的 JVM 单测（`./gradlew :app:testDebugUnitTest`）。
+
 ## [0.3.3] - 未发布
 
 ### Changed

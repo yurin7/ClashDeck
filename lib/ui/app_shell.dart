@@ -463,6 +463,18 @@ class _AppShellState extends State<AppShell>
           );
         }
       }
+      // 松手要结算：打开后 PageView 已不可滚，ScrollEnd 只能在这里收口，
+      // 否则抽屉会停在半开位置。
+      if (notification is ScrollEndNotification &&
+          notification.depth == 0 &&
+          _pulseOverscrollActive) {
+        _pulseOverscrollActive = false;
+        _settlePulse(
+          pulseDrawerShouldOpen(progress: _pulseReveal.value, velocity: 0)
+              ? 1
+              : 0,
+        );
+      }
       return true;
     }
     if (notification is ScrollStartNotification && notification.depth == 0) {

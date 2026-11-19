@@ -39,19 +39,19 @@ void main() {
     );
   }
 
-  testWidgets('规则行胶囊卡：主标题带中文名，副标题是类型 + → 目标', (tester) async {
+  testWidgets('规则行胶囊卡：主标题只放中文名，类型在行尾、目标在第二行', (tester) async {
     var taps = 0;
     final rule = RuleEntry.parse(0, 'RULE-SET,loyal-reject,PROXY');
     await pumpCard(tester, rule: rule, onTap: () => taps++);
 
-    expect(find.text('loyal-reject · 广告与跟踪域名'), findsOneWidget);
+    expect(find.text('广告与跟踪域名'), findsOneWidget);
     expect(find.text('RULE-SET'), findsOneWidget);
     expect(find.text('→ PROXY'), findsOneWidget);
     // 拖动手柄复用外部传入的 widget，卡片内部不自建。
     expect(find.byIcon(Icons.drag_indicator), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('loyal-reject · 广告与跟踪域名'));
+    await tester.tap(find.text('广告与跟踪域名'));
     await tester.pump();
     expect(taps, 1);
   });
@@ -123,7 +123,7 @@ void main() {
     expect(taps, 0);
   });
 
-  testWidgets('规则行胶囊卡：紧凑模式只留图标 + 标题', (tester) async {
+  testWidgets('规则行胶囊卡：紧凑模式只留色条 + 标题', (tester) async {
     final rule = RuleEntry.parse(0, 'DOMAIN-SUFFIX,google.com,PROXY');
     await pumpCard(tester, rule: rule, compact: true);
 

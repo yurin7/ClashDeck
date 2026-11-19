@@ -24,6 +24,7 @@ import 'rule_edit_dialog.dart';
 import 'dropdown.dart';
 import 'rules/geo_import_sheet.dart';
 import 'rules/online_import_sheet.dart';
+import 'rules/rule_detail_dialog.dart';
 import 'rules/rule_row_card.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -1003,7 +1004,13 @@ class _RulesTabState extends State<RulesTab> {
                 ),
               ),
             ),
-            onTap: () => _editRule(initial: rule, index: rule.index),
+            groupNames: {for (final g in s.profile.groups) g.name},
+            onTap: () => showRuleDetailDialog(
+              context,
+              rule: rule,
+              onEdit: () => _editRule(initial: rule, index: rule.index),
+              onMoveToGroup: () => _moveRuleToGroup(rule),
+            ),
             onEdit: () => _editRule(initial: rule, index: rule.index),
             onMoveToGroup: () => _moveRuleToGroup(rule),
           ),

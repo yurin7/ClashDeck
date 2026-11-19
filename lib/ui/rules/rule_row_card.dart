@@ -2,20 +2,19 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/edit/rule_labels.dart';
 import '../../core/model/profile.dart';
-import '../../core/model/rule_zone.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import '../widgets/app_ink.dart';
 
-/// 规则行胶囊卡。
+/// 规则行胶囊卡（0.3.4 信息层级）。
 ///
-/// 左侧是 32×32 的分区图标，中间主标题（能认出的名字）+ 副标题
-/// （类型小标签、「→ 目标」小胶囊、缓存信息），行尾 `chevron_right`、
-/// `⋮` 菜单与拖动手柄。
+/// 左侧 4dp 竖色条按「规则目标」着色：DIRECT 绿、REJECT 红、策略组紫、
+/// 其它灰；主标题只放规则值/规则集显示名，类型小标签在行尾；第二行是
+/// 「→ 目标」和附加标记。行内只显示一行，完整名字与 payload 走点击详情。
 ///
 /// 拖动手柄由调用方通过 [dragHandle] 传入（复用 `ReorderableDragStartListener`），
 /// 卡片内部不自建手柄：折叠的分区不构建卡片，自然也不会出现手柄。
-/// [compact] 用于组卡「本组规则」这类窄区块：只留图标 + 标题 + 菜单。
+/// [compact] 用于组卡「本组规则」这类窄区块：只留色条 + 标题 + 菜单。
 class RuleRowCard extends StatelessWidget {
   const RuleRowCard({
     super.key,
@@ -27,6 +26,7 @@ class RuleRowCard extends StatelessWidget {
     this.onRefresh,
     this.trailing,
     this.compact = false,
+    this.groupNames = const <String>{},
   });
 
   final RuleEntry rule;
@@ -34,7 +34,7 @@ class RuleRowCard extends StatelessWidget {
   /// 排序手柄，固定在本行最右侧。
   final Widget? dragHandle;
 
-  /// 点整行：编辑这条规则。
+  /// 点整行：打开详情（完整名字 / payload）。
   final VoidCallback onTap;
 
   final VoidCallback onEdit;
@@ -50,10 +50,13 @@ class RuleRowCard extends StatelessWidget {
 
   final bool compact;
 
+  /// 配置里已有的策略组名，用来把「目标是组」染成主色。
+  final Set<String> groupNames;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = _accentOf(scheme, rule);
+    final targetColor = _targetColor(scheme, rule.target);
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -65,24 +68,31 @@ class RuleRowCard extends StatelessWidget {
       child: AppInkWell(
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 44 : 54),
+          constraints: BoxConstraints(minHeight: compact ? 44 : 56),
           padding: const EdgeInsets.fromLTRB(
-            Insets.md,
+            Insets.sm,
             Insets.xs,
             Insets.sm,
             Insets.xs,
           ),
           child: Row(
             children: [
-              _TypeBadge(
-                color: accent.color,
-                icon: accent.icon,
-                size: compact ? 26 : 32,
+              // 4dp 目标色条：比图标更安静，也更容易扫读一列规则。
+              Container(
+                width: 4,
+                height: compact ? 28 : 34,
+                decoration: BoxDecoration(
+                  color: targetColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
               SizedBox(width: compact ? Insets.sm : Insets.md),
-              Expanded(child: _texts(context, scheme, accent.color)),
-              if (!compact)
-                Icon(Icons.chevron_right, size: 18, color: scheme.outline),
+              Expanded(child: _texts(context, scheme, targetColor)),
+              if (!compact) ...[
+                const SizedBox(width: Insets.sm),
+                _TypeTag(label: rule.type),
+                const SizedBox(width: Insets.xs),
+              ],
               if (onRefresh != null)
                 IconButton(
                   tooltip: '更新规则集',
@@ -107,9 +117,9 @@ class RuleRowCard extends StatelessWidget {
     );
   }
 
-  Widget _texts(BuildContext context, ColorScheme scheme, Color accent) {
+  Widget _texts(BuildContext context, ColorScheme scheme, Color targetColor) {
     final title = Text(
-      ruleTitleOf(rule),
+      ruleDisplayTitle(rule),
       style: mono(compact ? 12.5 : 13.5, weight: 700),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
@@ -123,26 +133,11 @@ class RuleRowCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              rule.type,
-              style: mono(
-                9.5,
-                color: scheme.onSurfaceVariant,
-                weight: 600,
-                letterSpacing: 0.3,
-              ),
-              maxLines: 1,
-            ),
-            const SizedBox(width: Insets.sm),
-            Expanded(child: title),
-          ],
-        ),
+        title,
         const SizedBox(height: 4),
         Row(
           children: [
-            _TargetChip(label: '→ ${rule.target}', color: accent),
+            _TargetChip(label: '→ ${rule.target}', color: targetColor),
             if (rule.isTerminal) ...[
               const SizedBox(width: Insets.sm),
               Pill(
@@ -179,29 +174,42 @@ class RuleRowCard extends StatelessWidget {
       icon: Icon(Icons.swap_horiz, size: 18, color: scheme.onSurfaceVariant),
     );
   }
+
+  /// 目标色：DIRECT 绿、REJECT 红、策略组主色、其它（PASS/GLOBAL/未知）灰。
+  Color _targetColor(ColorScheme scheme, String target) {
+    final name = target.trim();
+    if (name == 'DIRECT') return const Color(0xFF3FB950);
+    if (name == 'REJECT' || name == 'REJECT-DROP') return scheme.error;
+    if (groupNames.contains(name)) return scheme.primary;
+    return scheme.outline;
+  }
 }
 
-class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({
-    required this.color,
-    required this.icon,
-    required this.size,
-  });
+/// 行尾类型小标签：`RULE-SET` / `GEOSITE` / `DOMAIN-SUFFIX`。
+class _TypeTag extends StatelessWidget {
+  const _TypeTag({required this.label});
 
-  final Color color;
-  final IconData icon;
-  final double size;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(size * 0.32),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.7)),
       ),
-      child: Icon(icon, size: size * 0.56, color: color),
+      child: Text(
+        label,
+        style: mono(
+          9,
+          color: scheme.onSurfaceVariant,
+          weight: 600,
+          letterSpacing: 0.2,
+        ),
+        maxLines: 1,
+      ),
     );
   }
 }
@@ -231,13 +239,4 @@ class _TargetChip extends StatelessWidget {
       ),
     );
   }
-}
-
-({Color color, IconData icon}) _accentOf(ColorScheme scheme, RuleEntry rule) {
-  return switch (ruleZoneOf(rule.raw)) {
-    RuleZone.local => (color: scheme.primary, icon: Icons.dns_outlined),
-    RuleZone.online => (color: scheme.tertiary, icon: Icons.cloud_outlined),
-    RuleZone.geo => (color: scheme.secondary, icon: Icons.public),
-    RuleZone.terminal => (color: scheme.error, icon: Icons.flag_outlined),
-  };
 }

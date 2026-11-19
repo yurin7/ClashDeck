@@ -100,7 +100,7 @@ class _ProxyBoardState extends State<ProxyBoard> {
     } finally {
       if (mounted) setState(() => _testing = false);
     }
-    if (mounted) _toast('测速完成： 个节点');
+    if (mounted) _toast('测速完成：${names.length} 个节点');
   }
 
   void _fail() {

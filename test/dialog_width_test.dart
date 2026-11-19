@@ -64,8 +64,14 @@ void main() {
       ),
     );
 
-    // 1) 编辑规则
+    // 1) 先打开规则详情，再进编辑规则：两个弹窗都受同一宽度约束。
     await tester.tap(find.byType(RuleRowCard).first);
+    await tester.pumpAndSettle();
+    expect(find.text('规则详情'), findsOneWidget);
+    final detailWidth = tester
+        .getSize(find.byKey(const ValueKey('edit-dialog')))
+        .width;
+    await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
     final ruleWidth = tester
         .getSize(find.byKey(const ValueKey('edit-dialog')))
@@ -73,6 +79,7 @@ void main() {
     final ruleFieldHeight = tester.getSize(find.byType(TextField).first).height;
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
+    expect(detailWidth, ruleWidth);
 
     final expected = dialogWidthOf(tester.element(find.byType(RulesTab)));
 

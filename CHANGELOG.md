@@ -18,6 +18,8 @@
 - `test/save_restart_test.dart`：只有「当前配置 + 内核在跑」才重启。
 - `test/delay_targets_test.dart`：从 proxies 取测速目标、异常结构兜底。
 - `test/runtime_auto_delay_test.dart`：启动后自动测一次、手动测速进行中标记、重启后再测一次。
+- `test/proxy_board_delay_test.dart`：测速完成 toast 数量、测速中入口禁用与 done/total 进度。
+- `test/rule_row_card_test.dart`：标题只放中文名、类型在行尾、目标在第二行、紧凑模式只留色条与标题。
 ## [0.3.3] - 未发布
 
 ### Changed

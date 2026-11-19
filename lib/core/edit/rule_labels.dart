@@ -34,3 +34,21 @@ String ruleTitleOf(RuleEntry rule) {
   }
   return payload;
 }
+
+/// 规则行的主标题（0.3.4 信息层级）：只放用户最需要辨认的那一段。
+///
+/// - 在线规则集优先中文显示名（`loyal-gfw` → `GFW 域名`），查不到才用 id；
+/// - GEOSITE / GEOIP 用中文名，查不到用 code；
+/// - 其它规则用匹配内容；兜底显示「所有未匹配流量」。
+///
+/// 完整名字（`id · 中文名`）留给详情弹窗，行内只占一行。
+String ruleDisplayTitle(RuleEntry rule) {
+  if (rule.isTerminal) return '所有未匹配流量';
+  final payload = rule.payload;
+  if (payload.isEmpty) return rule.type;
+  if (rule.type == 'RULE-SET') return presetLabelOf(payload) ?? payload;
+  if (rule.type == 'GEOSITE' || rule.type == 'GEOIP') {
+    return geositeNameOf(payload) ?? payload;
+  }
+  return payload;
+}

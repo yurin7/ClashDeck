@@ -18,9 +18,15 @@
 - 自定义测速地址栏出现/消失增加 200ms 过渡，去掉与输入框重复的错误文案。
 - 遮罩半开时吞掉底页滚动，负向拖动只回收抽屉，`ScrollEnd` 使用真实速度判断开合。
 
+### Fixed
+
+- Pulse 抽屉滑出时正向拖动不再停在刚露头的位置，越过阈值后继续跟手。
+- 链式代理链尾「加一阶」加大点击区，避免贴着横向滚动边缘点不中。
+- 链式代理的节点选择面板不再显示无法加入的系统策略段。
+
 ### Tests
 
-- 新增 `drag_state`、`drag_snapback`、`pulse_back_drag`、`group_status`、`relay_chain` 测试；全量 709 tests。
+- 新增 `drag_state`、`drag_snapback`、`pulse_back_drag`、`group_status`、`relay_chain`、链式组加一阶与 picker 过滤测试；全量 715 tests。
 
 ## [0.3.5] - 2026-11-20
 

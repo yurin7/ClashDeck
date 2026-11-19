@@ -57,6 +57,16 @@ double pulseBackDrag({
   return (dx + delta).clamp(0.0, double.infinity);
 }
 
+/// 抽屉滑出后继续向右拖：累计位移必须继续增长。
+///
+/// `_beginPulse()` 一触发就会把 `active` 置 true 且 reveal > 0；
+/// 如果此时只处理负向 delta，进度会冻在刚越过阈值的那一下，
+/// 松手按低进度结算，表现为「只露一条就缩回」。
+double pulseForwardDrag({required double dx, required double delta}) {
+  if (delta <= 0) return dx;
+  return dx + delta;
+}
+
 /// PageView 是否应该禁滑：只有「已打开且不在拖拽中」才禁。
 ///
 /// 拖拽过程中切 physics 会打断当前 drag，让抽屉刚滑出就弹回。

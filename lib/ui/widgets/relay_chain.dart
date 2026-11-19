@@ -297,7 +297,7 @@ class _AddLink extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.all(Radiuses.chip),
         child: Container(
-          height: 36,
+          height: 44,
           padding: const EdgeInsets.symmetric(horizontal: Insets.md),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.all(Radiuses.chip),

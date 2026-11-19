@@ -40,6 +40,7 @@ List<NodePickerEntry> nodePickerEntries(
   Profile profile, {
   required String groupName,
   required Iterable<String> members,
+  bool includeBuiltins = true,
 }) {
   final candidates = memberCandidates(
     profile,
@@ -47,14 +48,15 @@ List<NodePickerEntry> nodePickerEntries(
     members: members,
   );
   return [
-    for (final candidate in candidates)
-      if (candidate.isBuiltin)
-        NodePickerEntry(
-          name: candidate.name,
-          section: NodePickerSection.builtin,
-          note: candidate.note,
-          inside: candidate.inGroup,
-        ),
+    if (includeBuiltins)
+      for (final candidate in candidates)
+        if (candidate.isBuiltin)
+          NodePickerEntry(
+            name: candidate.name,
+            section: NodePickerSection.builtin,
+            note: candidate.note,
+            inside: candidate.inGroup,
+          ),
     for (final candidate in candidates)
       if (!candidate.isBuiltin && !candidate.isGroup)
         NodePickerEntry(
@@ -82,6 +84,7 @@ Future<List<String>?> showNodePickerSheet(
   String title = '选择要加入的节点',
   String? subtitle,
   String confirmVerb = '加入',
+  bool includeBuiltins = true,
   VoidCallback? onCreateNode,
 }) {
   return showSelectSheet<List<String>>(
@@ -93,6 +96,7 @@ Future<List<String>?> showNodePickerSheet(
       groupName: groupName,
       members: members,
       confirmVerb: confirmVerb,
+      includeBuiltins: includeBuiltins,
       onCreateNode: onCreateNode,
     ),
   );
@@ -104,6 +108,7 @@ class _NodePickerSheet extends StatefulWidget {
     required this.groupName,
     required this.members,
     required this.confirmVerb,
+    required this.includeBuiltins,
     this.onCreateNode,
   });
 
@@ -111,6 +116,7 @@ class _NodePickerSheet extends StatefulWidget {
   final String groupName;
   final Iterable<String> members;
   final String confirmVerb;
+  final bool includeBuiltins;
   final VoidCallback? onCreateNode;
 
   @override
@@ -124,6 +130,7 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
     widget.profile,
     groupName: widget.groupName,
     members: widget.members,
+    includeBuiltins: widget.includeBuiltins,
   );
 
   void _toggle(NodePickerEntry entry) {
@@ -186,7 +193,8 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final sections = [
-      ?_sectionOf(NodePickerSection.builtin, '系统策略'),
+      if (widget.includeBuiltins)
+        ?_sectionOf(NodePickerSection.builtin, '系统策略'),
       ?_sectionOf(NodePickerSection.node, '节点'),
       ?_sectionOf(NodePickerSection.group, '策略组'),
     ];

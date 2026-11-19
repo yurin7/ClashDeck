@@ -469,6 +469,16 @@ class _AppShellState extends State<AppShell>
             _pulseOverscrollActive = false;
             unawaited(_settlePulse(0));
           }
+        } else {
+          // 越过阈值之后仍在同一次拖拽里：继续累积，别冻在刚露头的位置。
+          _pulseOverscrollDx = pulseForwardDrag(
+            dx: _pulseOverscrollDx,
+            delta: delta,
+          );
+          _pulseReveal.value = pulseDrawerProgress(
+            dragDx: _pulseOverscrollDx,
+            panelWidth: pulseDrawerPanelWidth(width),
+          );
         }
         return true;
       }

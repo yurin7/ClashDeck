@@ -67,4 +67,15 @@ void main() {
     expect(find.byIcon(Icons.arrow_right_alt_rounded), findsNWidgets(2));
     expect(find.text('加一阶'), findsOneWidget);
   });
+
+  testWidgets('链条满两阶以上时点「加一阶」仍能触发 onAddMember', (tester) async {
+    var added = 0;
+    await tester.pumpWidget(
+      _app(_profile(['a', 'b', 'c']), onAddMember: () => added++),
+    );
+
+    await tester.tap(find.text('加一阶'));
+    await tester.pump();
+    expect(added, 1);
+  });
 }

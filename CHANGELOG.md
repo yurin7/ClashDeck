@@ -2,7 +2,7 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
-## [0.3.4] - 未发布
+## [0.3.4] - 2026-11-19
 
 ### Added
 

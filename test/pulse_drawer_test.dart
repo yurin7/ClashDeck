@@ -31,7 +31,7 @@ void main() {
     expect(tester.getSize(find.byKey(panelKey)).width, 320);
   });
 
-  testWidgets('点左侧暗区会请求收起', (tester) async {
+  testWidgets('点右侧暗区会请求收起', (tester) async {
     await setSize(tester, const Size(400, 800));
     var closed = 0;
     await tester.pumpWidget(
@@ -46,7 +46,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tapAt(const Offset(40, 400));
+    await tester.tapAt(const Offset(360, 400));
     await tester.pump();
     expect(closed, 1);
   });
@@ -67,7 +67,7 @@ void main() {
     );
     await tester.pump();
     final rect = tester.getRect(find.byKey(panelKey));
-    expect(rect.left, 400);
+    expect(rect.left, -320);
   });
 
   testWidgets('开合抽屉不会丢掉概览的滚动位置', (tester) async {
@@ -86,7 +86,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('drawer')), findsOneWidget);
 
-    await tester.tapAt(const Offset(20, 400));
+    await tester.tapAt(const Offset(360, 400));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('drawer')), findsNothing);
     expect(inner.offset, before);

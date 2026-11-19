@@ -28,7 +28,6 @@ import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/horizontal_drag.dart';
-import 'widgets/pulse_edge_handle.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'motion.dart';
@@ -90,7 +89,7 @@ class _AppShellState extends State<AppShell>
       displayProvider: () =>
           (profile: _activeFileName ?? '', exit: _settings?.globalNode ?? ''),
     );
-    _pager = PageController()..addListener(_onPagerScroll);
+    _pager = PageController()..addListener(_onPageChanged);
     _pulseReveal = AnimationController(
       vsync: this,
       duration: Motion.normal.expand,
@@ -98,7 +97,7 @@ class _AppShellState extends State<AppShell>
     unawaited(_boot());
   }
 
-  void _onPagerScroll() {
+  void _onPageChanged() {
     if (!_pager.hasClients) return;
     final page = _pager.page;
     if (page == null || (page - _page).abs() < 0.001) return;
@@ -434,34 +433,50 @@ class _AppShellState extends State<AppShell>
   String? _pulseFileName;
   Profile? _pulseProfile;
   AppPrefs? _pulsePrefs;
-  double _pulseDragDx = 0;
+  double _pulseOverscrollDx = 0;
+  bool _pulseOverscrollActive = false;
 
-  /// 从概览左滑打开 Pulse：先按 80% 抽屉跟手，松手过半再补到全开。
-  void _onPulseDragStart() {
-    _pulseDragDx = 0;
+  /// 概览页（第 0 页）向右拖会先触发 PageView 的 overscroll：
+  /// 不在系统边缘也能拿到事件，用它跟手拉出左侧遮罩。
+  bool _onPagerScrollNotification(ScrollNotification notification) {
+    if (_index != 0) return false;
+    if (notification is ScrollStartNotification && notification.depth == 0) {
+      _pulseOverscrollDx = 0;
+      _pulseOverscrollActive = false;
+      return false;
+    }
+    if (notification is OverscrollNotification && notification.depth == 0) {
+      final delta = notification.dragDetails?.delta.dx ?? 0;
+      if (delta <= 0) return false;
+      _pulseOverscrollDx += delta;
+      if (!_pulseOverscrollActive) {
+        if (_pulseOverscrollDx < kPulseOverscrollStartDx) return true;
+        _pulseOverscrollActive = true;
+        _beginPulse();
+        if (!_pulseOpen) return true;
+      }
+      final width = MediaQuery.sizeOf(context).width;
+      _pulseReveal.value = pulseDrawerProgress(
+        dragDx: _pulseOverscrollDx,
+        panelWidth: pulseDrawerPanelWidth(width),
+      );
+      return true;
+    }
+    if (notification is ScrollEndNotification &&
+        notification.depth == 0 &&
+        _pulseOverscrollActive) {
+      _pulseOverscrollActive = false;
+      final open = pulseDrawerShouldOpen(
+        progress: _pulseReveal.value,
+        velocity: 0,
+      );
+      unawaited(_settlePulse(open ? 1 : 0));
+      return true;
+    }
+    return false;
   }
 
-  void _onPulseDragUpdate(DragUpdateDetails details) {
-    _pulseDragDx += details.delta.dx;
-    if (_pulseDragDx >= 0) return;
-    if (!_pulseOpen) _beginPulse();
-    final width = MediaQuery.sizeOf(context).width;
-    _pulseReveal.value = pulseDrawerProgress(
-      dragDx: _pulseDragDx,
-      panelWidth: pulseDrawerPanelWidth(width),
-    );
-  }
-
-  void _onPulseDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    final open = pulseDrawerShouldOpen(
-      progress: _pulseReveal.value,
-      velocity: velocity,
-    );
-    unawaited(_settlePulse(open ? 1 : 0));
-  }
-
-  /// 面板打开后向右拖：progress 从 1 往下减，松手按 0.65/速度判定。
+  /// 面板打开后向左拖：progress 从 1 往下减，松手按 0.65/速度判定。
   void _onPulseCloseDragUpdate(DragUpdateDetails details) {
     final width = MediaQuery.sizeOf(context).width;
     final panelWidth = pulseDrawerPanelWidth(width);
@@ -699,83 +714,70 @@ class _AppShellState extends State<AppShell>
         body: Stack(
           children: [
             // 主界面：抽屉打开时轻微缩小，左侧 20% 留给暗区。
-            AnimatedBuilder(
-              animation: _pulseReveal,
-              builder: (context, child) => Transform.scale(
-                scale: 1 - 0.02 * _pulseReveal.value,
-                child: child,
-              ),
-              child: PageView(
-                controller: _pager,
-                physics: const PageScrollPhysics(),
-                onPageChanged: (i) => setState(() => _index = i),
-                children: [
-                  _KeepAlivePage(
-                    child: SafeArea(
-                      bottom: false,
-                      child: OverviewPage(
-                        appVersion: _appVersion,
+            NotificationListener<ScrollNotification>(
+              onNotification: _onPagerScrollNotification,
+              child: AnimatedBuilder(
+                animation: _pulseReveal,
+                builder: (context, child) => Transform.scale(
+                  scale: 1 - 0.02 * _pulseReveal.value,
+                  child: child,
+                ),
+                child: PageView(
+                  controller: _pager,
+                  physics: const PageScrollPhysics(),
+                  onPageChanged: (i) => setState(() => _index = i),
+                  children: [
+                    _KeepAlivePage(
+                      child: SafeArea(
+                        bottom: false,
+                        child: OverviewPage(
+                          appVersion: _appVersion,
+                          runtime: _runtime,
+                          settings: _settings,
+                          activeProfile: _activeFileName,
+                          profileName: _activeName,
+                          profileCount: _profiles.length,
+                          onOpenEditor: _openEditor,
+                          onPickProfile: _pickProfile,
+                          onRefreshProfiles: _reloadProfiles,
+                          bottomInset: _bottomInset,
+                        ),
+                      ),
+                    ),
+                    _KeepAlivePage(
+                      child: HomePage(
+                        activeFileName: _activeFileName,
+                        switchingFileName: _switchingFileName,
+                        onSetActive: _setActive,
+                        onProfilesChanged: _reloadProfiles,
+                        onDeleteProfile: _deleteProfile,
                         runtime: _runtime,
-                        settings: _settings,
-                        activeProfile: _activeFileName,
-                        profileName: _activeName,
-                        profileCount: _profiles.length,
-                        onOpenEditor: _openEditor,
-                        onPickProfile: _pickProfile,
-                        onRefreshProfiles: _reloadProfiles,
+                        autoSave: _settings?.autoSave ?? false,
                         bottomInset: _bottomInset,
                       ),
                     ),
-                  ),
-                  _KeepAlivePage(
-                    child: HomePage(
-                      activeFileName: _activeFileName,
-                      switchingFileName: _switchingFileName,
-                      onSetActive: _setActive,
-                      onProfilesChanged: _reloadProfiles,
-                      onDeleteProfile: _deleteProfile,
-                      runtime: _runtime,
-                      autoSave: _settings?.autoSave ?? false,
-                      bottomInset: _bottomInset,
-                    ),
-                  ),
-                  _KeepAlivePage(
-                    child: SafeArea(
-                      bottom: false,
-                      child: SettingsPage(
-                        settings: _settings,
-                        runtime: _runtime,
-                        lastSubscriptionUpdate: _lastSubscriptionUpdate,
-                        onUpdateSubscription: _updateSubscription,
-                        onImportText: _importText,
-                        onImportUrl: _importUrl,
-                        onOpenSubscription: _openSubscription,
-                        activeName: _profileName(_activeFileName ?? ''),
-                        bottomInset: _bottomInset,
-                        appVersion: _appVersion,
-                        prefs: _prefs,
+                    _KeepAlivePage(
+                      child: SafeArea(
+                        bottom: false,
+                        child: SettingsPage(
+                          settings: _settings,
+                          runtime: _runtime,
+                          lastSubscriptionUpdate: _lastSubscriptionUpdate,
+                          onUpdateSubscription: _updateSubscription,
+                          onImportText: _importText,
+                          onImportUrl: _importUrl,
+                          onOpenSubscription: _openSubscription,
+                          activeName: _profileName(_activeFileName ?? ''),
+                          bottomInset: _bottomInset,
+                          appVersion: _appVersion,
+                          prefs: _prefs,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            // 概览页右缘：只有起手落在右缘手势带里、且向左拖时才拉抽屉；
-            // 屏幕中部仍是 PageView 翻页，互不抢手势。
-            if (!_pulseOpen && _index == 0)
-              Positioned(
-                top: 0,
-                bottom: 0,
-                right: 0,
-                width: kPulseEdgeBandWidth,
-                child: HorizontalDragArea(
-                  behavior: HitTestBehavior.opaque,
-                  onStart: _onPulseDragStart,
-                  onUpdate: _onPulseDragUpdate,
-                  onEnd: _onPulseDragEnd,
-                  child: const PulseEdgeHandle(),
+                  ],
                 ),
               ),
+            ),
             Positioned(
               left: Insets.xl,
               right: Insets.xl,
@@ -790,7 +792,7 @@ class _AppShellState extends State<AppShell>
                 ),
               ),
             ),
-            // 右侧 80% 抽屉：跟手 progress 由拖拽/回弹动画驱动。
+            // 左侧 80% 遮罩层：跟手 progress 由拖拽/回弹动画驱动。
             if (_pulseOpen &&
                 _pulseProfile != null &&
                 _pulsePrefs != null &&

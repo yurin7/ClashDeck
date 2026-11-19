@@ -1,0 +1,7 @@
+# 统一历史提交身份到维护者账号（修正早期自动化误用本机用户名生成的提交身份）
+ako-rin <niozi@outlook.com> rana <rana@users.noreply.github.com>
+ako-rin <niozi@outlook.com> rana <rana@local>
+ako-rin <niozi@outlook.com> lead <lead@local>
+ako-rin <niozi@outlook.com> clashdeck-agent <agent@clashdeck.local>
+ako-rin <niozi@outlook.com> ClashDeck <dev@clashdeck.local>
+ako-rin <niozi@outlook.com> ClashDeck Dev <dev@clashdeck.local>

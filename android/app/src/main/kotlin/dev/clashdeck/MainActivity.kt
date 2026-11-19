@@ -1,5 +1,6 @@
 package dev.clashdeck
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -8,8 +9,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.provider.Settings
+import android.net.Uri
 import android.net.VpnService
 import android.os.Build
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -19,11 +23,22 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val REQUEST_VPN_PERMISSION = 0x1001
+        private const val REQUEST_POST_NOTIFICATIONS = 0x1002
         private const val ICON_SIZE = 96
     }
 
     private var channel: MethodChannel? = null
     private var pendingStart: Map<*, *>? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Android 13+ 常驻通知需要运行时授权；拒绝也不阻塞内核启动，只是没有可见通知。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_POST_NOTIFICATIONS)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -53,6 +68,22 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             }
 
+            "notificationPermission" -> result.success(
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+            )
+
+            "openNotificationSettings" -> {
+                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(Uri.parse("package:$packageName"))
+                }
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                result.success(null)
+            }
             "status" -> {
                 // 快照可能比进程状态新：service 已经 spawn 但引擎还没回报时以快照
                 // 为准展示 running；service 明确报错时把 errorText 一起带回去。

@@ -374,6 +374,10 @@ class ClashVpnService : VpnService() {
         if (notify) RuntimeBridge.notifyState("stopped", message = reason)
         if (lastError == null) {
             RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STOPPED)
+            runCatching {
+                ClashTileService.refresh(this)
+                ClashWidgetProvider.refresh(this)
+            }
         }
         stopForegroundCompat()
         stopSelf()

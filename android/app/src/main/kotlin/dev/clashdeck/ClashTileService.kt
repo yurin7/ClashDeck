@@ -12,6 +12,16 @@ import android.service.quicksettings.TileService
  * 磁贴只读 [RuntimePrefs] 快照，不直接操作内核。
  */
 class ClashTileService : TileService() {
+
+    companion object {
+        /** 内核状态变化后让系统回调一次 onStartListening，刷新磁贴文案。 */
+        fun refresh(context: android.content.Context) {
+            TileService.requestListeningState(
+                context,
+                android.content.ComponentName(context, ClashTileService::class.java),
+            )
+        }
+    }
     override fun onStartListening() {
         super.onStartListening()
         refreshTile()

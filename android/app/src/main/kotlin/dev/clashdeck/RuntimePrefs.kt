@@ -102,7 +102,9 @@ object RuntimePrefs {
 
             else -> if (error != null) editor.putString(KEY_KERNEL_ERROR, error)
         }
-        editor.apply()
+        // 用 commit 同步落盘：ACTION_STOP 会在写完状态后立刻 killProcess，
+        // apply 的异步写入会随进程一起丢掉，磁贴/小组件就会看到 stale 状态。
+        editor.commit()
     }
 
     fun kernelState(context: Context): String =

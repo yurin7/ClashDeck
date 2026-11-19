@@ -337,6 +337,30 @@ class RuntimeController extends ChangeNotifier {
   /// 诊断面板用它区分「服务没起来」和「内核起来了但隧道没接管」。
   bool get serviceRunning => _serviceRunning;
 
+  /// Android 13+ 常驻通知的运行时授权状态。
+  ///
+  /// 查询失败（旧平台 / 未注册通道）时按已授权处理，避免把平台异常显示成
+  /// 「权限未开启」误导用户；授权与否不阻塞内核启动。
+  Future<bool> notificationPermission() async {
+    try {
+      final granted = await _channel.invokeMethod<bool>(
+        'notificationPermission',
+      );
+      return granted ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// 跳系统通知设置（Android 8+ 直达本应用的通知页）。
+  Future<void> openNotificationSettings() async {
+    try {
+      await _channel.invokeMethod<void>('openNotificationSettings');
+    } catch (_) {
+      // 平台不支持时静默失败，用户仍可进系统设置手动开启。
+    }
+  }
+
   /// 从 Android 侧同步一次真实状态（进入页面时用）。
   Future<void> refreshStatus() async {
     if (!(androidOverride ?? supported)) return;

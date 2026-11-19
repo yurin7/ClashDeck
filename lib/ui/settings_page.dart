@@ -39,6 +39,8 @@ class SettingsPage extends StatefulWidget {
     this.prefs,
     this.checkUpdate,
     this.openUrl,
+    this.notificationPermission,
+    this.openNotificationSettings,
   });
 
   final SettingsState? settings;
@@ -66,6 +68,12 @@ class SettingsPage extends StatefulWidget {
   /// 打开 Release 页（测试注入；默认交给 url_launcher）。
   final Future<bool> Function(String url)? openUrl;
 
+  /// 通知权限查询（测试注入；默认走 MethodChannel）。
+  final Future<bool> Function()? notificationPermission;
+
+  /// 跳系统通知设置（测试注入；默认走 MethodChannel）。
+  final Future<void> Function()? openNotificationSettings;
+
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -73,9 +81,30 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _busy = false;
   bool _checking = false;
+  bool? _notifications;
   Timer? _reloadTimer;
 
   SettingsState? get _s => widget.settings;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadNotificationPermission());
+  }
+
+  Future<void> _loadNotificationPermission() async {
+    final query =
+        widget.notificationPermission ?? widget.runtime.notificationPermission;
+    final granted = await query();
+    if (mounted) setState(() => _notifications = granted);
+  }
+
+  Future<void> _openNotificationSettings() async {
+    final open =
+        widget.openNotificationSettings ??
+        widget.runtime.openNotificationSettings;
+    await open();
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
@@ -508,6 +537,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       onChanged: widget.prefs == null
                           ? (_) {}
                           : _setUpdateAutoCheck,
+                    ),
+                    _ActionRow(
+                      label: '通知权限',
+                      description: _notifications == null
+                          ? '查询中…'
+                          : (_notifications!
+                                ? '已开启：内核运行时显示常驻通知与「停止」'
+                                : '未开启：常驻通知不可见，点此去系统设置开启'),
+                      icon: Icons.notifications_active_outlined,
+                      onTap: _openNotificationSettings,
                     ),
                     _SwitchRow(
                       label: '开机自启',

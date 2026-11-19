@@ -29,18 +29,14 @@ class ClashWidgetProvider : AppWidgetProvider() {
         val profile = RuntimePrefs.profileName(context)?.takeIf { it.isNotBlank() }
         val exit = RuntimePrefs.globalExit(context)?.takeIf { it.isNotBlank() }
         val views = RemoteViews(context.packageName, R.layout.clash_widget)
-        views.setTextViewText(
-            R.id.widget_title,
-            when {
-                running -> "已连接"
-                state == RuntimePrefs.STATE_STARTING -> "启动中"
-                state == RuntimePrefs.STATE_ERROR -> "启动失败"
-                else -> "已停止"
-            },
-        )
+        views.setTextViewText(R.id.widget_title, WidgetCopy.title(running, state))
         views.setTextViewText(
             R.id.widget_subtitle,
-            listOfNotNull(profile, exit).joinToString(" · ").ifBlank { "轻点打开 ClashDeck" },
+            WidgetCopy.subtitle(
+                hasSnapshot = RuntimePrefs.loadStart(context) != null,
+                profile = profile,
+                exit = exit,
+            ),
         )
         views.setImageViewResource(
             R.id.widget_dot,

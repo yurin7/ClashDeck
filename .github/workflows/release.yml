@@ -33,6 +33,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 开发版要列「最近提交」，浅克隆只有一条，够不到历史。
+          fetch-depth: 0
 
       - name: Resolve version
         id: v
@@ -195,6 +198,20 @@ jobs:
             "$apksigner" verify --print-certs "$f" | grep -E 'Signer #1 certificate (DN|SHA-256)' || true
           done
 
+      - name: Compose change notes
+        env:
+          KIND: ${{ steps.v.outputs.kind }}
+          VERSION: ${{ steps.v.outputs.name }}
+          SHORT_SHA: ${{ steps.v.outputs.short_sha }}
+        run: |
+          set -euo pipefail
+          dart run tool/release_notes.dart \
+            --kind "$KIND" \
+            --version "$VERSION" \
+            --sha "$SHORT_SHA" \
+            --out notes.md
+          cat notes.md
+
       - name: Compose release body
         env:
           KIND: ${{ steps.v.outputs.kind }}
@@ -205,6 +222,9 @@ jobs:
         run: |
           set -euo pipefail
           {
+            # 变更报告置顶；安装说明在后。
+            cat notes.md
+            echo
             if [ "$KIND" != "release" ]; then
               echo "> 每次 push 到 main 都会自动覆盖这个开发版，包含最新的 main 代码，可能不稳定。"
               echo "> 稳定版请看 [最新正式版](https://github.com/${REPO}/releases/latest)。"
@@ -225,7 +245,7 @@ jobs:
             echo "> 已使用固定签名，可直接覆盖安装；早期 debug 版本需先卸载一次。"
             if [ "$KIND" = "release" ]; then
               echo
-              echo "完整改动见 [CHANGELOG](https://github.com/${REPO}/compare/${TAG}...main) 或本页下方的自动生成说明。"
+              echo "完整历史见 [CHANGELOG](https://github.com/${REPO}/blob/main/CHANGELOG.md)。"
             fi
           } > body.md
           cat body.md
@@ -238,6 +258,6 @@ jobs:
           draft: false
           prerelease: ${{ steps.v.outputs.kind != 'release' }}
           make_latest: ${{ steps.v.outputs.kind == 'release' && 'true' || 'false' }}
-          generate_release_notes: ${{ steps.v.outputs.kind == 'release' }}
+          generate_release_notes: false
           body_path: body.md
           files: dist/*.apk

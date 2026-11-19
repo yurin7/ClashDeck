@@ -1,11 +1,9 @@
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:clashdeck/ui/pulse_entry.dart';
 
-/// 0.3.2 起 Pulse 改右侧 80% 抽屉：手势阈值、面板宽度与分页物理都收在这里，
-/// 方便单测。0.3.0 的 bug 是入口手势被 PageView 的手势竞技场吃掉，
-/// 现在第 0 页直接禁用横向滚动（[pulsePagerPhysics]）。
+/// 0.3.2 起 Pulse 是右侧 80% 抽屉；0.3.3 起只有「概览页右缘 28dp 手势带」
+/// 往左滑才拉抽屉，屏幕中部仍交给 PageView 翻页，两者不再抢手势。
 void main() {
   group('pulseDrawerPanelWidth', () {
     test('面板宽 = 屏宽 * 0.8', () {
@@ -30,6 +28,30 @@ void main() {
 
     test('屏宽异常时返回 0，避免除零', () {
       expect(pulseDrawerProgress(dragDx: -100, panelWidth: 0), 0);
+    });
+  });
+
+  group('右缘手势带', () {
+    test('起手点在右缘 28dp 内才接管', () {
+      expect(pulseEdgeDragStarts(startX: 972, screenWidth: 1000), isTrue);
+      expect(pulseEdgeDragStarts(startX: 973, screenWidth: 1000), isTrue);
+      expect(pulseEdgeDragStarts(startX: 971, screenWidth: 1000), isFalse);
+      expect(pulseEdgeDragStarts(startX: 500, screenWidth: 1000), isFalse);
+    });
+
+    test('屏宽异常时不接管', () {
+      expect(pulseEdgeDragStarts(startX: 0, screenWidth: 0), isFalse);
+    });
+
+    test('从右缘左拖 200dp 打开、只拖 100dp 回弹', () {
+      const width = 400.0;
+      final panel = pulseDrawerPanelWidth(width);
+      final open = pulseDrawerProgress(dragDx: -200, panelWidth: panel);
+      final half = pulseDrawerProgress(dragDx: -100, panelWidth: panel);
+      expect(open, closeTo(0.625, 0.001));
+      expect(half, closeTo(0.3125, 0.001));
+      expect(pulseDrawerShouldOpen(progress: open, velocity: 0), isTrue);
+      expect(pulseDrawerShouldOpen(progress: half, velocity: 0), isFalse);
     });
   });
 
@@ -64,17 +86,6 @@ void main() {
 
     test('右甩够快就收起', () {
       expect(pulseDrawerShouldClose(progress: 0.9, velocity: 301), isTrue);
-    });
-  });
-
-  group('pulsePagerPhysics', () {
-    test('第 0 页禁用横向滚动', () {
-      expect(pulsePagerPhysics(0), isA<NeverScrollableScrollPhysics>());
-    });
-
-    test('其它页保留分页滚动', () {
-      expect(pulsePagerPhysics(1), isA<PageScrollPhysics>());
-      expect(pulsePagerPhysics(2), isA<PageScrollPhysics>());
     });
   });
 }

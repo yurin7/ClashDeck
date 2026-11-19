@@ -28,6 +28,7 @@ import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/horizontal_drag.dart';
+import 'widgets/pulse_edge_handle.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'motion.dart';
@@ -695,66 +696,76 @@ class _AppShellState extends State<AppShell>
                 scale: 1 - 0.02 * _pulseReveal.value,
                 child: child,
               ),
-              child: HorizontalDragArea(
-                behavior: HitTestBehavior.translucent,
-                onStart: _index == 0 ? _onPulseDragStart : null,
-                onUpdate: _index == 0 ? _onPulseDragUpdate : null,
-                onEnd: _index == 0 ? _onPulseDragEnd : null,
-                child: PageView(
-                  controller: _pager,
-                  physics: pulsePagerPhysics(_index),
-                  onPageChanged: (i) => setState(() => _index = i),
-                  children: [
-                    _KeepAlivePage(
-                      child: SafeArea(
-                        bottom: false,
-                        child: OverviewPage(
-                          runtime: _runtime,
-                          settings: _settings,
-                          activeProfile: _activeFileName,
-                          profileName: _activeName,
-                          profileCount: _profiles.length,
-                          onOpenEditor: _openEditor,
-                          onPickProfile: _pickProfile,
-                          onRefreshProfiles: _reloadProfiles,
-                          bottomInset: _bottomInset,
-                        ),
-                      ),
-                    ),
-                    _KeepAlivePage(
-                      child: HomePage(
-                        activeFileName: _activeFileName,
-                        switchingFileName: _switchingFileName,
-                        onSetActive: _setActive,
-                        onProfilesChanged: _reloadProfiles,
-                        onDeleteProfile: _deleteProfile,
+              child: PageView(
+                controller: _pager,
+                physics: const PageScrollPhysics(),
+                onPageChanged: (i) => setState(() => _index = i),
+                children: [
+                  _KeepAlivePage(
+                    child: SafeArea(
+                      bottom: false,
+                      child: OverviewPage(
                         runtime: _runtime,
-                        autoSave: _settings?.autoSave ?? false,
+                        settings: _settings,
+                        activeProfile: _activeFileName,
+                        profileName: _activeName,
+                        profileCount: _profiles.length,
+                        onOpenEditor: _openEditor,
+                        onPickProfile: _pickProfile,
+                        onRefreshProfiles: _reloadProfiles,
                         bottomInset: _bottomInset,
                       ),
                     ),
-                    _KeepAlivePage(
-                      child: SafeArea(
-                        bottom: false,
-                        child: SettingsPage(
-                          settings: _settings,
-                          runtime: _runtime,
-                          lastSubscriptionUpdate: _lastSubscriptionUpdate,
-                          onUpdateSubscription: _updateSubscription,
-                          onImportText: _importText,
-                          onImportUrl: _importUrl,
-                          onOpenSubscription: _openSubscription,
-                          activeName: _profileName(_activeFileName ?? ''),
-                          bottomInset: _bottomInset,
-                          appVersion: _appVersion,
-                          prefs: _prefs,
-                        ),
+                  ),
+                  _KeepAlivePage(
+                    child: HomePage(
+                      activeFileName: _activeFileName,
+                      switchingFileName: _switchingFileName,
+                      onSetActive: _setActive,
+                      onProfilesChanged: _reloadProfiles,
+                      onDeleteProfile: _deleteProfile,
+                      runtime: _runtime,
+                      autoSave: _settings?.autoSave ?? false,
+                      bottomInset: _bottomInset,
+                    ),
+                  ),
+                  _KeepAlivePage(
+                    child: SafeArea(
+                      bottom: false,
+                      child: SettingsPage(
+                        settings: _settings,
+                        runtime: _runtime,
+                        lastSubscriptionUpdate: _lastSubscriptionUpdate,
+                        onUpdateSubscription: _updateSubscription,
+                        onImportText: _importText,
+                        onImportUrl: _importUrl,
+                        onOpenSubscription: _openSubscription,
+                        activeName: _profileName(_activeFileName ?? ''),
+                        bottomInset: _bottomInset,
+                        appVersion: _appVersion,
+                        prefs: _prefs,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+            // 概览页右缘：只有起手落在右缘手势带里、且向左拖时才拉抽屉；
+            // 屏幕中部仍是 PageView 翻页，互不抢手势。
+            if (!_pulseOpen && _index == 0)
+              Positioned(
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: kPulseEdgeBandWidth,
+                child: HorizontalDragArea(
+                  behavior: HitTestBehavior.opaque,
+                  onStart: _onPulseDragStart,
+                  onUpdate: _onPulseDragUpdate,
+                  onEnd: _onPulseDragEnd,
+                  child: const PulseEdgeHandle(),
+                ),
+              ),
             Positioned(
               left: Insets.xl,
               right: Insets.xl,

@@ -1,5 +1,3 @@
-import 'package:material_ui/material_ui.dart';
-
 /// Pulse 抽屉占屏宽的比例（右侧面板 80%，左侧露出 20% 概览）。
 const double kPulseDrawerWidthFactor = 0.8;
 
@@ -30,9 +28,20 @@ bool pulseDrawerShouldClose({
   required double velocity,
 }) => progress < 0.65 || velocity > 300;
 
-/// PageView 的滚动物理：概览页（第 0 页）固定关闭横向滚动，
-/// 否则左滑会被 PageView 的手势竞技场吃掉，抽屉永远打不开。
-/// 配置页 / 设置页保留左右滑。
-ScrollPhysics pulsePagerPhysics(int index) => index == 0
-    ? const NeverScrollableScrollPhysics()
-    : const PageScrollPhysics();
+/// 概览页右缘的透明手势带宽度（从屏幕右缘往左算）。
+///
+/// 只有起手落在这条带子里才驱动抽屉；屏幕中部的左右滑仍然交给
+/// PageView 翻页，两者不再抢手势。
+const double kPulseEdgeBandWidth = 28;
+
+/// 右缘把手宽度：可见但低调，提示用户「这里可以往左滑」。
+const double kPulseEdgeHandleWidth = 24;
+
+/// 起手点是否落在右缘手势带内。
+bool pulseEdgeDragStarts({
+  required double startX,
+  required double screenWidth,
+}) {
+  if (screenWidth <= 0) return false;
+  return startX >= screenWidth - kPulseEdgeBandWidth;
+}

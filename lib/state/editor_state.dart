@@ -155,6 +155,10 @@ class EditorState extends ChangeNotifier {
   bool removeGroupMember(String group, String member) =>
       apply((d) => ConfigOps.removeGroupMember(d, group, member));
 
+  /// 组内成员换位（链式代理的「前移/后移」与拖放插入）。
+  bool moveGroupMember(String group, int from, int to) =>
+      apply((d) => ConfigOps.moveGroupMember(d, group, from, to));
+
   /// 新增一条规则。默认按分区插到所属区块的第一位（本地精确 / 在线 / 兜底）；
   /// 显式给 [at] 时按旧行为插到指定下标（测试与特殊场景用）。
   bool addRule(String rule, {int? at}) => at == null

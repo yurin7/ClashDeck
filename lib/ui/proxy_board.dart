@@ -19,8 +19,10 @@ import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
 import 'widgets/delete_confirm.dart';
 import 'widgets/delay_badge.dart';
+import 'widgets/drag_state.dart';
 import 'widgets/edit_dialog.dart';
 import 'widgets/node_row.dart';
+import 'widgets/relay_chain.dart';
 import 'widgets/selectable_tile.dart';
 import 'widgets.dart';
 import 'node_form_page.dart';
@@ -63,7 +65,8 @@ class ProxyBoard extends StatefulWidget {
   State<ProxyBoard> createState() => _ProxyBoardState();
 }
 
-class _ProxyBoardState extends State<ProxyBoard> {
+class _ProxyBoardState extends State<ProxyBoard>
+    with SingleTickerProviderStateMixin {
   EditorState get s => widget.state;
 
   /// 当前左滑露出「删除」的组名。
@@ -73,6 +76,111 @@ class _ProxyBoardState extends State<ProxyBoard> {
   bool _testing = false;
   int _testDone = 0;
   int _testTotal = 0;
+
+  /// 非法拖拽松手后的「滑回原位」动画。
+  late final AnimationController _snapBack;
+  OverlayEntry? _snapEntry;
+  DragSnapBack? _snap;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapBack =
+        AnimationController(vsync: this, duration: Motion.normal.snapBack)
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) _finishSnapBack();
+          });
+    dragState.addListener(_onDragStateChanged);
+  }
+
+  @override
+  void dispose() {
+    dragState.removeListener(_onDragStateChanged);
+    _snapEntry?.remove();
+    _snapEntry = null;
+    _snapBack.dispose();
+    super.dispose();
+  }
+
+  void _onDragStateChanged() {
+    if (dragState.dragging || dragState.animating) return;
+    final snap = dragState.takeSnapBack();
+    if (snap == null) return;
+    _playSnapBack(snap);
+  }
+
+  void _playSnapBack(DragSnapBack snap) {
+    final profile = s.profile;
+    final node = profile.proxyByName[snap.node];
+    if (node == null) {
+      dragState.finishSnapBack();
+      return;
+    }
+    _snap = snap;
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (context) => AnimatedBuilder(
+        animation: _snapBack,
+        builder: (context, child) {
+          final t = Curves.easeOutCubic.transform(_snapBack.value);
+          final topLeft = Offset.lerp(
+            snap.endOffset,
+            snap.sourceRect.topLeft,
+            t,
+          )!;
+          return Positioned(
+            left: topLeft.dx,
+            top: topLeft.dy,
+            width: snap.feedbackSize.width,
+            height: snap.feedbackSize.height,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 1 - 0.7 * t,
+                child: Transform.scale(
+                  scale: 1 - 0.04 * t,
+                  alignment: Alignment.center,
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: NodeChip(
+            node: node,
+            fromGroup: snap.fromGroup,
+            onOpen: () {},
+            onMove: () {},
+            onDelete: () {},
+            onRemove: null,
+            onMenu: null,
+            delayText: widget.runtime?.delays[snap.node] == null
+                ? null
+                : formatDelay(
+                    widget.runtime!.delays[snap.node],
+                    approx: widget.runtime!.delayApprox(snap.node),
+                  ),
+          ),
+        ),
+      ),
+    );
+    _snapEntry = entry;
+    overlay.insert(entry);
+    _snapBack.forward(from: 0);
+  }
+
+  void _finishSnapBack() {
+    final duplicate = _snap?.duplicateGroup;
+    _snapEntry?.remove();
+    _snapEntry = null;
+    _snap = null;
+    dragState.finishSnapBack();
+    if (!mounted) return;
+    if (duplicate != null) {
+      _toast('该节点已在「$duplicate」里');
+    }
+  }
 
   Future<void> _testNodes(List<String> names) async {
     final runtime = widget.runtime;
@@ -582,6 +690,17 @@ class _ProxyBoardState extends State<ProxyBoard> {
                   : widget.runtime == null && widget.onGroupSelection == null
                   ? null
                   : (name) => _selectNodeForGroup(group.name, name),
+              onRelayInsert: (node, index) {
+                final from = group.members.length;
+                if (!s.addGroupMember(group.name, node)) {
+                  _fail();
+                  return;
+                }
+                if (!s.moveGroupMember(group.name, from, index)) _fail();
+              },
+              onRelayReorder: (from, to) {
+                if (!s.moveGroupMember(group.name, from, to)) _fail();
+              },
               onEdit: () => _editGroup(group),
               onDelete: () => _deleteGroup(group),
               onTestGroup: group.members.isEmpty
@@ -593,8 +712,17 @@ class _ProxyBoardState extends State<ProxyBoard> {
               onAddMember: () async {
                 final picked = await _pickMembers(profile, group);
                 if (picked == null || picked.isEmpty) return;
+                final names = group.type == 'relay'
+                    ? picked
+                          .where(profile.proxyByName.containsKey)
+                          .toList(growable: false)
+                    : picked;
+                if (names.isEmpty) {
+                  _toast('链式代理只能添加节点');
+                  return;
+                }
                 var added = 0;
-                for (final name in picked) {
+                for (final name in names) {
                   if (s.addGroupMember(group.name, name)) added++;
                 }
                 if (added == 0) {
@@ -919,6 +1047,8 @@ class _GroupCard extends StatelessWidget {
     this.testing = false,
     this.delays = const <String, int?>{},
     this.approx = const <String>{},
+    this.onRelayInsert,
+    this.onRelayReorder,
   });
 
   final GroupEntry group;
@@ -968,32 +1098,102 @@ class _GroupCard extends StatelessWidget {
   /// 从「本组规则」拖过来的规则：直接把 target 改成这个组。
   final void Function(RuleEntry)? onDropRule;
 
+  /// 链式代理：把节点插到某一阶（index 在 0..N 之间）。
+  final void Function(String node, int index)? onRelayInsert;
+
+  /// 链式代理：链内调整顺序。
+  final void Function(int from, int to)? onRelayReorder;
+
+  /// 当前实际出口：自动组按最低延迟推断，fallback 用运行时选中值。
+  String? get _currentLabel {
+    if (group.type == 'load-balance') {
+      return group.members.isEmpty ? null : '自动均衡 · ${group.members.length} 节点';
+    }
+    if (group.type != 'url-test' && group.type != 'fallback') {
+      return selectedName != null && group.members.contains(selectedName)
+          ? '当前 $selectedName'
+          : null;
+    }
+    String? best;
+    int? bestDelay;
+    for (final name in group.members) {
+      final delay = delays[name];
+      if (delay == null) continue;
+      if (bestDelay == null || delay < bestDelay) {
+        best = name;
+        bestDelay = delay;
+      }
+    }
+    best ??= selectedName != null && group.members.contains(selectedName)
+        ? selectedName
+        : null;
+    if (best == null) return null;
+    return group.type == 'url-test' ? '当前 $best · 最低延迟' : '当前 $best';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final motion = Motion.of(context);
     final profile = state.profile;
+    final currentLabel = _currentLabel;
     return DragTarget<Object>(
       onWillAcceptWithDetails: (d) {
         final data = d.data;
-        if (data is DragNodeData) return data.fromGroup != group.name;
-        if (data is RuleDragData) return data.rule.target != group.name;
+        if (data is DragNodeData) {
+          final duplicate =
+              data.fromGroup != group.name && group.members.contains(data.node);
+          dragState.hintDuplicate(duplicate ? group.name : null);
+          return true;
+        }
+        if (data is RuleDragData) {
+          dragState.clearHint();
+          return data.rule.target != group.name;
+        }
         return false;
+      },
+      onMove: (d) {
+        final data = d.data;
+        if (data is DragNodeData) {
+          final duplicate =
+              data.fromGroup != group.name && group.members.contains(data.node);
+          dragState.hintDuplicate(duplicate ? group.name : null);
+        }
+      },
+      onLeave: (_) {
+        if (dragState.duplicateGroup == group.name) dragState.clearHint();
       },
       onAcceptWithDetails: (d) {
         final data = d.data;
         if (data is DragNodeData) {
+          final duplicate =
+              data.fromGroup != group.name && group.members.contains(data.node);
+          if (duplicate) {
+            // 重复节点：数据不动，交给回弹动画收尾并提示。
+            return;
+          }
+          dragState.markAccepted();
           onDrop(data);
         } else if (data is RuleDragData) {
+          dragState.markAccepted();
           onDropRule?.call(data.rule);
         }
       },
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
+        final duplicate = dragState.duplicateGroup == group.name;
         return AppCard(
-          color: active ? scheme.primaryContainer : null,
-          borderColor: _dropBorder(scheme, active),
+          color: duplicate
+              ? scheme.error.withValues(alpha: 0.07)
+              : active
+              ? scheme.primaryContainer
+              : null,
+          borderColor: duplicate
+              ? scheme.error
+              : currentLabel != null && !active
+              ? scheme.primary.withValues(alpha: 0.35)
+              : _dropBorder(scheme, active),
           padding: const EdgeInsets.fromLTRB(
             Insets.lg,
             Insets.md,
@@ -1078,12 +1278,11 @@ class _GroupCard extends StatelessWidget {
                               ],
                             ],
                           ),
-                          if (selectedName != null &&
-                              group.members.contains(selectedName)) ...[
+                          if (currentLabel != null) ...[
                             const SizedBox(height: 4),
                             // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
                             Text(
-                              '当前 $selectedName',
+                              currentLabel,
                               style: mono(
                                 10.5,
                                 color: scheme.primary,
@@ -1140,88 +1339,115 @@ class _GroupCard extends StatelessWidget {
                     top: Insets.md,
                     right: Insets.sm,
                   ),
-                  child: AnimatedSize(
-                    duration: motion.expand,
-                    curve: motion.enter,
-                    alignment: Alignment.topCenter,
-                    child: Wrap(
-                      spacing: Insets.sm,
-                      runSpacing: Insets.sm,
-                      children: [
-                        for (final name in group.members) ...[
-                          if (profile.proxyByName[name] case final node?)
-                            MotionEntrance(
-                              key: ValueKey('member-$name'),
-                              child: NodeChip(
-                                node: node,
-                                fromGroup: group.name,
-                                onOpen: () => onOpenNode(node),
-                                onMove: () => onMove(node, group.name),
-                                onDelete: () => onDeleteNode(node),
-                                onRemove: isAuto ? null : () => onRemove(name),
-                                selected: selectedName == node.name,
-                                delayText: delays.containsKey(name)
-                                    ? formatDelay(
-                                        delays[name],
-                                        approx: approx.contains(name),
-                                      )
-                                    : null,
-                                onSelect: onSelectMember == null
-                                    ? null
-                                    : () => onSelectMember!(node.name),
-                                onMenu: isAuto || onMenuNode == null
-                                    ? null
-                                    : () => onMenuNode!(node, group.name),
-                              ),
-                            )
-                          else if (profile.groupByName[name] case final nested?)
-                            MotionEntrance(
-                              key: ValueKey('member-$name'),
-                              child: GroupChip(
-                                name: name,
-                                members: nested.members.length,
-                                type: nested.type,
-                                selected: selectedName == name,
-                                tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
-                                onTap: onSelectMember == null
-                                    ? null
-                                    : () => onSelectMember!(name),
-                                onRemove: () => onRemove(name),
-                              ),
-                            )
-                          else if (Profile.builtinTargets.contains(name))
-                            MotionEntrance(
-                              key: ValueKey('member-$name'),
-                              child: SystemPolicyChip(
-                                name: name,
-                                note: name == 'REJECT-DROP' ? '不常用' : null,
-                                selected: selectedName == name,
-                                tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
-                                onTap: onSelectMember == null
-                                    ? null
-                                    : () => onSelectMember!(name),
-                                onRemove: () => onRemove(name),
-                              ),
-                            )
-                          else
-                            MotionEntrance(
-                              key: ValueKey('member-$name'),
-                              child: InputChip(
-                                label: Text(name),
-                                avatar: Icon(
-                                  Icons.help_outline,
-                                  size: 16,
-                                  color: scheme.error,
-                                ),
-                                onDeleted: () => onRemove(name),
-                                deleteButtonTooltipMessage:
-                                    '从组里移除（这个成员在内核里不存在）',
-                              ),
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
+                  child: group.type == 'relay'
+                      ? RelayChain(
+                          group: group,
+                          profile: profile,
+                          delays: delays,
+                          approx: approx,
+                          selectedName: selectedName,
+                          onOpen: onOpenNode,
+                          onDelete: onDeleteNode,
+                          onRemove: onRemove,
+                          onInsertAt: (node, index) =>
+                              onRelayInsert?.call(node, index),
+                          onMoveLeft: (from, to) =>
+                              onRelayReorder?.call(from, to),
+                          onMoveRight: (from, to) =>
+                              onRelayReorder?.call(from, to),
+                          onAddMember: onAddMember,
+                          onSelect: onSelectMember,
+                          onMenu: onMenuNode == null
+                              ? null
+                              : (node, index) => onMenuNode!(node, group.name),
+                        )
+                      : AnimatedSize(
+                          duration: motion.expand,
+                          curve: motion.enter,
+                          alignment: Alignment.topCenter,
+                          child: Wrap(
+                            spacing: Insets.sm,
+                            runSpacing: Insets.sm,
+                            children: [
+                              for (final name in group.members) ...[
+                                if (profile.proxyByName[name] case final node?)
+                                  MotionEntrance(
+                                    key: ValueKey('member-$name'),
+                                    child: NodeChip(
+                                      node: node,
+                                      fromGroup: group.name,
+                                      onOpen: () => onOpenNode(node),
+                                      onMove: () => onMove(node, group.name),
+                                      onDelete: () => onDeleteNode(node),
+                                      onRemove: isAuto
+                                          ? null
+                                          : () => onRemove(name),
+                                      selected: selectedName == node.name,
+                                      delayText: delays.containsKey(name)
+                                          ? formatDelay(
+                                              delays[name],
+                                              approx: approx.contains(name),
+                                            )
+                                          : null,
+                                      onSelect: onSelectMember == null
+                                          ? null
+                                          : () => onSelectMember!(node.name),
+                                      onMenu: isAuto || onMenuNode == null
+                                          ? null
+                                          : () => onMenuNode!(node, group.name),
+                                    ),
+                                  )
+                                else if (profile.groupByName[name]
+                                    case final nested?)
+                                  MotionEntrance(
+                                    key: ValueKey('member-$name'),
+                                    child: GroupChip(
+                                      name: name,
+                                      members: nested.members.length,
+                                      type: nested.type,
+                                      selected: selectedName == name,
+                                      tooltip: '策略组「$name」：组里套组，内核按它的类型再选一次',
+                                      onTap: onSelectMember == null
+                                          ? null
+                                          : () => onSelectMember!(name),
+                                      onRemove: () => onRemove(name),
+                                    ),
+                                  )
+                                else if (Profile.builtinTargets.contains(name))
+                                  MotionEntrance(
+                                    key: ValueKey('member-$name'),
+                                    child: SystemPolicyChip(
+                                      name: name,
+                                      note: name == 'REJECT-DROP'
+                                          ? '不常用'
+                                          : null,
+                                      selected: selectedName == name,
+                                      tooltip: '内置出站「$name」：由内核直接处理，不是配置里的节点',
+                                      onTap: onSelectMember == null
+                                          ? null
+                                          : () => onSelectMember!(name),
+                                      onRemove: () => onRemove(name),
+                                    ),
+                                  )
+                                else
+                                  MotionEntrance(
+                                    key: ValueKey('member-$name'),
+                                    child: InputChip(
+                                      label: Text(name),
+                                      avatar: Icon(
+                                        Icons.help_outline,
+                                        size: 16,
+                                        color: scheme.error,
+                                      ),
+                                      onDeleted: () => onRemove(name),
+                                      deleteButtonTooltipMessage:
+                                          '从组里移除（这个成员在内核里不存在）',
+                                    ),
+                                  ),
+                              ],
+                            ],
+                          ),
+                        ),
                 ),
               ],
               GroupRulesBlock(state: state, target: group.name),

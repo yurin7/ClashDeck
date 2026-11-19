@@ -7,6 +7,7 @@ import '../core/model/profile.dart';
 import 'motion.dart';
 import 'theme.dart';
 import './widgets/app_ink.dart';
+import 'widgets/drag_state.dart';
 
 /// 胶囊的统一圆角：节点、规则、组、系统策略都用它，保证一排看起来是一套。
 /// 选中态前景/描边色：浅色主题下品牌紫贴在白底上对比度不够，
@@ -336,50 +337,97 @@ class NodeChip extends StatelessWidget {
       ),
     );
 
-    return LongPressDraggable<DragNodeData>(
-      data: DragNodeData(node.name, fromGroup),
-      // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
-      delay: const Duration(milliseconds: 300),
-      hapticFeedbackOnStart: true,
-      dragAnchorStrategy: childDragAnchorStrategy,
-      feedback: Material(
-        color: Colors.transparent,
-        child: Opacity(opacity: 0.92, child: shell),
-      ),
-      childWhenDragging: Opacity(opacity: 0.3, child: shell),
-      child: GestureDetector(
-        onSecondaryTapDown: (details) async {
-          final choice = await showMenu<String>(
-            context: context,
-            position: RelativeRect.fromLTRB(
-              details.globalPosition.dx,
-              details.globalPosition.dy,
-              details.globalPosition.dx,
-              details.globalPosition.dy,
-            ),
-            items: const [
-              PopupMenuItem(value: 'edit', child: Text('编辑节点')),
-              PopupMenuItem(value: 'move', child: Text('移动到…')),
-              PopupMenuItem(value: 'delete', child: Text('删除节点')),
-            ],
+    return ListenableBuilder(
+      listenable: dragState,
+      builder: (context, _) => LongPressDraggable<DragNodeData>(
+        data: DragNodeData(node.name, fromGroup),
+        // 回弹动画期间不允许再起拖，避免两层浮层叠在一起。
+        maxSimultaneousDrags: dragState.animating ? 0 : null,
+        // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
+        delay: const Duration(milliseconds: 300),
+        hapticFeedbackOnStart: true,
+        dragAnchorStrategy: childDragAnchorStrategy,
+        onDragStarted: () {
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null || !box.hasSize) return;
+          dragState.begin(
+            node: node.name,
+            group: fromGroup,
+            sourceRect: box.localToGlobal(Offset.zero) & box.size,
+            feedbackSize: box.size,
           );
-          switch (choice) {
-            case 'edit':
-              onOpen();
-            case 'move':
-              onMove();
-            case 'delete':
-              onDelete();
-          }
         },
-        child: Tooltip(
-          message: onSelect != null
-              ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
-              : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
-          // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
-          // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
-          triggerMode: TooltipTriggerMode.manual,
-          child: shell,
+        onDragEnd: (details) => dragState.end(details.offset),
+        feedback: Material(
+          color: Colors.transparent,
+          child: Opacity(
+            opacity: 0.92,
+            child: ListenableBuilder(
+              listenable: dragState,
+              builder: (context, child) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ?child,
+                  if (dragState.blocked)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: scheme.error,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: scheme.surface, width: 2),
+                        ),
+                        child: Icon(
+                          Icons.block,
+                          size: 10,
+                          color: scheme.onError,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              child: shell,
+            ),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.3, child: shell),
+        child: GestureDetector(
+          onSecondaryTapDown: (details) async {
+            final choice = await showMenu<String>(
+              context: context,
+              position: RelativeRect.fromLTRB(
+                details.globalPosition.dx,
+                details.globalPosition.dy,
+                details.globalPosition.dx,
+                details.globalPosition.dy,
+              ),
+              items: const [
+                PopupMenuItem(value: 'edit', child: Text('编辑节点')),
+                PopupMenuItem(value: 'move', child: Text('移动到…')),
+                PopupMenuItem(value: 'delete', child: Text('删除节点')),
+              ],
+            );
+            switch (choice) {
+              case 'edit':
+                onOpen();
+              case 'move':
+                onMove();
+              case 'delete':
+                onDelete();
+            }
+          },
+          child: Tooltip(
+            message: onSelect != null
+                ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
+                : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
+            // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
+            // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
+            triggerMode: TooltipTriggerMode.manual,
+            child: shell,
+          ),
         ),
       ),
     );

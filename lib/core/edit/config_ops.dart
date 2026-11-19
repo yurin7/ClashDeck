@@ -375,7 +375,10 @@ class ConfigOps {
   static YamlDoc _normalizeMembers(YamlDoc doc, String groupName) {
     final profile = Profile.from(doc);
     final group = profile.group(groupName);
-    if (group == null || group.members.length < 2) return doc;
+    // relay 的 members 顺序就是链式顺序，任何规范化都会打乱链路。
+    if (group == null || group.type == 'relay' || group.members.length < 2) {
+      return doc;
+    }
     final ordered = normalizeMemberOrder(
       group.members,
       proxyOrder: _proxyOrder(profile),
@@ -441,6 +444,42 @@ class ConfigOps {
       (e) => e.remove(['proxy-groups', group.index, 'proxies', index]),
     );
     return _normalizeMembers(next, groupName);
+  }
+
+  /// 把组内成员从 [from] 移动到 [to]（链式代理重排、组内拖拽）。
+  ///
+  /// 用「删一条 + 插一条」保持块状 YAML；relay 不做内置出站规范化，
+  /// 因为成员顺序就是链路顺序。
+  static YamlDoc moveGroupMember(
+    YamlDoc doc,
+    String groupName,
+    int from,
+    int to,
+  ) {
+    final profile = Profile.from(doc);
+    final group = profile.group(groupName);
+    if (group == null) throw ConfigEditException('找不到策略组：$groupName');
+    final members = group.members;
+    if (from < 0 || from >= members.length) {
+      throw ConfigEditException('成员位置越界：$from');
+    }
+    if (to < 0 || to > members.length) {
+      throw ConfigEditException('成员位置越界：$to');
+    }
+    if (from == to) return doc;
+    final node = members[from];
+    var next = doc.apply(
+      (e) => e.remove(['proxy-groups', group.index, 'proxies', from]),
+    );
+    final target = from < to ? to - 1 : to;
+    next = next.apply(
+      (e) => e.insertIntoList(
+        ['proxy-groups', group.index, 'proxies'],
+        target,
+        node,
+      ),
+    );
+    return next;
   }
 
   /// 把节点从 A 组挪到 B 组（核心交互：跨组拖拽）。

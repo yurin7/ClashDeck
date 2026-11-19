@@ -42,6 +42,11 @@ class ClashWidgetProvider : AppWidgetProvider() {
             R.id.widget_dot,
             if (running) R.drawable.widget_dot_on else R.drawable.widget_dot_off,
         )
+        views.setInt(
+            R.id.widget_toggle,
+            "setBackgroundResource",
+            if (running) R.drawable.widget_button_on else R.drawable.widget_button_off,
+        )
         views.setImageViewResource(
             R.id.widget_toggle,
             if (running) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,

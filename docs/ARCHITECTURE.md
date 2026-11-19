@@ -196,6 +196,18 @@ VpnService.Builder.establish() -> ParcelFileDescriptor
 并补 `default-nameserver`。想用 DoH 的用户自己在 `dns:` 段里写——`_ensureDns` 只补缺、不覆盖。
 
 
+### 5.4 配置保存后重启内核，而不是热重载
+
+mihomo 的 `PUT /configs` 只重建 listener 与规则，**改不了 tun / dns-hijack / 代理模式**这类
+启动参数；而用户保存配置时最常改的恰好是节点与规则目标。所以 0.3.4 起改成：
+
+- 保存的是**当前运行配置**、且内核正处于 running/starting → 500ms 去抖后 `stop()` → `start(force: true)`；
+- 保存其它配置只写盘，不打断正在运行的内核；
+- 设置页改动、订阅更新（只针对当前配置）同样走重启。
+
+`RuntimeController.restartIfRunning()` 负责去抖与串行（重启期间再保存会合并），
+`shouldRestartAfterSave()` 是「是否该重启」的纯函数，便于单测。
+
 ## 6. 里程碑与现状
 
 | 阶段 | 交付 | 状态 |

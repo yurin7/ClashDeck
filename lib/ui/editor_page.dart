@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/group_selection.dart';
+import '../core/edit/save_restart.dart';
 import '../core/validate/validator.dart';
 import '../data/profile_store.dart';
 import '../runtime/runtime_controller.dart';
@@ -29,6 +30,7 @@ class EditorPage extends StatefulWidget {
     this.runtime,
     this.autoSave = true,
     this.cachedDelays = const <String, int?>{},
+    this.isActiveProfile = true,
   });
 
   final ProfileStore store;
@@ -46,6 +48,9 @@ class EditorPage extends StatefulWidget {
 
   /// 上次测速缓存（毫秒；null 表示超时），给代理页节点行显示延迟。
   final Map<String, int?> cachedDelays;
+
+  /// 编辑的是不是当前运行配置。只有它保存后才需要自动重启内核。
+  final bool isActiveProfile;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -135,7 +140,22 @@ class _EditorPageState extends State<EditorPage> {
       state.normalizeRules();
       await state.save(widget.store);
       if (!mounted) return;
-      showToast(context, '已保存');
+      final runtime = widget.runtime;
+      final coreActive =
+          runtime != null &&
+          (runtime.phase == RuntimePhase.running ||
+              runtime.phase == RuntimePhase.starting);
+      final restarting = shouldRestartAfterSave(
+        isActiveProfile: widget.isActiveProfile,
+        coreActive: coreActive,
+      );
+      if (restarting) {
+        await runtime!.restartIfRunning(reason: '配置已保存');
+        if (!mounted) return;
+        showToast(context, '已保存，内核正在重启…');
+      } else {
+        showToast(context, '已保存');
+      }
     } catch (e) {
       if (!mounted) return;
       showToast(context, '保存失败：$e');

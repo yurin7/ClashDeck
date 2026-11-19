@@ -370,6 +370,7 @@ class _AppShellState extends State<AppShell>
           runtime: _runtime,
           autoSave: _settings?.autoSave ?? false,
           cachedDelays: _latencyCache,
+          isActiveProfile: fileName == _activeFileName,
         ),
       ),
     );
@@ -529,6 +530,7 @@ class _AppShellState extends State<AppShell>
           runtime: _runtime,
           autoSave: _settings?.autoSave ?? false,
           cachedDelays: _latencyCache,
+          isActiveProfile: fileName == _activeFileName,
         ),
       ),
     );
@@ -583,16 +585,21 @@ class _AppShellState extends State<AppShell>
     if (mounted) {
       setState(() => _lastSubscriptionUpdate = DateTime.now());
     }
-    await _reloadCoreIfRunning();
+    await _restartCoreIfRunning(reason: '订阅已更新');
     return count;
   }
 
-  /// 订阅/设置改动后，如果内核正在跑就用新配置热重载，不必让用户手动重载。
-  Future<void> _reloadCoreIfRunning() async {
-    if (_runtime.phase != RuntimePhase.running) return;
-    final ok = await _runtime.reloadConfig();
+  /// 订阅/设置改动后，如果内核正在跑就自动重启，让新配置完整生效。
+  ///
+  /// 不走热重载：TUN/DNS/代理模式这类启动参数热重载改不了，重启最省心。
+  Future<void> _restartCoreIfRunning({String reason = '配置已更新'}) async {
+    if (_runtime.phase != RuntimePhase.running &&
+        _runtime.phase != RuntimePhase.starting) {
+      return;
+    }
+    await _runtime.restartIfRunning(reason: reason);
     if (!mounted) return;
-    _toast(ok ? '内核已热重载' : '热重载失败，可在概览页停止后重新启动');
+    _toast('$reason，内核正在重启…');
   }
 
   Future<void> _updateSubscription() async {

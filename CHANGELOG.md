@@ -2,6 +2,16 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
+## [0.3.4] - 未发布
+
+### Changed
+
+- 保存**当前运行配置**后自动重启内核，让节点/规则/启动参数一次生效；保存其它配置只写盘，不打断正在运行的内核。500ms 内连续保存合并为一次重启；设置页与订阅更新同样走重启而不是热重载。
+
+### Tests
+
+- `test/runtime_restart_test.dart`：合并重启、未运行时静默、500ms 去重。
+- `test/save_restart_test.dart`：只有「当前配置 + 内核在跑」才重启。
 ## [0.3.3] - 未发布
 
 ### Changed

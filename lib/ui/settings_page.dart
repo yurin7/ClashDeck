@@ -90,13 +90,14 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// 内核在跑时，改完设置自动热重载（防抖 700ms），避免每拨一个开关都重载一次。
+  /// 内核在跑时，改完设置自动重启（本地 700ms 防抖，控制器再合并一次），
+  /// 避免每拨一个开关都重启一次。
   void _scheduleReload() {
     if (!_running) return;
     _reloadTimer?.cancel();
     _reloadTimer = Timer(const Duration(milliseconds: 700), () async {
       if (!mounted || !_running) return;
-      await widget.runtime.reloadConfig();
+      await widget.runtime.restartIfRunning(reason: '设置已修改');
     });
   }
 
@@ -224,14 +225,16 @@ class _SettingsPageState extends State<SettingsPage> {
                               color: context.semantic.warn,
                             ),
                             const SizedBox(width: Insets.sm),
-                            const Expanded(child: Text('内核正在运行，改动需要重载后生效')),
+                            const Expanded(child: Text('内核正在运行，改动会自动重启生效')),
                             TextButton(
                               onPressed: _busy
                                   ? null
                                   : () => _run(() async {
-                                      await widget.runtime.reloadConfig();
+                                      await widget.runtime.restartIfRunning(
+                                        reason: '手动重启',
+                                      );
                                     }),
-                              child: const Text('重载'),
+                              child: const Text('重启'),
                             ),
                           ],
                         ),

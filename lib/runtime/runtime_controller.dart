@@ -87,6 +87,11 @@ class RuntimeController extends ChangeNotifier {
   StreamSubscription<({int up, int down})>? _trafficSub;
   bool _disposed = false;
 
+  /// 配置保存后的自动重启：500ms 内多次保存只重启一次。
+  Timer? _restartTimer;
+  bool _restarting = false;
+  String? _restartReason;
+
   RuntimePhase get phase => _phase;
   String? get lastError => _lastError;
 
@@ -126,9 +131,66 @@ class RuntimeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _restartTimer?.cancel();
     _stopPolling();
     _channel.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  /// 是否正在执行「保存后自动重启」。UI 可以据此显示「正在重启」。
+  bool get restarting => _restarting;
+
+  /// 配置保存后按需重启内核。
+  ///
+  /// 只有内核正在运行（或正在启动）时才动；500ms 内的多次调用合并成一次，
+  /// 避免连续编辑（例如一次导入写入多条规则）触发多次 stop/start。
+  /// 不改变 [phase] 之外的状态；失败时走 [lastError]。
+  Future<void> restartIfRunning({
+    String reason = '配置已保存',
+    Duration debounce = const Duration(milliseconds: 500),
+  }) async {
+    if (_disposed) return;
+    if (_phase != RuntimePhase.running && _phase != RuntimePhase.starting) {
+      return;
+    }
+    _restartReason = reason;
+    if (_restarting) return;
+    if (_restartTimer?.isActive ?? false) return;
+    _restartTimer = Timer(debounce, () {
+      unawaited(_performRestart());
+    });
+  }
+
+  Future<void> _performRestart() async {
+    if (_disposed || _restarting) return;
+    // 刚点启动就保存：等内核真正 running 再重启，否则 stop 会打断授权流程。
+    final deadline = DateTime.now().add(const Duration(seconds: 8));
+    while (_phase == RuntimePhase.starting &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (_disposed) return;
+    }
+    if (_phase != RuntimePhase.running) return;
+    _restarting = true;
+    final reason = _restartReason ?? '配置已保存';
+    notifyListeners();
+    try {
+      await stop();
+      // stop 只负责发指令，真正落地要等 onRuntimeState 把 phase 置回 idle。
+      final waitUntil = DateTime.now().add(const Duration(seconds: 5));
+      while (_phase == RuntimePhase.stopping &&
+          DateTime.now().isBefore(waitUntil)) {
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        if (_disposed) return;
+      }
+      final ok = await start(force: true);
+      if (!ok && _lastError == null) {
+        _setError('$reason后内核重启失败');
+      }
+    } finally {
+      _restarting = false;
+      if (!_disposed) notifyListeners();
+    }
   }
 
   /// 配置里 `type: file` 的规则集，缓存文件丢了就用镜像链补拉一次。

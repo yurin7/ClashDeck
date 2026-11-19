@@ -94,7 +94,6 @@ class ClashVpnService : VpnService() {
             }
 
             ACTION_START -> {
-                promoteToForeground()
                 // 从磁贴 / 小组件 / 通知进来时 intent 里没有参数，读 App 内最后一次
                 // 启动时的快照；完全没有快照说明从没在 App 里启动过。
                 val stored = if (intent.getStringExtra(EXTRA_WORK_DIR) == null) {
@@ -140,6 +139,7 @@ class ClashVpnService : VpnService() {
                     ),
                 )
                 RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STARTING)
+                promoteToForeground()
                 bootThread?.interrupt()
                 bootThread = Thread(
                     { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress, ipv6) },
@@ -234,6 +234,7 @@ class ClashVpnService : VpnService() {
                 } else {
                     running = true
                     RuntimePrefs.setKernel(this, RuntimePrefs.STATE_RUNNING, pid = MihomoCore.pid)
+                    runCatching { refreshNotification() }
                     RuntimeBridge.notifyState("running", pid = MihomoCore.pid)
                 }
             } catch (t: Throwable) {
@@ -341,6 +342,7 @@ class ClashVpnService : VpnService() {
         lastError = message
         running = false
         RuntimePrefs.setKernel(this, RuntimePrefs.STATE_ERROR, error = message)
+        runCatching { refreshNotification() }
         MihomoCore.log("启动失败：$message")
         RuntimeBridge.notifyState("error", message = message)
         // 失败后的收尾不再发 "stopped"，否则会把刚报的错误状态冲掉。
@@ -381,35 +383,77 @@ class ClashVpnService : VpnService() {
     // ------------------------------------------------------------- 前台通知
 
     private fun promoteToForeground() {
+        ensureChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+    }
+
+    /** 状态/配置变化后刷新通知文案，不重建前台服务。 */
+    private fun refreshNotification() {
         val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "内核运行状态", NotificationManager.IMPORTANCE_LOW),
-                )
-            }
+        manager.notify(NOTIFICATION_ID, buildNotification())
+    }
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "内核运行状态", NotificationManager.IMPORTANCE_LOW),
+            )
         }
-        val intent = Intent(this, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(
+    }
+
+    private fun buildNotification(): Notification {
+        val open = PendingIntent.getActivity(
             this,
             0,
-            intent,
+            Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val stopIntent = Intent(this, ClashVpnService::class.java).apply {
+            action = ACTION_STOP
+            putExtra(EXTRA_FROM_ACTION, true)
+        }
+        val stop = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val profile = RuntimePrefs.profileName(this)
+        val exit = RuntimePrefs.globalExit(this)
+        val state = RuntimePrefs.kernelState(this)
+        val title = when (state) {
+            RuntimePrefs.STATE_RUNNING -> "ClashDeck · 已连接"
+            RuntimePrefs.STATE_STARTING -> "ClashDeck · 启动中"
+            RuntimePrefs.STATE_STOPPING -> "ClashDeck · 正在停止"
+            RuntimePrefs.STATE_ERROR -> "ClashDeck · 启动失败"
+            else -> "ClashDeck · 未连接"
+        }
+        val detail = listOfNotNull(
+            profile?.takeIf { it.isNotBlank() },
+            exit?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ").ifBlank { "轻点打开 ClashDeck" }
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
-        val notification = builder
-            .setContentTitle("ClashDeck")
-            .setContentText("内核运行中")
+        return builder
+            .setContentTitle(title)
+            .setContentText(detail)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentIntent(pending)
+            .setContentIntent(open)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "停止",
+                stop,
+            )
             .build()
-        startForeground(NOTIFICATION_ID, notification)
     }
 
     private fun stopForegroundCompat() {

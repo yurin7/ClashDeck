@@ -107,6 +107,12 @@ object RuntimePrefs {
     fun kernelState(context: Context): String =
         prefs(context).getString(KEY_KERNEL_STATE, STATE_STOPPED) ?: STATE_STOPPED
 
+    fun profileName(context: Context): String? =
+        prefs(context).getString(KEY_PROFILE_NAME, null)
+
+    fun globalExit(context: Context): String? =
+        prefs(context).getString(KEY_GLOBAL_EXIT, null)
+
     fun kernelError(context: Context): String? =
         prefs(context).getString(KEY_KERNEL_ERROR, null)
 

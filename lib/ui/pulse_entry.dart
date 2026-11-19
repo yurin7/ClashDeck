@@ -44,3 +44,9 @@ bool pulseShouldBlockPager({required bool open, required double reveal}) =>
 /// 遮罩打开期间的滚动策略；其余时间保持正常的翻页手感。
 ScrollPhysics pulsePagerPhysics({required bool open}) =>
     open ? const NeverScrollableScrollPhysics() : const PageScrollPhysics();
+
+/// PageView 是否应该禁滑：只有「已打开且不在拖拽中」才禁。
+///
+/// 拖拽过程中切 physics 会打断当前 drag，让抽屉刚滑出就弹回。
+bool pulsePagerLocked({required bool open, required bool dragging}) =>
+    open && !dragging;

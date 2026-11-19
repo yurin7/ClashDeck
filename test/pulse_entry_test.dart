@@ -108,4 +108,17 @@ void main() {
       expect(pulsePagerPhysics(open: false), isA<PageScrollPhysics>());
     });
   });
+  group('pulsePagerLocked', () {
+    test('打开且不在拖拽时禁滑', () {
+      expect(pulsePagerLocked(open: true, dragging: false), isTrue);
+    });
+
+    test('拖拽过程中不禁滑，避免打断手势', () {
+      expect(pulsePagerLocked(open: true, dragging: true), isFalse);
+    });
+
+    test('抽屉关闭时不禁滑', () {
+      expect(pulsePagerLocked(open: false, dragging: false), isFalse);
+    });
+  });
 }

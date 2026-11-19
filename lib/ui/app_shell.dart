@@ -444,37 +444,10 @@ class _AppShellState extends State<AppShell>
   /// 不在系统边缘也能拿到事件，用它跟手拉出左侧遮罩。
   bool _onPagerScrollNotification(ScrollNotification notification) {
     if (_index != 0) return false;
-    // 遮罩已打开或在滑出过程中：吞掉所有滚动，向左拖只回弹遮罩进度，
-    // 绝不能让后面的 PageView 借机翻页。
-    if (pulseShouldBlockPager(open: _pulseOpen, reveal: _pulseReveal.value)) {
-      if (notification is OverscrollNotification &&
-          notification.depth == 0 &&
-          _pulseOverscrollActive) {
-        final delta = notification.dragDetails?.delta.dx ?? 0;
-        if (delta < 0) {
-          _pulseOverscrollDx = (_pulseOverscrollDx + delta).clamp(
-            0.0,
-            double.infinity,
-          );
-          final width = MediaQuery.sizeOf(context).width;
-          _pulseReveal.value = pulseDrawerProgress(
-            dragDx: _pulseOverscrollDx,
-            panelWidth: pulseDrawerPanelWidth(width),
-          );
-        }
-      }
-      // 松手要结算：打开后 PageView 已不可滚，ScrollEnd 只能在这里收口，
-      // 否则抽屉会停在半开位置。
-      if (notification is ScrollEndNotification &&
-          notification.depth == 0 &&
-          _pulseOverscrollActive) {
-        _pulseOverscrollActive = false;
-        _settlePulse(
-          pulseDrawerShouldOpen(progress: _pulseReveal.value, velocity: 0)
-              ? 1
-              : 0,
-        );
-      }
+    // 抽屉已完全打开、且不在拖拽中：吞掉残余滚动，避免翻页。
+    // 拖拽过程中（_pulseOverscrollActive）必须继续走下面的 overscroll
+    // 分支，否则进度不再增长、抽屉会停在刚露头的位置。
+    if (pulsePagerLocked(open: _pulseOpen, dragging: _pulseOverscrollActive)) {
       return true;
     }
     if (notification is ScrollStartNotification && notification.depth == 0) {
@@ -778,7 +751,14 @@ class _AppShellState extends State<AppShell>
                 child: PageView(
                   controller: _pager,
                   // 遮罩打开期间禁止翻页：左滑只能回弹遮罩，不能切到下一页。
-                  physics: pulsePagerPhysics(open: _pulseOpen),
+                  // 只在「已打开且不在拖拽中」禁滑：拖拽过程中切 physics
+                  // 会打断当前 drag，导致抽屉刚滑出就弹回。
+                  physics: pulsePagerPhysics(
+                    open: pulsePagerLocked(
+                      open: _pulseOpen,
+                      dragging: _pulseOverscrollActive,
+                    ),
+                  ),
                   onPageChanged: (i) => setState(() => _index = i),
                   children: [
                     _KeepAlivePage(

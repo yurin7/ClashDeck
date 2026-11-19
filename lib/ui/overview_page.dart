@@ -362,6 +362,7 @@ class _QuickControls extends StatelessWidget {
             labelOf: (mode) => mode == ProxyMode.tun ? 'TUN' : '仅端口',
             onSelected: (mode) async {
               await state.setProxyMode(mode);
+              await runtime.restartIfRunning(reason: '运行模式已切换');
               onChanged();
             },
           ),
@@ -392,6 +393,7 @@ class _QuickControls extends StatelessWidget {
                             return;
                           }
                           await state.setTunStack(stack);
+                          await runtime.restartIfRunning(reason: 'TUN 协议栈已切换');
                           onChanged();
                         },
                       ),
@@ -417,9 +419,7 @@ class _QuickControls extends StatelessWidget {
             },
             onSelected: (mode) async {
               await state.setMode(mode);
-              if (runtime.phase == RuntimePhase.running) {
-                await runtime.api.setMode(mode);
-              }
+              await runtime.restartIfRunning(reason: '分流模式已切换');
               onChanged();
             },
           ),

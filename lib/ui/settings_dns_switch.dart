@@ -34,7 +34,7 @@ class DnsEnabledSwitch extends StatelessWidget {
         }
         onEnabledChanged(value);
       },
-      contentPadding: const EdgeInsets.fromLTRB(0, 0, Insets.md, 0),
+      contentPadding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.md, 0),
       title: Text('启用 DNS', style: display(14, weight: 600)),
       subtitle: Text('域名解析依赖内核 DNS，关闭后可能无法解析域名', style: hintStyle(context)),
     );

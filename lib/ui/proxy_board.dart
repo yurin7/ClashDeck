@@ -781,8 +781,9 @@ class _ProxyBoardState extends State<ProxyBoard>
       profile: profile,
       groupName: group.name,
       members: group.members,
-      // 链式代理只能填节点：系统策略段选了也会被过滤掉，直接不展示。
+      // 链式代理只能填节点：系统策略和策略组选了也会被过滤掉，直接不展示。
       includeBuiltins: group.type != 'relay',
+      includeGroups: group.type != 'relay',
       onCreateNode: () {
         Navigator.pop(context);
         _addNodeForm();

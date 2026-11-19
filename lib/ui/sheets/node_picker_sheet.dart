@@ -41,6 +41,7 @@ List<NodePickerEntry> nodePickerEntries(
   required String groupName,
   required Iterable<String> members,
   bool includeBuiltins = true,
+  bool includeGroups = true,
 }) {
   final candidates = memberCandidates(
     profile,
@@ -65,7 +66,7 @@ List<NodePickerEntry> nodePickerEntries(
           inside: candidate.inGroup,
         ),
     for (final candidate in candidates)
-      if (candidate.isGroup)
+      if (includeGroups && candidate.isGroup)
         NodePickerEntry(
           name: candidate.name,
           section: NodePickerSection.group,
@@ -85,6 +86,7 @@ Future<List<String>?> showNodePickerSheet(
   String? subtitle,
   String confirmVerb = '加入',
   bool includeBuiltins = true,
+  bool includeGroups = true,
   VoidCallback? onCreateNode,
 }) {
   return showSelectSheet<List<String>>(
@@ -97,6 +99,7 @@ Future<List<String>?> showNodePickerSheet(
       members: members,
       confirmVerb: confirmVerb,
       includeBuiltins: includeBuiltins,
+      includeGroups: includeGroups,
       onCreateNode: onCreateNode,
     ),
   );
@@ -109,6 +112,7 @@ class _NodePickerSheet extends StatefulWidget {
     required this.members,
     required this.confirmVerb,
     required this.includeBuiltins,
+    this.includeGroups = true,
     this.onCreateNode,
   });
 
@@ -117,6 +121,7 @@ class _NodePickerSheet extends StatefulWidget {
   final Iterable<String> members;
   final String confirmVerb;
   final bool includeBuiltins;
+  final bool includeGroups;
   final VoidCallback? onCreateNode;
 
   @override
@@ -131,6 +136,7 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
     groupName: widget.groupName,
     members: widget.members,
     includeBuiltins: widget.includeBuiltins,
+    includeGroups: widget.includeGroups,
   );
 
   void _toggle(NodePickerEntry entry) {
@@ -196,10 +202,10 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
       if (widget.includeBuiltins)
         ?_sectionOf(NodePickerSection.builtin, '系统策略'),
       ?_sectionOf(NodePickerSection.node, '节点'),
-      ?_sectionOf(NodePickerSection.group, '策略组'),
+      if (widget.includeGroups) ?_sectionOf(NodePickerSection.group, '策略组'),
     ];
     return PickerSheetScaffold(
-      searchHint: '搜索节点或策略组',
+      searchHint: widget.includeGroups ? '搜索节点或策略组' : '搜索节点',
       sections: sections,
       selectedCount: _picked.length,
       onSelectAll: _selectAll,

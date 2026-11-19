@@ -1,7 +1,7 @@
 name: clashdeck
 description: "Clash / mihomo 配置可视化编辑器"
 publish_to: 'none'
-version: 0.3.2+2087
+version: 0.3.3+2089
 
 environment:
   sdk: ^3.14.0

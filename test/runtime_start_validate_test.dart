@@ -92,4 +92,18 @@ void main() {
     expect(controller!.lastError, isNull);
     expect(calls.single.method, 'start');
   });
+
+  test('默认向 VpnService 传 ipv6=false', () async {
+    controller = make(_valid);
+    await controller!.start();
+    final args = calls.single.arguments as Map<Object?, Object?>;
+    expect(args['ipv6'], isFalse);
+  });
+
+  test('YAML 里 ipv6: true 时才传 true', () async {
+    controller = make('$_valid\nipv6: true\n');
+    await controller!.start();
+    final args = calls.single.arguments as Map<Object?, Object?>;
+    expect(args['ipv6'], isTrue);
+  });
 }

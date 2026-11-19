@@ -38,6 +38,10 @@ class ClashVpnService : VpnService() {
         const val EXTRA_ROUTE_APPS = "routeApps"
         const val EXTRA_MTU = "mtu"
 
+        /// 是否启用 IPv6：只有配置 `ipv6: true` 时才把 v6 地址/路由加进 tun，
+        /// 否则会把 v6 流量吸进隧道再被丢掉，部分网络下表现为「连不上」。
+        const val EXTRA_IPV6 = "ipv6"
+
         /// Dart 侧按 `dns.fake-ip-range` 算出的 tun 地址（`ip/prefix`），要和内核一致。
         const val EXTRA_TUN_ADDRESS = "tunAddress"
 
@@ -64,6 +68,37 @@ class ClashVpnService : VpnService() {
         @Volatile
         var lastError: String? = null
             private set
+
+        /**
+         * 读取内核里 tun 网卡的收发字节数，用于「内核已启动但流量没进来」的诊断。
+         * 读不到 stats（部分 ROM 限制 /sys）或没有 tun 网卡时返回 null，不要让它影响概览。
+         */
+        fun tunStats(): Map<String, Any?>? {
+            return try {
+                val dirs = File("/sys/class/net").listFiles { f -> f.name.startsWith("tun") }
+                    ?: return null
+                if (dirs.isEmpty()) return null
+                var rx = 0L
+                var tx = 0L
+                var picked: String? = null
+                for (dir in dirs) {
+                    val rxText = File(dir, "statistics/rx_bytes").takeIf { it.canRead() }
+                        ?.readText()?.trim() ?: continue
+                    val txText = File(dir, "statistics/tx_bytes").takeIf { it.canRead() }
+                        ?.readText()?.trim() ?: continue
+                    val rxValue = rxText.toLongOrNull() ?: continue
+                    val txValue = txText.toLongOrNull() ?: continue
+                    rx += rxValue
+                    tx += txValue
+                    picked = dir.name
+                }
+                val iface = picked ?: return null
+                mapOf("up" to running, "iface" to iface, "rx" to rx, "tx" to tx)
+            } catch (t: Throwable) {
+                MihomoCore.log("读取 tun 统计失败：${t.message}")
+                null
+            }
+        }
     }
 
     private var bootThread: Thread? = null
@@ -86,9 +121,10 @@ class ClashVpnService : VpnService() {
                 val routeApps = intent.getStringArrayListExtra(EXTRA_ROUTE_APPS) ?: arrayListOf()
                 val mtu = intent.getIntExtra(EXTRA_MTU, TUN_MTU)
                 val tunAddress = intent.getStringExtra(EXTRA_TUN_ADDRESS)
+                val ipv6 = intent.getBooleanExtra(EXTRA_IPV6, false)
                 bootThread?.interrupt()
                 bootThread = Thread(
-                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress) },
+                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress, ipv6) },
                     "clashdeck-boot",
                 ).also {
                     it.isDaemon = true
@@ -124,6 +160,7 @@ class ClashVpnService : VpnService() {
         routeApps: List<String>,
         mtu: Int,
         tunAddress: String?,
+        ipv6: Boolean,
     ) {
         lastError = null
         RuntimeBridge.notifyState("starting")
@@ -141,7 +178,7 @@ class ClashVpnService : VpnService() {
                 return
             }
 
-            val descriptor = establishTun(routeMode, routeApps, mtu, tunAddress)
+            val descriptor = establishTun(routeMode, routeApps, mtu, tunAddress, ipv6)
             if (descriptor == null) {
                 fail("建立 VPN 失败：没有拿到授权或系统拒绝")
                 return
@@ -202,6 +239,7 @@ class ClashVpnService : VpnService() {
         routeApps: List<String>,
         mtu: Int,
         tunAddress: String?,
+        ipv6: Boolean,
     ): ParcelFileDescriptor? {
         // 地址要和内核算出来的一致，否则 system / mixed 栈 bind 会失败。
         val (tunIp, tunPrefix) = parseTunAddress(tunAddress)
@@ -247,12 +285,16 @@ class ClashVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
         }
-        // IPv6 可选：设备不支持时忽略。
-        try {
-            builder.addAddress(TUN_ADDRESS6, TUN_PREFIX6)
-            builder.addRoute("::", 0)
-        } catch (t: Throwable) {
-            MihomoCore.log("IPv6 路由添加失败（忽略）：${t.message}")
+        // IPv6 可选：只有配置 ipv6: true 才加，否则 v6 流量会被吸进 tun 后丢弃。
+        if (ipv6) {
+            try {
+                builder.addAddress(TUN_ADDRESS6, TUN_PREFIX6)
+                builder.addRoute("::", 0)
+            } catch (t: Throwable) {
+                MihomoCore.log("IPv6 路由添加失败（忽略）：${t.message}")
+            }
+        } else {
+            MihomoCore.log("IPv6 未启用：不添加 v6 地址与路由")
         }
         return builder.establish()
     }

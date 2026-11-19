@@ -75,6 +75,8 @@ class MainActivity : FlutterActivity() {
 
             "listAppIcons" -> listAppIcons(arguments, result)
 
+            "tunStats" -> result.success(ClashVpnService.tunStats())
+
             else -> result.notImplemented()
         }
     }
@@ -202,6 +204,7 @@ class MainActivity : FlutterActivity() {
             .putExtra(ClashVpnService.EXTRA_ROUTE_MODE, routeMode)
             .putExtra(ClashVpnService.EXTRA_MTU, mtu)
             .putExtra(ClashVpnService.EXTRA_TUN_ADDRESS, tunAddress)
+            .putExtra(ClashVpnService.EXTRA_IPV6, arguments["ipv6"] as? Boolean ?: false)
             .putStringArrayListExtra(ClashVpnService.EXTRA_ROUTE_APPS, ArrayList(routeApps))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

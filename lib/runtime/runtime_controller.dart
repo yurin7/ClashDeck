@@ -16,6 +16,49 @@ import 'mihomo_api.dart';
 import 'runtime_config.dart';
 
 /// 内核 + VPN 的生命周期阶段。
+/// tun 网卡的实时收发计数（Kotlin 读 `/sys/class/net/tun*/statistics`）。
+///
+/// 读不到 stats 时整体为 null——部分 ROM 限制 /sys，诊断不能因此崩掉。
+class TunStats {
+  const TunStats({
+    required this.up,
+    required this.rx,
+    required this.tx,
+    this.iface,
+  });
+
+  final bool up;
+  final int rx;
+  final int tx;
+  final String? iface;
+
+  int get total => rx + tx;
+
+  static TunStats? fromMap(Map<Object?, Object?>? raw) {
+    if (raw == null) return null;
+    final rx = (raw['rx'] as num?)?.toInt();
+    final tx = (raw['tx'] as num?)?.toInt();
+    if (rx == null || tx == null) return null;
+    return TunStats(
+      up: raw['up'] == true,
+      rx: rx,
+      tx: tx,
+      iface: raw['iface'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is TunStats &&
+      other.up == up &&
+      other.rx == rx &&
+      other.tx == tx &&
+      other.iface == iface;
+
+  @override
+  int get hashCode => Object.hash(up, rx, tx, iface);
+}
+
 enum RuntimePhase { idle, starting, running, stopping, error }
 
 /// 运行期控制器：把 Dart 侧的配置生成、REST 观察、Android 侧 VpnService
@@ -74,6 +117,7 @@ class RuntimeController extends ChangeNotifier {
 
   /// 规则集缓存缺失（补拉也失败）的个数，供 UI 提示「N 个规则集未生效」。
   int _missingRuleCaches = 0;
+  TunStats? _tunStats;
   int _up = 0;
   int _down = 0;
 
@@ -218,6 +262,9 @@ class RuntimeController extends ChangeNotifier {
         // system / mixed 栈要在网卡上 bind 内核算出来的 tun 地址，这里把同一个
         // 地址交给 Kotlin 建网卡（gVisor 不看地址，但写了也无害）。
         'tunAddress': RuntimeConfig.tunAddressFor(config),
+        // 只有 YAML 里 ipv6: true 才让 VpnService 加 v6 地址/路由，否则 v6
+        // 流量会被吸进 tun 后丢弃，部分网络下表现为「连不上」。
+        'ipv6': config.plainAt(['ipv6']) == true,
         ...settings.toStartArgs(),
       });
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。
@@ -233,8 +280,30 @@ class RuntimeController extends ChangeNotifier {
     _setPhase(RuntimePhase.stopping);
     try {
       await _channel.invokeMethod<void>('stop');
+      _tunStats = null;
     } catch (error) {
       _setError('停止失败：$error');
+    }
+  }
+
+  /// 最近一次读到的 tun 收发计数；端口模式或读不到时为 null。
+  TunStats? get tunStats => _tunStats;
+
+  /// 读一次 tun 统计。失败（非 Android / ROM 限制）返回 null，不报错。
+  Future<TunStats?> loadTunStats() async {
+    if (!(androidOverride ?? supported)) return null;
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'tunStats',
+      );
+      final stats = TunStats.fromMap(raw);
+      if (stats != _tunStats) {
+        _tunStats = stats;
+        notifyListeners();
+      }
+      return stats;
+    } catch (_) {
+      return null;
     }
   }
 

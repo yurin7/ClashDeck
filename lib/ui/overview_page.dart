@@ -13,6 +13,7 @@ import 'widgets.dart';
 import 'widgets/start_stop_button.dart';
 import 'motion.dart';
 import 'startup_issues_dialog.dart';
+import 'runtime_diagnostic_dialog.dart';
 
 /// 概览页：现在在跑什么、流量多少、当前配置是哪份，以及最常用的两个动作。
 class OverviewPage extends StatefulWidget {
@@ -27,6 +28,7 @@ class OverviewPage extends StatefulWidget {
     required this.onPickProfile,
     required this.onRefreshProfiles,
     this.bottomInset = 0,
+    this.appVersion = '',
   });
 
   final RuntimeController runtime;
@@ -39,6 +41,9 @@ class OverviewPage extends StatefulWidget {
   final Future<void> Function() onRefreshProfiles;
 
   final double bottomInset;
+
+  /// 本机版本号，诊断面板里显示用。
+  final String appVersion;
 
   @override
   State<OverviewPage> createState() => _OverviewPageState();
@@ -131,6 +136,10 @@ class _OverviewPageState extends State<OverviewPage> {
                   history: _history,
                   running: _running,
                 ),
+                if (widget.settings != null) ...[
+                  const SizedBox(height: Insets.md),
+                  _TunWarning(runtime: runtime, settings: widget.settings!),
+                ],
               ],
             ),
           ),
@@ -175,7 +184,13 @@ class _OverviewPageState extends State<OverviewPage> {
             Insets.xl,
             0,
           ),
-          sliver: SliverToBoxAdapter(child: _LogCard(runtime: runtime)),
+          sliver: SliverToBoxAdapter(
+            child: _LogCard(
+              runtime: runtime,
+              settings: widget.settings,
+              appVersion: widget.appVersion,
+            ),
+          ),
         ),
         SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
       ],
@@ -774,9 +789,15 @@ class _ActiveProfileCard extends StatelessWidget {
 }
 
 class _LogCard extends StatelessWidget {
-  const _LogCard({required this.runtime});
+  const _LogCard({
+    required this.runtime,
+    required this.settings,
+    required this.appVersion,
+  });
 
   final RuntimeController runtime;
+  final SettingsState? settings;
+  final String appVersion;
 
   @override
   Widget build(BuildContext context) {
@@ -791,6 +812,16 @@ class _LogCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: MicroLabel('内核日志')),
+              IconButton(
+                tooltip: '诊断',
+                onPressed: () => showRuntimeDiagnosticDialog(
+                  context,
+                  appVersion: appVersion,
+                  runtime: runtime,
+                  settings: settings,
+                ),
+                icon: const Icon(Icons.bug_report_outlined, size: 20),
+              ),
               TextButton(
                 onPressed: () async {
                   await runtime.loadLogs();
@@ -946,4 +977,67 @@ class _Segmented<T> extends StatelessWidget {
   if (kb < 1024) return (value: kb.toStringAsFixed(1), unit: 'KB/s');
   final mb = kb / 1024;
   return (value: mb.toStringAsFixed(2), unit: 'MB/s');
+}
+
+/// TUN 启动后 3 秒内 tun 收发仍为 0 时的轻提示（读不到 stats 时不提示）。
+class _TunWarning extends StatefulWidget {
+  const _TunWarning({required this.runtime, required this.settings});
+
+  final RuntimeController runtime;
+  final SettingsState settings;
+
+  @override
+  State<_TunWarning> createState() => _TunWarningState();
+}
+
+class _TunWarningState extends State<_TunWarning> {
+  Timer? _timer;
+  TunStats? _stats;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _pollStats());
+    _pollStats();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _pollStats() {
+    if (!mounted) return;
+    if (widget.settings.app.proxyMode != ProxyMode.tun) return;
+    if (widget.runtime.phase != RuntimePhase.running) return;
+    unawaited(
+      widget.runtime.loadTunStats().then((stats) {
+        if (mounted) setState(() => _stats = stats);
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final semantic = context.semantic;
+    final stats = _stats;
+    final startedAt = widget.runtime.startedAt;
+    final idle =
+        widget.settings.app.proxyMode == ProxyMode.tun &&
+        widget.runtime.phase == RuntimePhase.running &&
+        stats != null &&
+        stats.total == 0 &&
+        startedAt != null &&
+        DateTime.now().difference(startedAt) > const Duration(seconds: 3);
+    if (!idle) return const SizedBox.shrink();
+    return AppCard(
+      child: Text(
+        '内核已启动，但 TUN 3 秒内没有收到任何流量。'
+        '如果浏览器打不开网页，可以切到「仅代理端口」并用 127.0.0.1:7890 验证。',
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(height: 1.4, color: semantic.warn),
+      ),
+    );
+  }
 }

@@ -2,6 +2,27 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
+## [0.3.3] - 未发布
+
+### Changed
+
+- Pulse 打开手势改为「概览页右缘 28dp 手势带（带内 24dp 半透明把手 + 左箭头）起手左滑」，屏幕中部左右滑仍由 PageView 翻页；0.3.2 的「第 0 页禁用横向滚动」不再需要。
+- TUN 模式强制 dns.enable: true：VpnService 把系统 DNS 指到 198.18.0.2，dns-hijack 依赖内核 DNS；用户在设置里关过 DNS 会静默断域名（延迟测速仍正常）。仅端口模式不受影响。
+- 设置页在 TUN 模式下把「启用 DNS」显示为开启并拦截关闭操作，提示切到「仅代理端口」再关。
+- IPv6 只在 YAML `ipv6: true` 时才把 v6 地址/路由加进 TUN（通过 intent extra 传给 VpnService），避免 v6 流量被吸进隧道后丢弃。
+
+### Added
+
+- 内核日志卡新增「诊断」入口：版本、运行模式、分流模式、全局出口、DEFAULT 当前出口、应用路由、DNS/TUN 关键项、tun 收发计数与最后 20 行日志，可一键复制（不含节点密码与订阅地址）。
+- 概览新增一条轻提示：TUN 启动 3 秒后 tun 收发仍为 0 时提示隧道可能没有接管流量（读不到 stats 时不提示）。
+- 运行诊断读取 `/sys/class/net/tun*/statistics` 的收发计数；ROM 限制读不到时返回 null，不影响概览。
+
+### Tests
+
+- `test/runtime_config_test.dart`：TUN 强制开启 DNS、仅端口保留用户关闭、无 dns 段时补默认段。
+- `test/settings_dns_guard_test.dart`：TUN 下点开关不写 false 且出现提示。
+- `test/runtime_diagnostic_test.dart`：诊断文本字段（含 DEFAULT 出口与 tun 统计）。
+- `test/pulse_entry_test.dart`：右缘手势带边界与阈值。
 ## [0.3.2] - 2026-11-19
 
 ### Changed

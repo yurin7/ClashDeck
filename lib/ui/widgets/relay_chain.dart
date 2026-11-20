@@ -426,29 +426,36 @@ class _GapTarget extends StatelessWidget {
       },
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
-        return AnimatedContainer(
-          duration: Motion.of(context).fast,
-          width: active ? 28 : 6,
-          height: 36,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active
-                ? scheme.primary.withValues(alpha: 0.14)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
+        // 命中区 24×44：胶囊本体不接链内 drop，插入目标只能落在间隙里，
+        // 视觉上静止仍是 6dp 细缝，靠透明命中区让手指/触摸能稳定落进来。
+        return SizedBox(
+          width: 24,
+          height: 44,
+          child: Center(
+            child: AnimatedContainer(
+              duration: Motion.of(context).fast,
+              width: active ? 28 : 6,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active
+                    ? scheme.primary.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              // 悬停时给一条 2dp 插入线，比只变宽更像「会插在这里」。
+              child: active
+                  ? Container(
+                      width: 2,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    )
+                  : null,
+            ),
           ),
-          // 悬停时给一条 2dp 插入线，比只变宽更像「会插在这里」。
-          child: active
-              ? Container(
-                  width: 2,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )
-              : null,
         );
       },
     );

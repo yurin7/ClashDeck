@@ -23,19 +23,25 @@ String _yaml(List<String> nodes) {
       '  - MATCH,chain\n';
 }
 
-Future<void> _pump(WidgetTester tester, List<String> nodes) async {
+/// 按指定卡宽渲染链条；延迟 + ⋮ + × 全开，复现真实组卡里的最宽组合。
+Future<void> _pump(
+  WidgetTester tester,
+  List<String> nodes, {
+  double width = 360,
+  Map<String, int?> delays = const {},
+}) async {
   final profile = Profile.from(YamlDoc.parse(_yaml(nodes)));
   final group = profile.groupByName['chain']!;
   await tester.pumpWidget(
     MaterialApp(
       theme: ThemeData.dark(useMaterial3: true),
       home: MediaQuery(
-        data: const MediaQueryData(size: Size(360, 800)),
+        data: MediaQueryData(size: Size(width, 800)),
         child: Scaffold(
           body: RelayChain(
             group: group,
             profile: profile,
-            delays: const <String, int?>{},
+            delays: delays,
             approx: const <String>{},
             selectedName: null,
             onOpen: (_) {},
@@ -46,6 +52,7 @@ Future<void> _pump(WidgetTester tester, List<String> nodes) async {
             onMoveRight: (from, to) {},
             onAddMember: () {},
             onSelect: (_) {},
+            onMenu: (node, index) {},
           ),
         ),
       ),
@@ -61,6 +68,23 @@ void main() {
     expect(find.text('加一阶'), findsOneWidget);
     expect(find.byIcon(Icons.arrow_right_alt_rounded), findsNWidgets(3));
   });
+
+  for (final width in const [320.0, 360.0]) {
+    testWidgets('长名 + 延迟 + 菜单在 ${width.toInt()}dp 下不溢出', (tester) async {
+      await _pump(
+        tester,
+        const [_long, 'JP-02', _long, 'SG-04'],
+        width: width,
+        delays: const {_long: 104, 'JP-02': 48},
+      );
+      expect(tester.takeException(), isNull);
+
+      final name = tester.widget<Text>(find.text(_long).first);
+      expect(name.overflow, TextOverflow.ellipsis);
+      expect(name.maxLines, 1);
+      expect(find.text('加一阶'), findsOneWidget);
+    });
+  }
 
   testWidgets('链条不再用横向滚动', (tester) async {
     await _pump(tester, const ['HK-01', 'JP-02', 'SG-04']);

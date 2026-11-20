@@ -314,20 +314,21 @@ class NodeChip extends StatelessWidget {
           // 选中只靠紫色底 / 描边表达，不再加 ✓（四类胶囊统一）。
           _TypeSquare(label: typeBadge(node.type), color: scheme.primary),
           const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxNameWidth ?? double.infinity,
-            ),
-            child: Text(
-              node.name,
-              maxLines: 1,
-              overflow: maxNameWidth == null
-                  ? TextOverflow.clip
-                  : TextOverflow.ellipsis,
-              style: display(
-                13,
-                weight: selected ? 600 : 500,
-                color: selected ? chipSelectionColor(scheme) : null,
+          // 名字必须能收缩：延迟、⋮、× 都是固定宽，长名只能自己省略。
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: maxNameWidth ?? double.infinity,
+              ),
+              child: Text(
+                node.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: display(
+                  13,
+                  weight: selected ? 600 : 500,
+                  color: selected ? chipSelectionColor(scheme) : null,
+                ),
               ),
             ),
           ),

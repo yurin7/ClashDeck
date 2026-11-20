@@ -62,68 +62,78 @@ class RelayChain extends StatelessWidget {
         ),
       );
     }
-    final width = MediaQuery.sizeOf(context).width;
-    // 胶囊只占半屏，长名省略而不是把后面的链条挤出屏幕。
-    final nameWidth = (width * 0.5).clamp(0.0, 200.0);
     return Padding(
       padding: const EdgeInsets.only(top: Insets.md, right: Insets.sm),
-      child: Wrap(
-        spacing: Insets.xs,
-        runSpacing: Insets.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (var i = 0; i < members.length; i++)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _GapTarget(index: i, group: group, onInsertAt: onInsertAt),
-                if (i > 0)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Insets.xs),
-                    child: Icon(
-                      Icons.arrow_right_alt_rounded,
-                      size: 18,
-                      color: scheme.outline,
-                    ),
-                  ),
-                _ChainLink(
-                  index: i,
-                  total: members.length,
-                  node: profile.proxyByName[members[i]],
-                  fallbackName: members[i],
-                  groupName: group.name,
-                  selected: selectedName == members[i],
-                  maxNameWidth: nameWidth,
-                  delayText: delays.containsKey(members[i])
-                      ? formatDelay(
-                          delays[members[i]],
-                          approx: approx.contains(members[i]),
-                        )
-                      : null,
-                  onOpen: onOpen,
-                  onDelete: onDelete,
-                  onRemove: onRemove,
-                  onSelect: onSelect,
-                  onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
-                  onMoveRight: i == members.length - 1
-                      ? null
-                      : () => onMoveRight(i, i + 1),
-                  onMenu: onMenu,
-                ),
-              ],
-            ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+      // 每个链节还要放大箭头与序号徽标，链节本身必须限制在卡片内容宽内。
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final linkMaxWidth = (constraints.maxWidth - 48).clamp(
+            140.0,
+            double.infinity,
+          );
+          final nameWidth = (linkMaxWidth - 150).clamp(48.0, 200.0);
+          return Wrap(
+            spacing: Insets.xs,
+            runSpacing: Insets.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _GapTarget(
-                index: members.length,
-                group: group,
-                onInsertAt: onInsertAt,
+              for (var i = 0; i < members.length; i++)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _GapTarget(index: i, group: group, onInsertAt: onInsertAt),
+                    if (i > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Insets.xs,
+                        ),
+                        child: Icon(
+                          Icons.arrow_right_alt_rounded,
+                          size: 18,
+                          color: scheme.outline,
+                        ),
+                      ),
+                    _ChainLink(
+                      index: i,
+                      total: members.length,
+                      node: profile.proxyByName[members[i]],
+                      fallbackName: members[i],
+                      groupName: group.name,
+                      selected: selectedName == members[i],
+                      maxWidth: linkMaxWidth,
+                      maxNameWidth: nameWidth,
+                      delayText: delays.containsKey(members[i])
+                          ? formatDelay(
+                              delays[members[i]],
+                              approx: approx.contains(members[i]),
+                            )
+                          : null,
+                      onOpen: onOpen,
+                      onDelete: onDelete,
+                      onRemove: onRemove,
+                      onSelect: onSelect,
+                      onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
+                      onMoveRight: i == members.length - 1
+                          ? null
+                          : () => onMoveRight(i, i + 1),
+                      onMenu: onMenu,
+                    ),
+                  ],
+                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _GapTarget(
+                    index: members.length,
+                    group: group,
+                    onInsertAt: onInsertAt,
+                  ),
+                  _AddLink(onTap: onAddMember),
+                ],
               ),
-              _AddLink(onTap: onAddMember),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -138,6 +148,7 @@ class _ChainLink extends StatelessWidget {
     required this.groupName,
     required this.selected,
     required this.delayText,
+    required this.maxWidth,
     required this.maxNameWidth,
     required this.onOpen,
     required this.onDelete,
@@ -155,6 +166,9 @@ class _ChainLink extends StatelessWidget {
   final String groupName;
   final bool selected;
   final String? delayText;
+
+  /// 链节整体最大宽度（含胶囊、徽标占位），避免把卡片撑出边界。
+  final double maxWidth;
   final double maxNameWidth;
   final void Function(ProxyEntry node) onOpen;
   final void Function(ProxyEntry node) onDelete;
@@ -169,29 +183,39 @@ class _ChainLink extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final proxy = node;
     if (proxy == null) {
-      return InputChip(
-        label: Text('$fallbackName（内核里不存在）'),
-        avatar: Icon(Icons.help_outline, size: 16, color: scheme.error),
-        onDeleted: () => onRemove(fallbackName),
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: InputChip(
+          label: Text(
+            '$fallbackName（内核里不存在）',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          avatar: Icon(Icons.help_outline, size: 16, color: scheme.error),
+          onDeleted: () => onRemove(fallbackName),
+        ),
       );
     }
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        NodeChip(
-          node: proxy,
-          fromGroup: groupName,
-          onOpen: () => onOpen(proxy),
-          onMove: () => onOpen(proxy),
-          onDelete: () => onDelete(proxy),
-          onRemove: () => onRemove(fallbackName),
-          onMenu: onMenu == null && onMoveLeft == null && onMoveRight == null
-              ? null
-              : () => _showMenu(context),
-          onSelect: onSelect == null ? null : () => onSelect!(fallbackName),
-          selected: selected,
-          delayText: delayText,
-          maxNameWidth: maxNameWidth,
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: NodeChip(
+            node: proxy,
+            fromGroup: groupName,
+            onOpen: () => onOpen(proxy),
+            onMove: () => onOpen(proxy),
+            onDelete: () => onDelete(proxy),
+            onRemove: () => onRemove(fallbackName),
+            onMenu: onMenu == null && onMoveLeft == null && onMoveRight == null
+                ? null
+                : () => _showMenu(context),
+            onSelect: onSelect == null ? null : () => onSelect!(fallbackName),
+            selected: selected,
+            delayText: delayText,
+            maxNameWidth: maxNameWidth,
+          ),
         ),
         Positioned(
           left: -6,

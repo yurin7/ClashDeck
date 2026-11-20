@@ -71,6 +71,27 @@ void main() {
     expect(pageChanges, isEmpty);
   });
 
+  testWidgets('抽屉回收后，下一次左拖可以正常翻页', (tester) async {
+    reveal = AnimationController(vsync: const TestVSync());
+    addTearDown(reveal.dispose);
+    reveal.value = 0.5;
+    await tester.pumpWidget(build());
+    // 回收抽屉：左拖到 0。
+    final recover = await tester.startGesture(const Offset(700, 400));
+    await recover.moveBy(const Offset(-500, 0));
+    await recover.up();
+    await tester.pump();
+    expect(settled, isFalse);
+    expect(pageChanges, isEmpty);
+    reveal.value = 0;
+    // 关闭态左拖：应恢复正常翻页。
+    final swipe = await tester.startGesture(const Offset(700, 400));
+    await swipe.moveBy(const Offset(-400, 0));
+    await swipe.up();
+    await tester.pump();
+    expect(pageChanges, [1]);
+  });
+
   testWidgets('拖到一半反向松开，不跳页', (tester) async {
     reveal = AnimationController(vsync: const TestVSync());
     addTearDown(reveal.dispose);

@@ -30,6 +30,8 @@ class PulseDrawer extends StatelessWidget {
         final width = constraints.maxWidth;
         final panelWidth = pulseDrawerPanelWidth(width);
         final p = progress.clamp(0.0, 1.0);
+        // 完全收起时不留任何命中层：否则透明遮罩会吃掉页面点击。
+        if (p <= 0.001) return const SizedBox.shrink();
         final left = panelWidth * p - panelWidth;
         final maskLeft = panelWidth * p;
         return Stack(

@@ -51,7 +51,7 @@ void main() {
     expect(closed, 1);
   });
 
-  testWidgets('收起时面板退回屏外，暗区消失', (tester) async {
+  testWidgets('收起时不渲染面板，也不留透明点击层', (tester) async {
     await setSize(tester, const Size(400, 800));
     const panelKey = Key('panel');
     await tester.pumpWidget(
@@ -66,8 +66,7 @@ void main() {
       ),
     );
     await tester.pump();
-    final rect = tester.getRect(find.byKey(panelKey));
-    expect(rect.left, -320);
+    expect(find.byKey(panelKey), findsNothing);
   });
 
   testWidgets('开合抽屉不会丢掉概览的滚动位置', (tester) async {

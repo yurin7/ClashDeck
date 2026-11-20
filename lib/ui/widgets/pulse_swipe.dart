@@ -45,8 +45,12 @@ class _PulseSwipeAreaState extends State<PulseSwipeArea> {
   /// 本次拖拽累计位移（关闭态用于开抽屉/翻页判定）。
   double _dx = 0;
 
+  /// 起手时抽屉是否已经打开：是则本次拖拽只负责开合，不参与翻页。
+  bool _drawerDrag = false;
+
   void _onStart() {
     _dx = 0;
+    _drawerDrag = widget.reveal.value > 0.001;
   }
 
   void _onUpdate(DragUpdateDetails details) {
@@ -79,7 +83,8 @@ class _PulseSwipeAreaState extends State<PulseSwipeArea> {
 
   void _onEnd(DragEndDetails details) {
     final velocity = details.velocity.pixelsPerSecond.dx;
-    if (widget.reveal.value > 0) {
+    if (_drawerDrag || widget.reveal.value > 0.001) {
+      _drawerDrag = false;
       widget.onSettle(
         pulseDrawerShouldOpen(
           progress: widget.reveal.value,

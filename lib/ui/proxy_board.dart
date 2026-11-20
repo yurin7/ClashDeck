@@ -766,7 +766,12 @@ class _ProxyBoardState extends State<ProxyBoard>
           ('REJECT', '拒绝：直接断开，不发出请求'),
         ]) ...[
           const SizedBox(height: Insets.sm),
-          _SystemPolicyCard(state: s, target: name, subtitle: subtitle),
+          _SystemPolicyCard(
+            state: s,
+            target: name,
+            subtitle: subtitle,
+            onDropRule: (rule) => _retargetRule(rule, name),
+          ),
         ],
         const SizedBox(height: Insets.xl),
       ],
@@ -1515,65 +1520,88 @@ class _SystemPolicyCard extends StatelessWidget {
     required this.state,
     required this.target,
     required this.subtitle,
+    this.onDropRule,
   });
 
   final EditorState state;
   final String target;
   final String subtitle;
 
+  /// 从「本组规则」拖过来的规则：把 target 改成这个系统策略。
+  final void Function(RuleEntry)? onDropRule;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(
-        Insets.lg,
-        Insets.md,
-        Insets.lg,
-        Insets.lg,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    // 系统策略组本身只读，但允许把规则拖进来改挂到 DIRECT / REJECT。
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (d) {
+        final data = d.data;
+        return data is RuleDragData && data.rule.target != target;
+      },
+      onAcceptWithDetails: (d) {
+        final data = d.data;
+        if (data is RuleDragData) onDropRule?.call(data.rule);
+      },
+      builder: (context, candidate, _) {
+        final active = candidate.isNotEmpty;
+        return AppCard(
+          borderColor: _dropBorder(scheme, active),
+          padding: const EdgeInsets.fromLTRB(
+            Insets.lg,
+            Insets.md,
+            Insets.lg,
+            Insets.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: scheme.tertiary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(Radiuses.xs),
-                  border: Border.all(
-                    color: scheme.tertiary.withValues(alpha: 0.20),
-                  ),
-                ),
-                child: Icon(
-                  builtinIcon(target),
-                  size: 20,
-                  color: scheme.tertiary,
-                ),
-              ),
-              const SizedBox(width: Insets.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      target,
-                      style: display(16, weight: 700, letterSpacing: -0.2),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: scheme.tertiary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(Radiuses.xs),
+                      border: Border.all(
+                        color: scheme.tertiary.withValues(alpha: 0.20),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: hintStyle(context)),
-                  ],
-                ),
+                    child: Icon(
+                      builtinIcon(target),
+                      size: 20,
+                      color: scheme.tertiary,
+                    ),
+                  ),
+                  const SizedBox(width: Insets.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          target,
+                          style: display(16, weight: 700, letterSpacing: -0.2),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(subtitle, style: hintStyle(context)),
+                      ],
+                    ),
+                  ),
+                  Pill(label: '系统策略', color: scheme.tertiary, dense: true),
+                ],
               ),
-              Pill(label: '系统策略', color: scheme.tertiary, dense: true),
+              GroupRulesBlock(
+                state: state,
+                target: target,
+                newRuleLabel: '添加规则',
+              ),
             ],
           ),
-          GroupRulesBlock(state: state, target: target, newRuleLabel: '添加规则'),
-        ],
-      ),
+        );
+      },
     );
   }
 }

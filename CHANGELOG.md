@@ -2,6 +2,14 @@
 
 只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
 
+## [0.3.11] - 2026-11-24
+
+### Fixed
+
+- 链内拖拽补上过渡：拿起时浮层 120ms 放大到 1.04 并带阴影，原位保持 0.35 半透明占位。
+- 间隙悬停时插入线 120ms 淡入并轻微放大，间隙宽度仍用 6↔28 的 `AnimatedContainer`。
+- 松手换位后 `AnimatedSwitcher` 用 200ms 淡入 + 轻微推入呈现新顺序；`MediaQuery.disableAnimations` 为真时跳过全部过渡。
+
 ## [0.3.10] - 2026-11-23
 
 ### Fixed

@@ -7,6 +7,18 @@ import '../theme.dart';
 import 'app_ink.dart';
 import 'delay_badge.dart';
 
+/// 拿起、让位这类小过渡的时长。
+const Duration _kRelayMotion = Duration(milliseconds: 120);
+
+/// 松手重排的过渡时长。
+const Duration _kRelayReorder = Duration(milliseconds: 200);
+
+/// 无障碍「减少动效」时直接归零，跳过所有过渡。
+Duration _relayMotion(BuildContext context, Duration duration) =>
+    (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
+    ? Duration.zero
+    : duration;
+
 /// 链内换位：从第 [from] 阶拖到某个插入间隙。
 class RelayMemberDragData {
   const RelayMemberDragData({required this.group, required this.from});
@@ -133,72 +145,93 @@ class RelayChain extends StatelessWidget {
             double.infinity,
           );
           final nameWidth = (linkMaxWidth - 150).clamp(48.0, 200.0);
-          return Wrap(
-            spacing: Insets.xs,
-            runSpacing: Insets.xs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              for (var i = 0; i < members.length; i++)
+          return AnimatedSwitcher(
+            duration: _relayMotion(context, _kRelayReorder),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeOutCubic,
+            // 旧布局留在栈里淡出，新布局淡入并沿链条方向轻微推入。
+            layoutBuilder: (current, previous) => Stack(
+              alignment: AlignmentDirectional.centerStart,
+              children: [...previous, ?current],
+            ),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.04, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Wrap(
+              key: ValueKey<String>(members.join('|')),
+              spacing: Insets.xs,
+              runSpacing: Insets.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (var i = 0; i < members.length; i++)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _GapTarget(
+                        index: i,
+                        group: group,
+                        onInsertAt: onInsertAt,
+                        onMoveMember: onMoveMember,
+                      ),
+                      if (i > 0)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Insets.xs,
+                          ),
+                          child: Icon(
+                            Icons.arrow_right_alt_rounded,
+                            size: 18,
+                            color: scheme.outline,
+                          ),
+                        ),
+                      _ChainLink(
+                        index: i,
+                        total: members.length,
+                        node: profile.proxyByName[members[i]],
+                        fallbackName: members[i],
+                        groupName: group.name,
+                        selected: false,
+                        maxWidth: linkMaxWidth,
+                        maxNameWidth: nameWidth,
+                        delayText: delays.containsKey(members[i])
+                            ? formatDelay(
+                                delays[members[i]],
+                                approx: approx.contains(members[i]),
+                              )
+                            : null,
+                        onOpen: onOpen,
+                        onDelete: onDelete,
+                        onRemove: onRemove,
+                        onSelect: onSelect,
+                        onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
+                        onMoveRight: i == members.length - 1
+                            ? null
+                            : () => onMoveRight(i, i + 1),
+                        onMenu: onMenu,
+                      ),
+                    ],
+                  ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _GapTarget(
-                      index: i,
+                      index: members.length,
                       group: group,
                       onInsertAt: onInsertAt,
                       onMoveMember: onMoveMember,
                     ),
-                    if (i > 0)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Insets.xs,
-                        ),
-                        child: Icon(
-                          Icons.arrow_right_alt_rounded,
-                          size: 18,
-                          color: scheme.outline,
-                        ),
-                      ),
-                    _ChainLink(
-                      index: i,
-                      total: members.length,
-                      node: profile.proxyByName[members[i]],
-                      fallbackName: members[i],
-                      groupName: group.name,
-                      selected: false,
-                      maxWidth: linkMaxWidth,
-                      maxNameWidth: nameWidth,
-                      delayText: delays.containsKey(members[i])
-                          ? formatDelay(
-                              delays[members[i]],
-                              approx: approx.contains(members[i]),
-                            )
-                          : null,
-                      onOpen: onOpen,
-                      onDelete: onDelete,
-                      onRemove: onRemove,
-                      onSelect: onSelect,
-                      onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
-                      onMoveRight: i == members.length - 1
-                          ? null
-                          : () => onMoveRight(i, i + 1),
-                      onMenu: onMenu,
-                    ),
+                    _AddLink(onTap: onAddMember),
                   ],
                 ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _GapTarget(
-                    index: members.length,
-                    group: group,
-                    onInsertAt: onInsertAt,
-                    onMoveMember: onMoveMember,
-                  ),
-                  _AddLink(onTap: onAddMember),
-                ],
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -268,22 +301,39 @@ class _ChainLink extends StatelessWidget {
       delay: const Duration(milliseconds: 250),
       hapticFeedbackOnStart: true,
       dragAnchorStrategy: childDragAnchorStrategy,
-      feedback: Material(
-        color: Colors.transparent,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: ChipShell(
-            spec: ChipSpec.of(context, ChipFamily.node),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Insets.md,
-                vertical: Insets.sm,
+      feedback: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 1, end: 1.04),
+        duration: _relayMotion(context, _kRelayMotion),
+        curve: Curves.easeOutCubic,
+        builder: (context, scale, child) =>
+            Transform.scale(scale: scale, child: child),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radiuses.chip),
+            // 拿起时浮起来一点，和原位 0.35 的占位拉开层次。
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 14,
+                offset: Offset(0, 6),
               ),
-              child: Text(
-                fallbackName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: display(13, weight: 500),
+            ],
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: ChipShell(
+              spec: ChipSpec.of(context, ChipFamily.node),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Insets.md,
+                  vertical: Insets.sm,
+                ),
+                child: Text(
+                  fallbackName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: display(13, weight: 500),
+                ),
               ),
             ),
           ),
@@ -444,16 +494,23 @@ class _GapTarget extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               // 悬停时给一条 2dp 插入线，比只变宽更像「会插在这里」。
-              child: active
-                  ? Container(
-                      width: 2,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: scheme.primary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    )
-                  : null,
+              child: AnimatedOpacity(
+                opacity: active ? 1 : 0,
+                duration: _relayMotion(context, _kRelayMotion),
+                child: AnimatedScale(
+                  scale: active ? 1 : 0.55,
+                  duration: _relayMotion(context, _kRelayMotion),
+                  curve: Curves.easeOutCubic,
+                  child: Container(
+                    width: 2,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );

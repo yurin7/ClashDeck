@@ -34,6 +34,7 @@ Widget _app(Profile profile, {VoidCallback? onAddMember}) {
         onInsertAt: (_, _) {},
         onMoveLeft: (_, _) {},
         onMoveRight: (_, _) {},
+        onMoveMember: (_, _) {},
         onAddMember: onAddMember ?? () {},
       ),
     ),

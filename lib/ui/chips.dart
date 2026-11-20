@@ -258,6 +258,7 @@ class NodeChip extends StatelessWidget {
     this.selected = false,
     this.delayText,
     this.maxNameWidth,
+    this.draggable = true,
   });
 
   final ProxyEntry node;
@@ -283,6 +284,10 @@ class NodeChip extends StatelessWidget {
 
   /// 节点名最大宽度；用于链式代理等窄格子里截断长名。
   final double? maxNameWidth;
+
+  /// 是否自带拖拽浮层。链式代理的链节由外层接管拖拽，这里要关掉，
+  /// 否则内层 `DragNodeData` 会吞掉手势、链内换位永远收不到事件。
+  final bool draggable;
 
   static String typeBadge(String type) => switch (type) {
     'vless' => 'V',
@@ -350,6 +355,8 @@ class NodeChip extends StatelessWidget {
         ],
       ),
     );
+
+    if (!draggable) return shell;
 
     return ListenableBuilder(
       listenable: dragState,

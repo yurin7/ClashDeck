@@ -212,7 +212,7 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
       onInvert: _invert,
       onClear: _clear,
       emptyHint: widget.profile.proxies.isEmpty
-          ? '还没有节点：点左下角「新建节点」先建一个。'
+          ? '还没有节点：点左下角「添加节点」先建一个。'
           : '没有匹配的节点或策略组',
       footer: Row(
         children: [
@@ -220,7 +220,7 @@ class _NodePickerSheetState extends State<_NodePickerSheet> {
             TextButton.icon(
               onPressed: widget.onCreateNode,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('新建节点'),
+              label: const Text('添加节点'),
             ),
           const Spacer(),
           TextButton(

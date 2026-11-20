@@ -281,7 +281,13 @@ class _ProxyBoardState extends State<ProxyBoard>
     if (groups.isEmpty) return;
     final target = await _pickGroup(title: '把「${result['name']}」加入哪个组？');
     if (target == null) return;
-    if (!s.addGroupMember(target, '${result['name']}')) _fail();
+    if (!s.addGroupMember(
+      target,
+      '${result['name']}',
+      appendToEnd: s.profile.group(target)?.type == 'relay',
+    )) {
+      _fail();
+    }
   }
 
   Future<void> _importFromLinks() async {
@@ -480,7 +486,11 @@ class _ProxyBoardState extends State<ProxyBoard>
     );
     if (target == null) return;
     final ok = fromGroup == null
-        ? s.addGroupMember(target, node.name)
+        ? s.addGroupMember(
+            target,
+            node.name,
+            appendToEnd: s.profile.group(target)?.type == 'relay',
+          )
         : s.moveMember(node.name, fromGroup, target);
     if (!ok) _fail();
   }
@@ -694,7 +704,11 @@ class _ProxyBoardState extends State<ProxyBoard>
                   : (name) => _selectNodeForGroup(group.name, name),
               onRelayInsert: (node, index) {
                 final from = group.members.length;
-                if (!s.addGroupMember(group.name, node)) {
+                if (!s.addGroupMember(
+                  group.name,
+                  node,
+                  appendToEnd: group.type == 'relay',
+                )) {
                   _fail();
                   return;
                 }
@@ -725,7 +739,13 @@ class _ProxyBoardState extends State<ProxyBoard>
                 }
                 var added = 0;
                 for (final name in names) {
-                  if (s.addGroupMember(group.name, name)) added++;
+                  if (s.addGroupMember(
+                    group.name,
+                    name,
+                    appendToEnd: group.type == 'relay',
+                  )) {
+                    added++;
+                  }
                 }
                 if (added == 0) {
                   _fail();
@@ -739,7 +759,11 @@ class _ProxyBoardState extends State<ProxyBoard>
               },
               onDrop: (data) async {
                 final ok = data.fromGroup == null
-                    ? s.addGroupMember(group.name, data.node)
+                    ? s.addGroupMember(
+                        group.name,
+                        data.node,
+                        appendToEnd: group.type == 'relay',
+                      )
                     : s.moveMember(data.node, data.fromGroup!, group.name);
                 if (!ok) {
                   _fail();
@@ -793,7 +817,8 @@ class _ProxyBoardState extends State<ProxyBoard>
       includeGroups: group.type != 'relay',
       onCreateNode: () {
         Navigator.pop(context);
-        _addNodeForm();
+        // 和节点列表右上「+」同一个入口：先选模式，再进对应表单。
+        _addNode();
       },
     );
   }
@@ -1407,6 +1432,8 @@ class _GroupCard extends StatelessWidget {
                           onMoveLeft: (from, to) =>
                               onRelayReorder?.call(from, to),
                           onMoveRight: (from, to) =>
+                              onRelayReorder?.call(from, to),
+                          onMoveMember: (from, to) =>
                               onRelayReorder?.call(from, to),
                           onAddMember: onAddMember,
                           onSelect: onSelectMember,

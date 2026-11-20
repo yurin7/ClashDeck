@@ -149,8 +149,13 @@ class EditorState extends ChangeNotifier {
     (d) => ConfigOps.moveMember(d, node: node, fromGroup: from, toGroup: to),
   );
 
-  bool addGroupMember(String group, String member) =>
-      apply((d) => ConfigOps.addGroupMember(d, group, member));
+  bool addGroupMember(
+    String group,
+    String member, {
+    bool appendToEnd = false,
+  }) => apply(
+    (d) => ConfigOps.addGroupMember(d, group, member, appendToEnd: appendToEnd),
+  );
 
   bool removeGroupMember(String group, String member) =>
       apply((d) => ConfigOps.removeGroupMember(d, group, member));

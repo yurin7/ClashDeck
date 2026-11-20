@@ -7,6 +7,14 @@ import '../theme.dart';
 import 'app_ink.dart';
 import 'delay_badge.dart';
 
+/// 链内换位：从第 [from] 阶拖到某个插入间隙。
+class RelayMemberDragData {
+  const RelayMemberDragData({required this.group, required this.from});
+
+  final String group;
+  final int from;
+}
+
 /// 链式代理的横向链条：`①节点 → ②节点 → ③节点 → ＋`。
 ///
 /// 每阶左上角有顺序徽标，阶与阶之间、链条末尾各留一个透明拖放间隙，
@@ -24,6 +32,7 @@ class RelayChain extends StatelessWidget {
     required this.onInsertAt,
     required this.onMoveLeft,
     required this.onMoveRight,
+    required this.onMoveMember,
     required this.onAddMember,
     this.onSelect,
     this.onMenu,
@@ -40,6 +49,7 @@ class RelayChain extends StatelessWidget {
   final void Function(String node, int index) onInsertAt;
   final void Function(int from, int to) onMoveLeft;
   final void Function(int from, int to) onMoveRight;
+  final void Function(int from, int to) onMoveMember;
   final VoidCallback onAddMember;
   final void Function(String name)? onSelect;
   final void Function(ProxyEntry node, int index)? onMenu;
@@ -72,6 +82,7 @@ class RelayChain extends StatelessWidget {
                         index: 0,
                         group: group,
                         onInsertAt: onInsertAt,
+                        onMoveMember: onMoveMember,
                       ),
                       _ChainLink(
                         index: 0,
@@ -131,7 +142,12 @@ class RelayChain extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _GapTarget(index: i, group: group, onInsertAt: onInsertAt),
+                    _GapTarget(
+                      index: i,
+                      group: group,
+                      onInsertAt: onInsertAt,
+                      onMoveMember: onMoveMember,
+                    ),
                     if (i > 0)
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -177,6 +193,7 @@ class RelayChain extends StatelessWidget {
                     index: members.length,
                     group: group,
                     onInsertAt: onInsertAt,
+                    onMoveMember: onMoveMember,
                   ),
                   _AddLink(onTap: onAddMember),
                 ],
@@ -246,6 +263,47 @@ class _ChainLink extends StatelessWidget {
         ),
       );
     }
+    return LongPressDraggable<RelayMemberDragData>(
+      data: RelayMemberDragData(group: groupName, from: index),
+      delay: const Duration(milliseconds: 250),
+      hapticFeedbackOnStart: true,
+      dragAnchorStrategy: childDragAnchorStrategy,
+      feedback: Material(
+        color: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: ChipShell(
+            spec: ChipSpec.of(context, ChipFamily.node),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Insets.md,
+                vertical: Insets.sm,
+              ),
+              child: Text(
+                fallbackName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: display(13, weight: 500),
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.35,
+        child: _link(context, scheme, proxy, draggable: false),
+      ),
+      child: _link(context, scheme, proxy, draggable: true),
+    );
+  }
+
+  /// 链节本体；拖拽浮层里复用同一外观，只是关掉内部拖拽。
+  Widget _link(
+    BuildContext context,
+    ColorScheme scheme,
+    ProxyEntry proxy, {
+    required bool draggable,
+  }) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -254,6 +312,7 @@ class _ChainLink extends StatelessWidget {
           child: NodeChip(
             node: proxy,
             fromGroup: groupName,
+            draggable: draggable,
             onOpen: () => onOpen(proxy),
             onMove: () => onOpen(proxy),
             onDelete: () => onDelete(proxy),
@@ -338,11 +397,13 @@ class _GapTarget extends StatelessWidget {
     required this.index,
     required this.group,
     required this.onInsertAt,
+    required this.onMoveMember,
   });
 
   final int index;
   final GroupEntry group;
   final void Function(String node, int index) onInsertAt;
+  final void Function(int from, int to) onMoveMember;
 
   @override
   Widget build(BuildContext context) {
@@ -350,23 +411,44 @@ class _GapTarget extends StatelessWidget {
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) {
         final data = details.data;
+        if (data is RelayMemberDragData) {
+          return data.group == group.name && data.from != index;
+        }
         return data is DragNodeData && !group.members.contains(data.node);
       },
       onAcceptWithDetails: (details) {
         final data = details.data;
-        if (data is DragNodeData) onInsertAt(data.node, index);
+        if (data is RelayMemberDragData) {
+          onMoveMember(data.from, index);
+        } else if (data is DragNodeData) {
+          onInsertAt(data.node, index);
+        }
       },
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
         return AnimatedContainer(
           duration: Motion.of(context).fast,
-          width: active ? 10 : 6,
+          width: active ? 28 : 6,
           height: 36,
           margin: const EdgeInsets.symmetric(horizontal: 3),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? scheme.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(3),
+            color: active
+                ? scheme.primary.withValues(alpha: 0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
           ),
+          // 悬停时给一条 2dp 插入线，比只变宽更像「会插在这里」。
+          child: active
+              ? Container(
+                  width: 2,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                )
+              : null,
         );
       },
     );

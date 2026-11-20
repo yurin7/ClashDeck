@@ -162,6 +162,28 @@ void main() {
     );
     expect(find.textContaining('当前 DIRECT'), findsOneWidget);
   });
+
+  testWidgets('选择器左下角按钮叫「添加节点」，点它走三选一入口', (tester) async {
+    tester.view.physicalSize = const Size(1080, 4800);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    final state = EditorState.fromText(_noNodes, fileName: 't.yaml');
+    await _pump(tester, state);
+
+    await tester.tap(find.byTooltip('添加成员').at(1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加节点'), findsOneWidget);
+    expect(find.text('新建节点'), findsNothing);
+
+    // 点它应该关掉 picker 并弹出三选一（手动填写 / 粘贴分享链接 / 从订阅链接导入）。
+    await tester.tap(find.text('添加节点'));
+    await tester.pumpAndSettle();
+    expect(find.text('手动填写'), findsOneWidget);
+    expect(find.text('粘贴分享链接'), findsOneWidget);
+    expect(find.text('从订阅链接导入'), findsOneWidget);
+  });
 }
 
 Future<void> _pump(

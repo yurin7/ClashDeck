@@ -393,6 +393,7 @@ class ConfigOps {
     String member, {
     bool missingGroupOk = false,
     int? at,
+    bool appendToEnd = false,
   }) {
     final profile = Profile.from(doc);
     final group = profile.group(groupName);
@@ -404,12 +405,16 @@ class ConfigOps {
       return _normalizeMembers(doc, groupName);
     }
     if (group.members.isNotEmpty && group.raw.containsKey('proxies')) {
+      // relay 的成员顺序就是链路顺序：追加时必须落在末尾，不能按
+      // proxies 定义顺序重排（否则 A/B/C 删 A 再加回会变成 A/B/C）。
       final memberAt =
           at ??
-          normalizeMemberOrder(<String>[
-            ...group.members,
-            member,
-          ], proxyOrder: _proxyOrder(profile)).indexOf(member);
+          (appendToEnd
+              ? group.members.length
+              : normalizeMemberOrder(<String>[
+                  ...group.members,
+                  member,
+                ], proxyOrder: _proxyOrder(profile)).indexOf(member));
       final next = doc.apply(
         (e) => e.insertIntoList(
           ['proxy-groups', group.index, 'proxies'],
@@ -418,8 +423,10 @@ class ConfigOps {
         ),
       );
       // `at` 是调用方明确指定的位置（如「插到内置出站之前」），保留其语义；
-      // 其余插入才按规范把内置出站压到末尾。
-      return at == null ? _normalizeMembers(next, groupName) : next;
+      // appendToEnd 也不做内置出站归一化。其余插入才按规范整理。
+      return at == null && !appendToEnd
+          ? _normalizeMembers(next, groupName)
+          : next;
     }
     // 组里还没有成员（或没写 proxies 键）：整体写一次，保持块状风格；
     // 空 flow 列表插入单项会被 yaml_edit 写成 `proxies: [NAME]`。

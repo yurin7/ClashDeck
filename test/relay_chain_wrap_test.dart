@@ -49,6 +49,7 @@ Future<void> _pump(
             onInsertAt: (node, index) {},
             onMoveLeft: (from, to) {},
             onMoveRight: (from, to) {},
+            onMoveMember: (from, to) {},
             onAddMember: () {},
             onSelect: (_) {},
             onMenu: (node, index) {},

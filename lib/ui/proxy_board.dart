@@ -20,6 +20,7 @@ import 'sheets/node_picker_sheet.dart';
 import 'theme.dart';
 import 'widgets/delete_confirm.dart';
 import 'widgets/delay_badge.dart';
+import 'widgets/drag_rules.dart';
 import 'widgets/drag_state.dart';
 import 'widgets/edit_dialog.dart';
 import 'widgets/node_row.dart';
@@ -1146,7 +1147,7 @@ class _GroupCard extends StatelessWidget {
     final issueColor = issue == GroupCardIssue.error
         ? scheme.error
         : issue == GroupCardIssue.warning
-        ? scheme.tertiary
+        ? context.semantic.warn
         : null;
     // 链式卡只接受链内插入，整卡不再是投放目标。
     final isRelay = group.type == 'relay';
@@ -1154,14 +1155,23 @@ class _GroupCard extends StatelessWidget {
       onWillAcceptWithDetails: (d) {
         final data = d.data;
         if (data is DragNodeData) {
-          if (isRelay) {
+          final accept = shouldAcceptNodeDrop(
+            fromGroup: data.fromGroup,
+            targetGroup: group.name,
+            relay: isRelay,
+            alreadyMember: group.members.contains(data.node),
+          );
+          if (!accept) {
+            final hint = shouldHintDuplicate(
+              fromGroup: data.fromGroup,
+              targetGroup: group.name,
+              alreadyMember: group.members.contains(data.node),
+            );
+            dragState.hintDuplicate(hint ? group.name : null);
+          } else {
             dragState.clearHint();
-            return false;
           }
-          final duplicate =
-              data.fromGroup != group.name && group.members.contains(data.node);
-          dragState.hintDuplicate(duplicate ? group.name : null);
-          return true;
+          return accept;
         }
         if (data is RuleDragData) {
           dragState.clearHint();
@@ -1190,8 +1200,8 @@ class _GroupCard extends StatelessWidget {
       onAcceptWithDetails: (d) {
         final data = d.data;
         if (data is DragNodeData) {
-          final duplicate =
-              data.fromGroup != group.name && group.members.contains(data.node);
+          if (data.fromGroup == group.name) return;
+          final duplicate = group.members.contains(data.node);
           if (duplicate) {
             // 重复节点：数据不动，交给回弹动画收尾并提示。
             return;
@@ -1271,40 +1281,50 @@ class _GroupCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              if (isAuto)
-                                Pill(
-                                  label: '自动测速',
-                                  color: scheme.tertiary,
-                                  dense: true,
-                                )
-                              else
+                          if (group.type == 'relay')
+                            Text(
+                              '整链 · ${group.members.length} 阶',
+                              style: mono(
+                                10.5,
+                                color: scheme.onSurfaceVariant,
+                                letterSpacing: 0.4,
+                              ),
+                            )
+                          else
+                            Row(
+                              children: [
+                                if (isAuto)
+                                  Pill(
+                                    label: '自动测速',
+                                    color: scheme.tertiary,
+                                    dense: true,
+                                  )
+                                else
+                                  Text(
+                                    group.typeLabel,
+                                    style: mono(
+                                      10.5,
+                                      color: scheme.onSurfaceVariant,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
                                 Text(
-                                  group.typeLabel,
+                                  ' · ${group.members.length} 成员',
                                   style: mono(
                                     10.5,
                                     color: scheme.onSurfaceVariant,
-                                    letterSpacing: 0.4,
                                   ),
                                 ),
-                              Text(
-                                ' · ${group.members.length} 成员',
-                                style: mono(
-                                  10.5,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (group.computedMembers) ...[
-                                const SizedBox(width: Insets.xs),
-                                Pill(
-                                  label: '运行时决定',
-                                  color: scheme.tertiary,
-                                  dense: true,
-                                ),
+                                if (group.computedMembers) ...[
+                                  const SizedBox(width: Insets.xs),
+                                  Pill(
+                                    label: '运行时决定',
+                                    color: scheme.tertiary,
+                                    dense: true,
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
+                            ),
                           if (currentLabel != null) ...[
                             const SizedBox(height: 4),
                             // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
@@ -1372,7 +1392,6 @@ class _GroupCard extends StatelessWidget {
                           profile: profile,
                           delays: delays,
                           approx: approx,
-                          selectedName: selectedName,
                           onOpen: onOpenNode,
                           onDelete: onDeleteNode,
                           onRemove: onRemove,

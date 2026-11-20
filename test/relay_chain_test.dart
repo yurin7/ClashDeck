@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
+import 'package:clashdeck/ui/chips.dart';
 import 'package:clashdeck/ui/widgets/relay_chain.dart';
 
 Profile _profile(List<String> members) => Profile.from(
@@ -27,7 +28,6 @@ Widget _app(Profile profile, {VoidCallback? onAddMember}) {
         profile: profile,
         delays: const {},
         approx: const {},
-        selectedName: null,
         onOpen: (_) {},
         onDelete: (_) {},
         onRemove: (_) {},
@@ -77,5 +77,13 @@ void main() {
     await tester.tap(find.text('加一阶'));
     await tester.pump();
     expect(added, 1);
+  });
+
+  testWidgets('链式代理不高亮任何节点（选中态只属于普通组）', (tester) async {
+    await tester.pumpWidget(_app(_profile(['a', 'b', 'c'])));
+
+    final chips = tester.widgetList<NodeChip>(find.byType(NodeChip)).toList();
+    expect(chips, isNotEmpty);
+    expect(chips.every((c) => !c.selected), isTrue);
   });
 }

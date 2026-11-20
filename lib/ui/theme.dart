@@ -102,7 +102,7 @@ const Color _inkHairline = Color(0xFF1E2530);
 const Color _inkText = Color(0xFFF2F5FB);
 const Color _inkDim = Color(0xFF8E99AD);
 const Color _mint = Color(0xFF2EE6A8);
-const Color _amber = Color(0xFFFFC266);
+const Color _amber = Color(0xFFF2C14E);
 const Color _rose = Color(0xFFFF6E6E);
 
 const Color _paper = Color(0xFFF6F7FB);

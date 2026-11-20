@@ -303,7 +303,8 @@ class _EditorPageState extends State<EditorPage> {
       builder: (ctx) => EditDialog(
         title: report.isClean
             ? '校验通过'
-            : '${report.errors.length} 个错误 · ${report.warnings.length} 个警告',
+            : '${report.errors.length} 个错误 · ${report.warnings.length} 个警告'
+                  '${report.issues.where((e) => e.severity == IssueSeverity.info).isEmpty ? '' : ' · ${report.issues.where((e) => e.severity == IssueSeverity.info).length} 个提示（不计入错误/警告）'}',
         confirmLabel: '关闭',
         showCancel: false,
         content: SizedBox(
@@ -322,7 +323,7 @@ class _EditorPageState extends State<EditorPage> {
                     final scheme = Theme.of(ctx).colorScheme;
                     final color = switch (issue.severity) {
                       IssueSeverity.error => scheme.error,
-                      IssueSeverity.warning => scheme.tertiary,
+                      IssueSeverity.warning => ctx.semantic.warn,
                       IssueSeverity.info => scheme.outline,
                     };
                     return ListTile(

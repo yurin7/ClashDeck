@@ -18,7 +18,6 @@ class RelayChain extends StatelessWidget {
     required this.profile,
     required this.delays,
     required this.approx,
-    required this.selectedName,
     required this.onOpen,
     required this.onDelete,
     required this.onRemove,
@@ -34,7 +33,7 @@ class RelayChain extends StatelessWidget {
   final Profile profile;
   final Map<String, int?> delays;
   final Set<String> approx;
-  final String? selectedName;
+
   final void Function(ProxyEntry node) onOpen;
   final void Function(ProxyEntry node) onDelete;
   final void Function(String name) onRemove;
@@ -99,7 +98,7 @@ class RelayChain extends StatelessWidget {
                       node: profile.proxyByName[members[i]],
                       fallbackName: members[i],
                       groupName: group.name,
-                      selected: selectedName == members[i],
+                      selected: false,
                       maxWidth: linkMaxWidth,
                       maxNameWidth: nameWidth,
                       delayText: delays.containsKey(members[i])

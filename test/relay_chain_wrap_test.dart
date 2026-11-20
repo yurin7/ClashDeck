@@ -43,7 +43,6 @@ Future<void> _pump(
             profile: profile,
             delays: delays,
             approx: const <String>{},
-            selectedName: null,
             onOpen: (_) {},
             onDelete: (_) {},
             onRemove: (_) {},

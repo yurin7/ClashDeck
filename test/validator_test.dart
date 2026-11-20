@@ -109,7 +109,7 @@ proxy-groups:
   - {name: G, type: select}
   - {name: G, type: select}
 ''');
-      expect(c, containsAll(['duplicate-group-name', 'empty-select-group']));
+      expect(c, containsAll(['duplicate-group-name', 'empty-group']));
     });
 
     test('缺 type', () {
@@ -149,7 +149,7 @@ proxy-groups:
 ''');
       expect(
         info.issues.firstWhere((e) => e.code == 'dangling-member').severity,
-        IssueSeverity.info,
+        IssueSeverity.warning,
       );
       expect(info.hasErrors, isFalse);
     });
@@ -301,5 +301,28 @@ rules:
     final lastError = report.issues.lastIndexWhere((e) => e.isError);
     expect(lastError, lessThan(firstWarning));
     expect(report.canSubmit, isFalse);
+  });
+  test('bordertest：空组、短链、坏引用是错误，全直连是警告', () {
+    final report = run('''
+proxies:
+  - name: N1
+    type: vless
+    server: n1.example.com
+    port: 443
+    uuid: u-u-i-d
+proxy-groups:
+  - {name: 空组, type: select, proxies: []}
+  - {name: 短链, type: relay, proxies: [N1]}
+  - {name: 坏引用, type: select, proxies: [N1, 不存在]}
+  - {name: 全直连, type: select, proxies: [DIRECT]}
+rules:
+  - MATCH,全直连
+''');
+    expect(report.errors, hasLength(3));
+    expect(report.warnings, hasLength(1));
+    expect(report.errors.map((e) => e.code), contains('empty-group'));
+    expect(report.errors.map((e) => e.code), contains('thin-relay'));
+    expect(report.errors.map((e) => e.code), contains('dangling-member'));
+    expect(report.warnings.single.code, 'all-builtin-group');
   });
 }

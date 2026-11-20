@@ -185,7 +185,7 @@ class ConfigValidator {
       if (seen.containsKey(name)) {
         issues.add(
           Issue(
-            severity: IssueSeverity.warning,
+            severity: IssueSeverity.error,
             code: 'name-shadow',
             message: '策略组与节点同名：$name，引用时含义不明确',
             subject: name,
@@ -332,6 +332,17 @@ class ConfigValidator {
       } else {
         names[g.name] = i;
       }
+      if (Profile.builtinTargets.contains(g.name)) {
+        issues.add(
+          Issue(
+            severity: IssueSeverity.error,
+            code: 'builtin-group-name',
+            message: '策略组名与系统策略名冲突：${g.name}',
+            subject: g.name,
+            path: [...path, 'name'],
+          ),
+        );
+      }
       final type = g.raw['type'];
       if (type == null) {
         issues.add(
@@ -367,7 +378,7 @@ class ConfigValidator {
             // 必须按错误拦下，不能只给警告。computed 组（include-all/filter）
             // 的成员由内核动态生成，缺项不致命。
             severity: g.computedMembers
-                ? IssueSeverity.info
+                ? IssueSeverity.warning
                 : IssueSeverity.error,
             code: 'dangling-member',
             message: '策略组 ${g.name} 里的成员「$m」不存在',
@@ -389,12 +400,12 @@ class ConfigValidator {
           );
         }
       }
-      if (g.type == 'select' && g.members.isEmpty && !g.computedMembers) {
+      if (g.members.isEmpty && !g.computedMembers) {
         issues.add(
           Issue(
-            severity: IssueSeverity.warning,
-            code: 'empty-select-group',
-            message: '手动选择组 ${g.name} 没有任何成员',
+            severity: IssueSeverity.error,
+            code: 'empty-group',
+            message: '策略组 ${g.name} 没有任何成员',
             subject: g.name,
             path: path,
           ),
@@ -403,11 +414,25 @@ class ConfigValidator {
       if (g.type == 'relay' && g.members.length < 2) {
         issues.add(
           Issue(
-            severity: IssueSeverity.info,
+            severity: IssueSeverity.error,
             code: 'thin-relay',
-            message: '链式代理组 ${g.name} 成员少于 2 个',
+            message: '链式代理组 ${g.name} 成员少于 2 个，内核无法启动',
             subject: g.name,
             path: path,
+          ),
+        );
+      }
+      final onlyBuiltin =
+          g.members.isNotEmpty &&
+          g.members.every((m) => m == 'DIRECT' || m == 'REJECT');
+      if (onlyBuiltin) {
+        issues.add(
+          Issue(
+            severity: IssueSeverity.warning,
+            code: 'all-builtin-group',
+            message: '策略组 ${g.name} 的成员全是 DIRECT/REJECT，不会真正走代理',
+            subject: g.name,
+            path: [...path, 'proxies'],
           ),
         );
       }

@@ -52,6 +52,32 @@ rules:
   - MATCH,DEFAULT
 ''';
 
+/// 链式代理：选中的是整条链，卡片不应出现「当前 xxx」。
+const String _withRelay = '''
+mixed-port: 7890
+proxies:
+  - name: 香港 01
+    type: vless
+    server: example.com
+    port: 443
+    uuid: 11111111-1111-1111-1111-111111111111
+    cipher: auto
+  - name: 日本 02
+    type: vless
+    server: example.com
+    port: 443
+    uuid: 22222222-2222-2222-2222-222222222222
+    cipher: auto
+proxy-groups:
+  - name: 链式代理
+    type: relay
+    proxies:
+      - 香港 01
+      - 日本 02
+rules:
+  - MATCH,链式代理
+''';
+
 Finder _cardOf(String title) =>
     find.ancestor(of: find.text(title), matching: find.byType(AppCard)).first;
 
@@ -212,5 +238,22 @@ rules:
         .colorScheme;
     expect(find.text('当前 REJECT'), findsOneWidget);
     expect(_borderOf(tester, reject), scheme.primary);
+  });
+
+  testWidgets('链式代理卡不显示「当前 」出口文案', (tester) async {
+    await _pump(
+      tester,
+      yaml: _withRelay,
+      groupSelection: const <String, String>{'链式代理': '香港 01'},
+    );
+    final card = _cardOf('链式代理');
+    expect(
+      find.descendant(of: card, matching: find.textContaining('当前 ')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: card, matching: find.textContaining('整链 · 2 阶')),
+      findsOneWidget,
+    );
   });
 }

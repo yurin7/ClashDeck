@@ -1325,7 +1325,9 @@ class _GroupCard extends StatelessWidget {
                                 ],
                               ],
                             ),
-                          if (currentLabel != null) ...[
+                          // 链式代理没有「当前节点」：选中的是整条链。
+                          if (currentLabel != null &&
+                              group.type != 'relay') ...[
                             const SizedBox(height: 4),
                             // 单独一行，避免和类型/成员数挤在同一行被省略号截断。
                             Text(

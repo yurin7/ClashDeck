@@ -47,6 +47,9 @@ void main() {
     await tester.pumpWidget(_app(profile, onAddMember: () => added = true));
 
     expect(find.textContaining('链式代理至少需要 2 个节点'), findsOneWidget);
+    // 只有一个节点时也要把它显示出来，否则用户看不到自己加了谁。
+    expect(find.text('a'), findsOneWidget);
+    expect(find.byType(NodeChip), findsOneWidget);
     // 空态仍然保留「加一阶」入口。
     expect(find.text('加一阶'), findsOneWidget);
     await tester.tap(find.text('加一阶'));

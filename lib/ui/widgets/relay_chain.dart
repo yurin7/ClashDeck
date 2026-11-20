@@ -49,15 +49,66 @@ class RelayChain extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final members = group.members;
     if (members.length < 2) {
+      // 单节点 relay 也是合法配置（只是跑不起来）：仍要把这一阶显示出来，
+      // 用户才看得到自己加了哪个节点；空组只留提示。
+      final single = members.length == 1 ? members.first : null;
       return Padding(
-        padding: const EdgeInsets.only(top: Insets.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('链式代理至少需要 2 个节点：点右上 ⊕ 添加，或把节点拖进来。', style: hintStyle(context)),
-            const SizedBox(height: Insets.sm),
-            _AddLink(onTap: onAddMember),
-          ],
+        padding: const EdgeInsets.only(top: Insets.md, right: Insets.sm),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final linkMaxWidth = (constraints.maxWidth - 48).clamp(
+              140.0,
+              double.infinity,
+            );
+            final nameWidth = (linkMaxWidth - 150).clamp(48.0, 200.0);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (single != null) ...[
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _GapTarget(
+                        index: 0,
+                        group: group,
+                        onInsertAt: onInsertAt,
+                      ),
+                      _ChainLink(
+                        index: 0,
+                        total: 1,
+                        node: profile.proxyByName[single],
+                        fallbackName: single,
+                        groupName: group.name,
+                        selected: false,
+                        maxWidth: linkMaxWidth,
+                        maxNameWidth: nameWidth,
+                        delayText: delays.containsKey(single)
+                            ? formatDelay(
+                                delays[single],
+                                approx: approx.contains(single),
+                              )
+                            : null,
+                        onOpen: onOpen,
+                        onDelete: onDelete,
+                        onRemove: onRemove,
+                        onSelect: onSelect,
+                        onMoveLeft: null,
+                        onMoveRight: null,
+                        onMenu: onMenu,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Insets.sm),
+                ],
+                Text(
+                  '链式代理至少需要 2 个节点：点右上 ⊕ 添加，或把节点拖进来。',
+                  style: hintStyle(context),
+                ),
+                const SizedBox(height: Insets.sm),
+                _AddLink(onTap: onAddMember),
+              ],
+            );
+          },
         ),
       );
     }

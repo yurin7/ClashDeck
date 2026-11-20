@@ -62,55 +62,68 @@ class RelayChain extends StatelessWidget {
         ),
       );
     }
+    final width = MediaQuery.sizeOf(context).width;
+    // 胶囊只占半屏，长名省略而不是把后面的链条挤出屏幕。
+    final nameWidth = (width * 0.5).clamp(0.0, 200.0);
     return Padding(
       padding: const EdgeInsets.only(top: Insets.md, right: Insets.sm),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (var i = 0; i < members.length; i++) ...[
-              _GapTarget(index: i, group: group, onInsertAt: onInsertAt),
-              if (i > 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Insets.xs),
-                  child: Icon(
-                    Icons.arrow_right_alt_rounded,
-                    size: 18,
-                    color: scheme.outline,
+      child: Wrap(
+        spacing: Insets.xs,
+        runSpacing: Insets.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (var i = 0; i < members.length; i++)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GapTarget(index: i, group: group, onInsertAt: onInsertAt),
+                if (i > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Insets.xs),
+                    child: Icon(
+                      Icons.arrow_right_alt_rounded,
+                      size: 18,
+                      color: scheme.outline,
+                    ),
                   ),
+                _ChainLink(
+                  index: i,
+                  total: members.length,
+                  node: profile.proxyByName[members[i]],
+                  fallbackName: members[i],
+                  groupName: group.name,
+                  selected: selectedName == members[i],
+                  maxNameWidth: nameWidth,
+                  delayText: delays.containsKey(members[i])
+                      ? formatDelay(
+                          delays[members[i]],
+                          approx: approx.contains(members[i]),
+                        )
+                      : null,
+                  onOpen: onOpen,
+                  onDelete: onDelete,
+                  onRemove: onRemove,
+                  onSelect: onSelect,
+                  onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
+                  onMoveRight: i == members.length - 1
+                      ? null
+                      : () => onMoveRight(i, i + 1),
+                  onMenu: onMenu,
                 ),
-              _ChainLink(
-                index: i,
-                total: members.length,
-                node: profile.proxyByName[members[i]],
-                fallbackName: members[i],
-                groupName: group.name,
-                selected: selectedName == members[i],
-                delayText: delays.containsKey(members[i])
-                    ? formatDelay(
-                        delays[members[i]],
-                        approx: approx.contains(members[i]),
-                      )
-                    : null,
-                onOpen: onOpen,
-                onDelete: onDelete,
-                onRemove: onRemove,
-                onSelect: onSelect,
-                onMoveLeft: i == 0 ? null : () => onMoveLeft(i, i - 1),
-                onMoveRight: i == members.length - 1
-                    ? null
-                    : () => onMoveRight(i, i + 1),
-                onMenu: onMenu,
-              ),
-            ],
-            _GapTarget(
-              index: members.length,
-              group: group,
-              onInsertAt: onInsertAt,
+              ],
             ),
-            _AddLink(onTap: onAddMember),
-          ],
-        ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _GapTarget(
+                index: members.length,
+                group: group,
+                onInsertAt: onInsertAt,
+              ),
+              _AddLink(onTap: onAddMember),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -125,6 +138,7 @@ class _ChainLink extends StatelessWidget {
     required this.groupName,
     required this.selected,
     required this.delayText,
+    required this.maxNameWidth,
     required this.onOpen,
     required this.onDelete,
     required this.onRemove,
@@ -141,6 +155,7 @@ class _ChainLink extends StatelessWidget {
   final String groupName;
   final bool selected;
   final String? delayText;
+  final double maxNameWidth;
   final void Function(ProxyEntry node) onOpen;
   final void Function(ProxyEntry node) onDelete;
   final void Function(String name) onRemove;
@@ -176,6 +191,7 @@ class _ChainLink extends StatelessWidget {
           onSelect: onSelect == null ? null : () => onSelect!(fallbackName),
           selected: selected,
           delayText: delayText,
+          maxNameWidth: maxNameWidth,
         ),
         Positioned(
           left: -6,

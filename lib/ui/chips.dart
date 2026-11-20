@@ -257,6 +257,7 @@ class NodeChip extends StatelessWidget {
     this.onSelect,
     this.selected = false,
     this.delayText,
+    this.maxNameWidth,
   });
 
   final ProxyEntry node;
@@ -279,6 +280,9 @@ class NodeChip extends StatelessWidget {
 
   /// 延迟胶囊文本（`123 ms` / `超时`）；null 表示不显示。
   final String? delayText;
+
+  /// 节点名最大宽度；用于链式代理等窄格子里截断长名。
+  final double? maxNameWidth;
 
   static String typeBadge(String type) => switch (type) {
     'vless' => 'V',
@@ -310,12 +314,21 @@ class NodeChip extends StatelessWidget {
           // 选中只靠紫色底 / 描边表达，不再加 ✓（四类胶囊统一）。
           _TypeSquare(label: typeBadge(node.type), color: scheme.primary),
           const SizedBox(width: 6),
-          Text(
-            node.name,
-            style: display(
-              13,
-              weight: selected ? 600 : 500,
-              color: selected ? chipSelectionColor(scheme) : null,
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: maxNameWidth ?? double.infinity,
+            ),
+            child: Text(
+              node.name,
+              maxLines: 1,
+              overflow: maxNameWidth == null
+                  ? TextOverflow.clip
+                  : TextOverflow.ellipsis,
+              style: display(
+                13,
+                weight: selected ? 600 : 500,
+                color: selected ? chipSelectionColor(scheme) : null,
+              ),
             ),
           ),
           if (delayText != null) ...[

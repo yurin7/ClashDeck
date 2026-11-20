@@ -1,7 +1,7 @@
 name: clashdeck
 description: "Clash / mihomo 配置可视化编辑器"
 publish_to: 'none'
-version: 0.3.6+2092
+version: 0.3.7+2093
 
 environment:
   sdk: ^3.14.0
@@ -50,3 +50,4 @@ flutter:
     - family: JetBrainsMono
       fonts:
         - asset: assets/fonts/JetBrainsMono.ttf
+

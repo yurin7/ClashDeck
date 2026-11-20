@@ -1,5 +1,3 @@
-import 'package:material_ui/material_ui.dart';
-
 /// Pulse 抽屉占屏宽的比例（左侧面板 80%，右侧露出 20% 概览）。
 const double kPulseDrawerWidthFactor = 0.8;
 
@@ -37,14 +35,6 @@ bool pulseDrawerShouldClose({
 /// 这里用 overscroll 事件驱动抽屉，不依赖系统边缘手势排除。
 const double kPulseOverscrollStartDx = 12;
 
-/// 遮罩已打开或在滑出过程中：PageView 必须停止翻页。
-bool pulseShouldBlockPager({required bool open, required double reveal}) =>
-    open || reveal > 0;
-
-/// 遮罩打开期间的滚动策略；其余时间保持正常的翻页手感。
-ScrollPhysics pulsePagerPhysics({required bool open}) =>
-    open ? const NeverScrollableScrollPhysics() : const PageScrollPhysics();
-
 /// 抽屉滑出后向左回收：只允许减小累计位移，不会变成负值。
 ///
 /// 「半开时向左拖」不应产生任何页面移动，只是把抽屉收回去。
@@ -66,9 +56,3 @@ double pulseForwardDrag({required double dx, required double delta}) {
   if (delta <= 0) return dx;
   return dx + delta;
 }
-
-/// PageView 是否应该禁滑：只有「已打开且不在拖拽中」才禁。
-///
-/// 拖拽过程中切 physics 会打断当前 drag，让抽屉刚滑出就弹回。
-bool pulsePagerLocked({required bool open, required bool dragging}) =>
-    open && !dragging;

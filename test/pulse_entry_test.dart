@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_ui/material_ui.dart';
 
 import 'package:clashdeck/ui/pulse_entry.dart';
 
@@ -80,45 +79,6 @@ void main() {
 
     test('左甩够快就收起', () {
       expect(pulseDrawerShouldClose(progress: 0.9, velocity: -301), isTrue);
-    });
-  });
-  group('pulseShouldBlockPager', () {
-    test('抽屉打开时禁止翻页', () {
-      expect(pulseShouldBlockPager(open: true, reveal: 0), isTrue);
-    });
-
-    test('抽屉滑出一半时也禁止翻页', () {
-      expect(pulseShouldBlockPager(open: false, reveal: 0.4), isTrue);
-    });
-
-    test('完全收起后恢复翻页', () {
-      expect(pulseShouldBlockPager(open: false, reveal: 0), isFalse);
-    });
-  });
-
-  group('pulsePagerPhysics', () {
-    test('打开时不可滚', () {
-      expect(
-        pulsePagerPhysics(open: true),
-        isA<NeverScrollableScrollPhysics>(),
-      );
-    });
-
-    test('关闭时是正常翻页', () {
-      expect(pulsePagerPhysics(open: false), isA<PageScrollPhysics>());
-    });
-  });
-  group('pulsePagerLocked', () {
-    test('打开且不在拖拽时禁滑', () {
-      expect(pulsePagerLocked(open: true, dragging: false), isTrue);
-    });
-
-    test('拖拽过程中不禁滑，避免打断手势', () {
-      expect(pulsePagerLocked(open: true, dragging: true), isFalse);
-    });
-
-    test('抽屉关闭时不禁滑', () {
-      expect(pulsePagerLocked(open: false, dragging: false), isFalse);
     });
   });
 }

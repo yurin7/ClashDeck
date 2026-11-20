@@ -29,6 +29,7 @@ import 'sheets.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/horizontal_drag.dart';
+import 'widgets/pulse_swipe.dart';
 import 'navigation.dart';
 import './widgets/text_input_dialog.dart';
 import 'motion.dart';
@@ -437,104 +438,6 @@ class _AppShellState extends State<AppShell>
   String? _pulseFileName;
   Profile? _pulseProfile;
   AppPrefs? _pulsePrefs;
-  double _pulseOverscrollDx = 0;
-  bool _pulseOverscrollActive = false;
-
-  /// 概览页（第 0 页）向右拖会先触发 PageView 的 overscroll：
-  /// 不在系统边缘也能拿到事件，用它跟手拉出左侧遮罩。
-  bool _onPagerScrollNotification(ScrollNotification notification) {
-    if (_index != 0) return false;
-    // 抽屉已完全打开、且不在拖拽中：吞掉残余滚动，避免翻页。
-    // 拖拽过程中（_pulseOverscrollActive）必须继续走下面的 overscroll
-    // 分支，否则进度不再增长、抽屉会停在刚露头的位置。
-    if (pulsePagerLocked(open: _pulseOpen, dragging: _pulseOverscrollActive)) {
-      return true;
-    }
-    // 半开或滑出过程中：底页完全不许动。向左拖只回收抽屉进度。
-    if (_pulseOverscrollActive || _pulseReveal.value > 0) {
-      final width = MediaQuery.sizeOf(context).width;
-      if (notification is OverscrollNotification && notification.depth == 0) {
-        final delta = notification.dragDetails?.delta.dx ?? 0;
-        if (delta < 0) {
-          _pulseOverscrollDx = pulseBackDrag(
-            dx: _pulseOverscrollDx,
-            delta: delta,
-            active: _pulseOverscrollActive,
-          );
-          _pulseReveal.value = pulseDrawerProgress(
-            dragDx: _pulseOverscrollDx,
-            panelWidth: pulseDrawerPanelWidth(width),
-          );
-          if (_pulseOverscrollDx == 0) {
-            _pulseOverscrollActive = false;
-            unawaited(_settlePulse(0));
-          }
-        } else {
-          // 越过阈值之后仍在同一次拖拽里：继续累积，别冻在刚露头的位置。
-          _pulseOverscrollDx = pulseForwardDrag(
-            dx: _pulseOverscrollDx,
-            delta: delta,
-          );
-          _pulseReveal.value = pulseDrawerProgress(
-            dragDx: _pulseOverscrollDx,
-            panelWidth: pulseDrawerPanelWidth(width),
-          );
-        }
-        return true;
-      }
-      if (notification is ScrollEndNotification &&
-          notification.depth == 0 &&
-          _pulseOverscrollActive) {
-        _pulseOverscrollActive = false;
-        final velocity =
-            notification.dragDetails?.velocity.pixelsPerSecond.dx ?? 0;
-        final open = pulseDrawerShouldOpen(
-          progress: _pulseReveal.value,
-          velocity: velocity,
-        );
-        unawaited(_settlePulse(open ? 1 : 0));
-        return true;
-      }
-      if (notification is ScrollStartNotification && notification.depth == 0) {
-        return true;
-      }
-      return true;
-    }
-    if (notification is ScrollStartNotification && notification.depth == 0) {
-      _pulseOverscrollDx = 0;
-      _pulseOverscrollActive = false;
-      return false;
-    }
-    if (notification is OverscrollNotification && notification.depth == 0) {
-      final delta = notification.dragDetails?.delta.dx ?? 0;
-      if (delta <= 0) return false;
-      _pulseOverscrollDx += delta;
-      if (!_pulseOverscrollActive) {
-        if (_pulseOverscrollDx < kPulseOverscrollStartDx) return true;
-        _pulseOverscrollActive = true;
-        _beginPulse();
-        if (!_pulseOpen) return true;
-      }
-      final width = MediaQuery.sizeOf(context).width;
-      _pulseReveal.value = pulseDrawerProgress(
-        dragDx: _pulseOverscrollDx,
-        panelWidth: pulseDrawerPanelWidth(width),
-      );
-      return true;
-    }
-    if (notification is ScrollEndNotification &&
-        notification.depth == 0 &&
-        _pulseOverscrollActive) {
-      _pulseOverscrollActive = false;
-      final open = pulseDrawerShouldOpen(
-        progress: _pulseReveal.value,
-        velocity: notification.dragDetails?.velocity.pixelsPerSecond.dx ?? 0,
-      );
-      unawaited(_settlePulse(open ? 1 : 0));
-      return true;
-    }
-    return false;
-  }
 
   /// 面板打开后向左拖：progress 从 1 往下减，松手按 0.65/速度判定。
   void _onPulseCloseDragUpdate(DragUpdateDetails details) {
@@ -790,8 +693,15 @@ class _AppShellState extends State<AppShell>
         body: Stack(
           children: [
             // 主界面：抽屉打开时轻微缩小，左侧 20% 留给暗区。
-            NotificationListener<ScrollNotification>(
-              onNotification: _onPagerScrollNotification,
+            // 翻页与抽屉都由这层水平手势驱动；PageView 自身禁用滚动，
+            // 避免两层争抢同一次拖拽导致抽屉滑到一半被判定为翻页。
+            PulseSwipeArea(
+              index: _index,
+              pageCount: 3,
+              reveal: _pulseReveal,
+              onOpenPulse: _beginPulse,
+              onSettle: (open) => unawaited(_settlePulse(open ? 1 : 0)),
+              onPageChange: (i) => unawaited(_goTo(i)),
               child: AnimatedBuilder(
                 animation: _pulseReveal,
                 builder: (context, child) => Transform.scale(
@@ -800,15 +710,7 @@ class _AppShellState extends State<AppShell>
                 ),
                 child: PageView(
                   controller: _pager,
-                  // 遮罩打开期间禁止翻页：左滑只能回弹遮罩，不能切到下一页。
-                  // 只在「已打开且不在拖拽中」禁滑：拖拽过程中切 physics
-                  // 会打断当前 drag，导致抽屉刚滑出就弹回。
-                  physics: pulsePagerPhysics(
-                    open: pulsePagerLocked(
-                      open: _pulseOpen,
-                      dragging: _pulseOverscrollActive,
-                    ),
-                  ),
+                  physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (i) => setState(() => _index = i),
                   children: [
                     _KeepAlivePage(

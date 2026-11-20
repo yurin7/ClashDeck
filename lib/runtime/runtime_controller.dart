@@ -45,6 +45,9 @@ class RuntimeController extends ChangeNotifier {
     this.delayProbe,
     this.tcpConnector,
     this.displayProvider,
+    this.pruneSavedExit,
+    this.pruneSavedGlobalExit,
+    this.apiOverride,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_handleDartCall);
   }
@@ -72,6 +75,20 @@ class RuntimeController extends ChangeNotifier {
   /// 供 Kotlin 快照用的展示信息（当前配置名 / 全局出口）。
   /// 磁贴、通知、小组件在 Flutter 不在时只能读这份快照。
   final ({String profile, String exit}) Function()? displayProvider;
+
+  /// 设置里记住的组出口已经失效（组不存在 / 节点不在组里）时，把它从
+  /// sidecar 删掉，避免每次启动都重放一次注定 404 的 selectProxy。
+  final void Function(String group, String? node)? pruneSavedExit;
+
+  /// 同上，针对全局出口 GLOBAL。
+  final void Function()? pruneSavedGlobalExit;
+
+  /// 测试注入：替代真实 REST 的 [MihomoApi]。
+  final MihomoApi? apiOverride;
+
+  /// 轮询是否在跑（测试用来断言 idle 分支也会启动轮询）。
+  @visibleForTesting
+  bool get polling => _pollTimer != null;
   final int port;
   final String? secret;
   final Duration pollInterval;
@@ -175,7 +192,8 @@ class RuntimeController extends ChangeNotifier {
   bool get isBusy =>
       _phase == RuntimePhase.starting || _phase == RuntimePhase.stopping;
 
-  MihomoApi get api => MihomoApi(host: '127.0.0.1', port: port, secret: secret);
+  MihomoApi get api =>
+      apiOverride ?? MihomoApi(host: '127.0.0.1', port: port, secret: secret);
 
   // ------------------------------------------------------------------ 生命周期
 
@@ -430,6 +448,9 @@ class RuntimeController extends ChangeNotifier {
       final running =
           status['running'] == true || ((_pid ?? 0) > 0 && error == null);
       if (running) {
+        // 内核在跑就以内核为准：之前留下的操作错误（例如重放旧出口的 404）
+        // 不能把 phase 永久钉在 error 上。
+        _lastError = null;
         _setPhase(RuntimePhase.running);
         unawaited(_refreshRuntimeView());
         _startPolling();
@@ -439,6 +460,7 @@ class RuntimeController extends ChangeNotifier {
       } else if (kernelState == 'running' && _phase != RuntimePhase.running) {
         // App 冷启动后被打开：磁贴/小组件可能已经拉起了内核，这里对齐而不是
         // 假设「刚启动 = 未运行」。
+        _lastError = null;
         _setPhase(RuntimePhase.running);
         unawaited(_refreshRuntimeView());
         _startPolling();
@@ -447,7 +469,22 @@ class RuntimeController extends ChangeNotifier {
       } else if (kernelState == 'stopping') {
         _setPhase(RuntimePhase.stopping);
       } else if (_phase != RuntimePhase.starting && kernelState != 'running') {
+        // 内核确实没跑：清掉残留的 pid/启动时间与旧日志，避免 UI 显示幽灵进程。
+        final stale = (_pid ?? 0) > 0 || _phase == RuntimePhase.running;
+        _pid = null;
+        _lastError = null;
         _phase = RuntimePhase.idle;
+        if (stale) {
+          _startedAt = null;
+          _logs = <String>[];
+          _stopPolling();
+        }
+      }
+      // 服务标记或 pid 还在：即使还没收到 running，也要轮询等内核应答。
+      if (!running &&
+          _phase == RuntimePhase.idle &&
+          (_serviceRunning || (_pid ?? 0) > 0)) {
+        _startPolling();
       }
       await loadLogs();
       notifyListeners();
@@ -502,7 +539,14 @@ class RuntimeController extends ChangeNotifier {
   }
 
   /// 运行时切换某个策略组选中的节点。
-  Future<bool> selectNode(String group, String node) async {
+  ///
+  /// [quiet] 为 true 时用于「重放上次选择」：失败不写全局错误条（那是操作
+  /// 提示，不是内核故障），只刷新一次真实状态。
+  Future<bool> selectNode(
+    String group,
+    String node, {
+    bool quiet = false,
+  }) async {
     final client = api;
     try {
       await client.selectProxy(group, node);
@@ -510,7 +554,11 @@ class RuntimeController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (error) {
-      _setError('切换节点失败：$error');
+      if (quiet) {
+        unawaited(_refreshRuntimeView());
+      } else {
+        _setError('切换节点失败：$error');
+      }
       return false;
     } finally {
       client.close();
@@ -838,24 +886,29 @@ class RuntimeController extends ChangeNotifier {
   /// 只在本次启动里生效：用户之后在运行页临时换节点，不该被反复覆盖。
   Future<void> _applySavedGlobalExit() async {
     if (_globalExitApplied) return;
-    // 先把每个组切到记住的节点，再把 GLOBAL 切过去：顺序对了，用户看到的
-    // 「GLOBAL → 组 → 组内节点」才和上次退出时一致。
-    final saved =
-        settingsProvider?.call().groupNodes ?? const <String, String>{};
+    // 先置位再重放：中途 refresh 回到这里也不会套娃。
+    _globalExitApplied = true;
+    final settings = settingsProvider?.call();
+    final saved = settings?.groupNodes ?? const <String, String>{};
     for (final entry in saved.entries) {
+      final members = _members[entry.key];
+      if (members == null || !members.contains(entry.value)) {
+        // 组没了 / 节点已从组里移除：清掉这条记忆，下次启动不再重放。
+        pruneSavedExit?.call(entry.key, null);
+        continue;
+      }
       if (_selected[entry.key] == entry.value) continue;
-      await selectNode(entry.key, entry.value);
+      await selectNode(entry.key, entry.value, quiet: true);
     }
-    final node = settingsProvider?.call().globalNode;
-    if (node == null || node.isEmpty) {
-      _globalExitApplied = true;
+    final node = settings?.globalNode;
+    if (node == null || node.isEmpty) return;
+    final globalMembers = _members['GLOBAL'];
+    if (globalMembers == null || !globalMembers.contains(node)) {
+      pruneSavedGlobalExit?.call();
       return;
     }
-    if (_selected['GLOBAL'] == node) {
-      _globalExitApplied = true;
-      return;
-    }
-    if (await selectNode('GLOBAL', node)) _globalExitApplied = true;
+    if (_selected['GLOBAL'] == node) return;
+    await selectNode('GLOBAL', node, quiet: true);
   }
 
   /// 内核启动成功后自动测一轮速（每次启动只测一次）。

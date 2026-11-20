@@ -74,6 +74,10 @@ class RuntimeConfig {
   }) {
     var next = doc;
 
+    // mihomo 1.10 起不再支持 `type: relay`，链式代理要在运行配置里展开成
+    // dialer-proxy 链。只改派生文件：用户配置与 sidecar 保持原样。
+    next = _expandRelayGroups(next);
+
     next = _set(next, ['external-controller'], controller);
     if (secret != null && secret.isNotEmpty) {
       next = _set(next, ['secret'], secret);
@@ -120,6 +124,98 @@ class RuntimeConfig {
     }
 
     return next.text;
+  }
+
+  /// 把 `proxy-groups` 里的 `type: relay` 展开成 dialer-proxy 链。
+  ///
+  /// mihomo 1.10 移除了 relay 类型（fatal `unsupported type: ... relay type
+  /// was removed, please using dialer-proxy instead`）。这里只在运行配置里
+  /// 改写：成员 A→B→C 生成隐藏代理 `__chain_<组>_1..3`，后者用
+  /// `dialer-proxy` 指向前者；原组名改成 `select` 且只保留最后一级，
+  /// 选中即整条链。用户文件与 sidecar 完全不动。
+  static YamlDoc _expandRelayGroups(YamlDoc doc) {
+    final rawGroups = doc.plainAt(['proxy-groups']);
+    if (rawGroups is! List || rawGroups.isEmpty) return doc;
+    final rawProxies = doc.plainAt(['proxies']);
+    final proxies = <Object?>[
+      if (rawProxies is List)
+        for (final item in rawProxies)
+          item is Map ? YamlDoc.toPlainMap(item) : item,
+    ];
+    final byName = <String, Map<String, Object?>>{};
+    for (final item in proxies) {
+      if (item is Map) {
+        final name = item['name'];
+        if (name is String) byName[name] = YamlDoc.toPlainMap(item);
+      }
+    }
+    var changed = false;
+    final hidden = <Object?>[];
+    final groups = <Object?>[];
+    for (final raw in rawGroups) {
+      if (raw is! Map) {
+        groups.add(raw);
+        continue;
+      }
+      final group = YamlDoc.toPlainMap(raw);
+      if ('${group['type'] ?? ''}'.trim().toLowerCase() != 'relay') {
+        groups.add(group);
+        continue;
+      }
+      changed = true;
+      final rawMembers = group['proxies'];
+      final members = <String>[
+        if (rawMembers is List)
+          for (final member in rawMembers)
+            if ('$member'.isNotEmpty && byName.containsKey('$member'))
+              '$member',
+      ];
+      final groupName = '${group['name'] ?? 'relay'}';
+      if (members.isEmpty) {
+        // 空 relay 组没有任何可跑的东西，收敛成 DIRECT，至少不 fatal。
+        groups.add(<String, Object?>{
+          'name': groupName,
+          'type': 'select',
+          'proxies': <Object?>['DIRECT'],
+        });
+        continue;
+      }
+      if (members.length == 1) {
+        // 单节点不需要链：直接 select 该节点，少一层隐藏代理。
+        groups.add(<String, Object?>{
+          'name': groupName,
+          'type': 'select',
+          'proxies': <Object?>[members.first],
+        });
+        continue;
+      }
+      final chain = <String>[];
+      for (var i = 0; i < members.length; i++) {
+        var chainName = '__chain_${groupName}_${i + 1}';
+        while (byName.containsKey(chainName)) {
+          chainName = '${chainName}_';
+        }
+        final proxy = <String, Object?>{
+          ...byName[members[i]]!,
+          'name': chainName,
+        };
+        if (i > 0) proxy['dialer-proxy'] = chain[i - 1];
+        hidden.add(proxy);
+        byName[chainName] = proxy;
+        chain.add(chainName);
+      }
+      // 单节点 relay 也走 select，只是没有 dialer-proxy 前缀链。
+      groups.add(<String, Object?>{
+        'name': groupName,
+        'type': 'select',
+        'proxies': <Object?>[chain.last],
+      });
+    }
+    if (!changed) return doc;
+    var next = doc;
+    next = ConfigOps.setAt(next, ['proxies'], <Object?>[...proxies, ...hidden]);
+    next = ConfigOps.setAt(next, ['proxy-groups'], groups);
+    return next;
   }
 
   /// 保证 DNS 段存在且为 fake-ip（TUN 下最稳），但**不覆盖**用户已写的值。

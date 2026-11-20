@@ -90,6 +90,17 @@ class _AppShellState extends State<AppShell>
       settingsProvider: () => _settings?.app ?? AppSettings.defaults,
       displayProvider: () =>
           (profile: _activeFileName ?? '', exit: _settings?.globalNode ?? ''),
+      // 重放上次出口时若条目已失效，顺手从 sidecar 删掉，避免每次启动都 404。
+      pruneSavedExit: (group, node) {
+        final settings = _settings;
+        if (settings == null) return;
+        unawaited(settings.setGroupNode(group, node));
+      },
+      pruneSavedGlobalExit: () {
+        final settings = _settings;
+        if (settings == null) return;
+        unawaited(settings.setGlobalNode(null));
+      },
     );
     _pager = PageController()..addListener(_onPageChanged);
     _pulseReveal = AnimationController(

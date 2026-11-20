@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
 import '../core/edit/group_selection.dart';
+import '../core/edit/group_status.dart';
 import '../core/model/profile.dart';
 import '../core/schema/group_schema.dart';
 import '../core/yaml/yaml_doc.dart';
@@ -1141,10 +1142,22 @@ class _GroupCard extends StatelessWidget {
     final motion = Motion.of(context);
     final profile = state.profile;
     final currentLabel = _currentLabel;
+    final issue = groupCardIssue(group: group, profile: profile);
+    final issueColor = issue == GroupCardIssue.error
+        ? scheme.error
+        : issue == GroupCardIssue.warning
+        ? scheme.tertiary
+        : null;
+    // 链式卡只接受链内插入，整卡不再是投放目标。
+    final isRelay = group.type == 'relay';
     return DragTarget<Object>(
       onWillAcceptWithDetails: (d) {
         final data = d.data;
         if (data is DragNodeData) {
+          if (isRelay) {
+            dragState.clearHint();
+            return false;
+          }
           final duplicate =
               data.fromGroup != group.name && group.members.contains(data.node);
           dragState.hintDuplicate(duplicate ? group.name : null);
@@ -1159,6 +1172,13 @@ class _GroupCard extends StatelessWidget {
       onMove: (d) {
         final data = d.data;
         if (data is DragNodeData) {
+          if (isRelay) {
+            // 链式组只接受链内重排：同组拖整卡标 🚫，松手走回弹。
+            dragState.hintDuplicate(
+              data.fromGroup == group.name ? group.name : null,
+            );
+            return;
+          }
           final duplicate =
               data.fromGroup != group.name && group.members.contains(data.node);
           dragState.hintDuplicate(duplicate ? group.name : null);
@@ -1187,16 +1207,20 @@ class _GroupCard extends StatelessWidget {
         final active = candidate.isNotEmpty;
         final duplicate = dragState.duplicateGroup == group.name;
         return AppCard(
-          color: duplicate
+          color: duplicate && !isRelay
               ? scheme.error.withValues(alpha: 0.07)
+              : issueColor != null
+              ? issueColor.withValues(alpha: 0.06)
               : active
               ? scheme.primaryContainer
               : null,
-          borderColor: duplicate
+          // 红/黄问题优先于「当前出口」的紫色提示；链式卡不做整卡高亮。
+          borderColor: duplicate && !isRelay
               ? scheme.error
-              : currentLabel != null && !active
-              ? scheme.primary.withValues(alpha: 0.35)
-              : _dropBorder(scheme, active),
+              : issueColor ??
+                    (currentLabel != null && !active
+                        ? scheme.primary.withValues(alpha: 0.35)
+                        : _dropBorder(scheme, active)),
           padding: const EdgeInsets.fromLTRB(
             Insets.lg,
             Insets.md,

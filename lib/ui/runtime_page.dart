@@ -415,7 +415,12 @@ class _RuntimePageState extends State<RuntimePage> {
         collapsedShape: const Border(),
         leading: Icon(Icons.terminal, size: 20, color: scheme.onSurfaceVariant),
         title: Text('内核日志', style: theme.textTheme.titleSmall),
-        subtitle: Text('${lines.length} 行', style: hintStyle(context)),
+        subtitle: Text(
+          lines.length > tail.length
+              ? '最近 ${tail.length} 行 / 共 ${lines.length} 行'
+              : '${lines.length} 行',
+          style: hintStyle(context),
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(
           Insets.lg,
           0,

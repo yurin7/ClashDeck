@@ -37,3 +37,38 @@ String? groupCurrentLabel({
   if (best == null) return null;
   return group.type == 'url-test' ? '当前 $best · 最低延迟' : '当前 $best';
 }
+
+/// 组卡外框的严重程度：红=跑不起来，黄=能跑但可疑。
+enum GroupCardIssue { none, warning, error }
+
+/// 判定一个组卡该不该报警。
+///
+/// 红：空组、relay 少于 2 个成员、成员既不是节点也不是已知组、组名重复。
+/// 黄：组能跑，但成员全是 DIRECT/REJECT（这类组不会真的走代理）。
+GroupCardIssue groupCardIssue({
+  required GroupEntry group,
+  required Profile profile,
+}) {
+  if (group.members.isEmpty) return GroupCardIssue.error;
+  if (group.type == 'relay' && group.members.length < 2) {
+    return GroupCardIssue.error;
+  }
+  final proxyNames = {for (final p in profile.proxies) p.name};
+  final groupNames = {for (final g in profile.groups) g.name};
+  for (final member in group.members) {
+    final builtin =
+        member == 'DIRECT' || member == 'REJECT' || member == 'REJECT-DROP';
+    if (!builtin &&
+        !proxyNames.contains(member) &&
+        !groupNames.contains(member)) {
+      return GroupCardIssue.error;
+    }
+  }
+  if (profile.groups.where((g) => g.name == group.name).length > 1) {
+    return GroupCardIssue.error;
+  }
+  if (group.members.every((m) => m == 'DIRECT' || m == 'REJECT')) {
+    return GroupCardIssue.warning;
+  }
+  return GroupCardIssue.none;
+}

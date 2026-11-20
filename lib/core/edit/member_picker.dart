@@ -115,8 +115,7 @@ Set<String> invertVisible(
   return next;
 }
 
-/// 把已选集合裁到「当前仍可加入」的范围内。
-///
+/// 把已选集合裁到「当前仍可加入」的范围内。///
 /// 搜索关键字变化时不用调用；它用于成员在面板打开期间被别处改动后的兜底，
 /// 避免把已在组内的名字又提交一次。
 Set<String> prunePicked(List<MemberCandidate> all, Set<String> picked) {
@@ -128,4 +127,29 @@ Set<String> prunePicked(List<MemberCandidate> all, Set<String> picked) {
     for (final name in picked)
       if (selectable.contains(name)) name,
   };
+}
+
+/// 批量加入时按节点列表顺序排序，而不是按面板里的点选顺序。
+///
+/// 链式代理的 members 顺序就是链路顺序，所以「先点 E 再点 D」不应该变成
+/// E→D。这里按 [Profile.proxies] 的索引升序排；不在节点列表里的名字
+/// （DIRECT / REJECT / 未知项）保持相对顺序排在最后。重复名去重并保留
+/// 第一次出现的位置。
+List<String> orderNamesByNodeList(Profile profile, Iterable<String> names) {
+  final index = <String, int>{
+    for (var i = 0; i < profile.proxies.length; i++) profile.proxies[i].name: i,
+  };
+  final seen = <String>{};
+  final known = <String>[];
+  final unknown = <String>[];
+  for (final name in names) {
+    if (!seen.add(name)) continue;
+    if (index.containsKey(name)) {
+      known.add(name);
+    } else {
+      unknown.add(name);
+    }
+  }
+  known.sort((a, b) => index[a]!.compareTo(index[b]!));
+  return <String>[...known, ...unknown];
 }

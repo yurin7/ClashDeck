@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/edit/config_ops.dart';
 import '../core/edit/group_selection.dart';
 import '../core/edit/group_status.dart';
+import '../core/edit/member_picker.dart';
 import '../core/model/profile.dart';
 import '../core/schema/group_schema.dart';
 import '../core/yaml/yaml_doc.dart';
@@ -729,9 +730,10 @@ class _ProxyBoardState extends State<ProxyBoard>
                 final picked = await _pickMembers(profile, group);
                 if (picked == null || picked.isEmpty) return;
                 final names = group.type == 'relay'
-                    ? picked
-                          .where(profile.proxyByName.containsKey)
-                          .toList(growable: false)
+                    ? orderNamesByNodeList(
+                        profile,
+                        picked.where(profile.proxyByName.containsKey),
+                      )
                     : picked;
                 if (names.isEmpty) {
                   _toast('链式代理只能添加节点');

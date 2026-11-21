@@ -23,8 +23,6 @@
 
 ## 操作演示
 
-以下操作均录自 Android 模拟器。点图片可以查看原尺寸。
-
 | 内核运行时切换出口 | 拖动成员到另一个策略组 |
 | :---: | :---: |
 | <a href="docs/screenshots/selector.gif"><img src="docs/screenshots/selector.gif" width="260" alt="内核运行时点按 selector 节点，当前出口在香港和东京之间切换"></a> | <a href="docs/screenshots/group-drag.gif"><img src="docs/screenshots/group-drag.gif" width="260" alt="长按东京节点，将它从 DEFAULT 拖到备用线路，目标组边框高亮"></a> |

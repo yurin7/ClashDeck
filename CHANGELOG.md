@@ -1,7 +1,5 @@
 # 更新日志
 
-只记录技术改动；用户向说明见 [README](README.md)。格式参考 Keep a Changelog。
-
 ## [0.3.20] - 2026-11-21
 
 ### Added

@@ -24,17 +24,13 @@ import 'desktop_overview.dart';
 import 'desktop_profiles.dart';
 import 'desktop_window.dart';
 import 'editor_page.dart';
-import 'fields.dart';
 import 'home_page.dart';
-import 'motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
-import 'widgets/app_ink.dart';
 import 'widgets/delete_confirm.dart';
-import 'widgets/profile_icon.dart';
 import 'widgets/text_input_dialog.dart';
 
-/// 桌面版常驻配置库，配置在同一窗口内切换和编辑。
+/// 桌面工作区，配置可在同一窗口选用和编辑。
 class DesktopWorkspace extends StatefulWidget {
   const DesktopWorkspace({super.key, required this.store});
 
@@ -247,6 +243,24 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     setState(() => _page = page);
   });
 
+  Future<void> _focusSearch() async {
+    if (_page == _DesktopPage.connections) {
+      _connectionSearchFocus.requestFocus();
+      return;
+    }
+    if (_page == _DesktopPage.profiles) {
+      _searchFocus.requestFocus();
+      return;
+    }
+    await _navigate(_DesktopPage.profiles);
+    if (!mounted || _page != _DesktopPage.profiles) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _page == _DesktopPage.profiles) {
+        _searchFocus.requestFocus();
+      }
+    });
+  }
+
   Future<void> _setTunStack(String? stack) => _withProfileAction(() async {
     if (_runtime.phase == RuntimePhase.running || _runtime.isBusy) return;
     await _prefs?.setWindowsTunStack(stack);
@@ -333,14 +347,9 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   Future<void> _rename(StoredProfile profile) => _withProfileAction(() async {
     final name = await _askName(profile.name);
     if (name == null || name == profile.name || !mounted) return;
-    final active = profile.fileName == _current;
     final runningProfile = profile.fileName == _activeSettings?.fileName;
-    if (active && !await _canLeave()) return;
     final renamed = await widget.store.rename(profile.fileName, name);
-    await _load(
-      select: active ? renamed : null,
-      active: runningProfile ? renamed : null,
-    );
+    await _load(active: runningProfile ? renamed : null);
     if (runningProfile) await _prefs?.setActiveProfile(renamed);
   });
 
@@ -387,10 +396,6 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final keyword = _search.text.trim().toLowerCase();
-    final visible = _profiles.where((item) {
-      return item.name.toLowerCase().contains(keyword);
-    }).toList();
     final selected = _profiles
         .where((item) => item.fileName == _current)
         .firstOrNull;
@@ -409,11 +414,8 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
               _create,
           const SingleActivator(LogicalKeyboardKey.keyO, control: true):
               _import,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
-              (_page == _DesktopPage.connections
-                      ? _connectionSearchFocus
-                      : _searchFocus)
-                  .requestFocus(),
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+              _focusSearch,
         },
         child: Focus(
           autofocus: true,
@@ -422,7 +424,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
               builder: (context, bounds) => Row(
                 children: [
                   SizedBox(
-                    width: bounds.maxWidth >= 1100 ? 242 : 202,
+                    width: bounds.maxWidth >= 1100 ? 184 : 172,
                     child: Material(
                       color: colors.surfaceContainerLow,
                       child: Column(
@@ -474,94 +476,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                               ],
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Text(
-                                      '我的配置',
-                                      style: theme.textTheme.titleSmall,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: _busy ? null : _import,
-                                  tooltip: '导入配置 (Ctrl+O)',
-                                  icon: const Icon(
-                                    Icons.file_download_outlined,
-                                    size: 19,
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: _busy ? null : _create,
-                                  tooltip: '新建配置 (Ctrl+N)',
-                                  icon: const Icon(Icons.add, size: 19),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                            child: AppTextField(
-                              controller: _search,
-                              focusNode: _searchFocus,
-                              onChanged: (_) => setState(() {}),
-                              hint: '搜索配置',
-                              prefixIcon: const Icon(Icons.search, size: 17),
-                            ),
-                          ),
-                          Expanded(
-                            child: visible.isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.all(18),
-                                    child: Text(
-                                      keyword.isEmpty ? '暂无配置' : '未找到匹配的配置',
-                                      style: hintStyle(context),
-                                    ),
-                                  )
-                                : ListView.separated(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 11,
-                                    ),
-                                    itemCount: visible.length,
-                                    separatorBuilder: (_, _) =>
-                                        const SizedBox(height: 3),
-                                    itemBuilder: (context, index) {
-                                      final item = visible[index];
-                                      final isActive =
-                                          item.fileName == active?.fileName;
-                                      return _ProfileListItem(
-                                        key: ValueKey(item.fileName),
-                                        profile: item,
-                                        selected:
-                                            _page == _DesktopPage.edit &&
-                                            item.fileName == _current,
-                                        active: isActive,
-                                        origin:
-                                            _profileInfo[item.fileName]
-                                                ?.origin ??
-                                            ProfileOrigin.local,
-                                        status: item.fileName == _switchingFile
-                                            ? '切换中'
-                                            : isActive
-                                            ? _activeStatus
-                                            : null,
-                                        onOpen: _busy
-                                            ? null
-                                            : () => _open(item),
-                                        onRename: _busy
-                                            ? null
-                                            : () => _rename(item),
-                                        onDelete: _busy
-                                            ? null
-                                            : () => _delete(item),
-                                      );
-                                    },
-                                  ),
-                          ),
+                          const Spacer(),
                           const Hairline(),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(18, 13, 14, 14),
@@ -630,23 +545,29 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                     if (active != null) _open(active);
                                   },
                                 ),
-                                DesktopProfiles(
-                                  profiles: visible,
-                                  info: _profileInfo,
-                                  activeFile: active?.fileName,
-                                  activeStatus: _activeStatus,
-                                  switchingFile: _switchingFile,
-                                  filtered: keyword.isNotEmpty,
-                                  onActivate:
-                                      _busy ||
-                                          _runtime.isBusy ||
-                                          _runtime.restarting ||
-                                          _runtime.isTemporaryConfig
-                                      ? null
-                                      : _selectRuntimeProfile,
-                                  onEdit: _busy ? null : _open,
-                                  onCreate: _busy ? null : _create,
-                                  onImport: _busy ? null : _import,
+                                ExcludeFocus(
+                                  excluding: _page != _DesktopPage.profiles,
+                                  child: DesktopProfiles(
+                                    profiles: _profiles,
+                                    info: _profileInfo,
+                                    activeFile: active?.fileName,
+                                    activeStatus: _activeStatus,
+                                    switchingFile: _switchingFile,
+                                    search: _search,
+                                    searchFocus: _searchFocus,
+                                    onActivate:
+                                        _busy ||
+                                            _runtime.isBusy ||
+                                            _runtime.restarting ||
+                                            _runtime.isTemporaryConfig
+                                        ? null
+                                        : _selectRuntimeProfile,
+                                    onEdit: _busy ? null : _open,
+                                    onRename: _busy ? null : _rename,
+                                    onDelete: _busy ? null : _delete,
+                                    onCreate: _busy ? null : _create,
+                                    onImport: _busy ? null : _import,
+                                  ),
                                 ),
                                 DesktopConnections(
                                   monitor: _connections,
@@ -709,7 +630,9 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     final colors = Theme.of(context).colorScheme;
     return ListTile(
       dense: true,
-      selected: _page == page,
+      selected:
+          _page == page ||
+          (_page == _DesktopPage.edit && page == _DesktopPage.profiles),
       selectedTileColor: colors.primary.withValues(alpha: 0.13),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Radiuses.xs),
@@ -717,112 +640,6 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       leading: Icon(icon, size: 19),
       title: Text(label),
       onTap: _busy ? null : () => _navigate(page),
-    );
-  }
-}
-
-class _ProfileListItem extends StatelessWidget {
-  const _ProfileListItem({
-    super.key,
-    required this.profile,
-    required this.selected,
-    required this.active,
-    required this.origin,
-    required this.status,
-    this.onOpen,
-    this.onRename,
-    this.onDelete,
-  });
-
-  final StoredProfile profile;
-  final bool selected;
-  final bool active;
-  final ProfileOrigin origin;
-  final String? status;
-  final VoidCallback? onOpen;
-  final VoidCallback? onRename;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(8);
-    return Material(
-      color: selected
-          ? colors.primary.withValues(alpha: 0.13)
-          : Colors.transparent,
-      borderRadius: radius,
-      child: Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              selected: selected,
-              child: AppInkWell(
-                onTap: onOpen,
-                borderRadius: radius,
-                hoverColor: colors.primary.withValues(alpha: 0.08),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
-                  child: Row(
-                    children: [
-                      ProfileIcon(
-                        origin: origin,
-                        size: 28,
-                        selected: active || status == '切换中',
-                        running: status == '运行中',
-                        switching: status == '切换中' || status == '启动中',
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              profile.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: selected || active
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                            AnimatedSwitcher(
-                              duration: Motion.of(context).fast,
-                              child: status == null
-                                  ? const SizedBox.shrink()
-                                  : Align(
-                                      key: ValueKey(status),
-                                      alignment: Alignment.centerLeft,
-                                      child: Pill(
-                                        label: status!,
-                                        color: colors.primary,
-                                        dense: true,
-                                      ),
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          PopupMenuButton<String>(
-            enabled: onRename != null,
-            tooltip: '配置操作',
-            onSelected: (value) =>
-                value == 'rename' ? onRename?.call() : onDelete?.call(),
-            icon: const Icon(Icons.more_horiz, size: 19),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'rename', child: Text('重命名')),
-              PopupMenuItem(value: 'delete', child: Text('删除')),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

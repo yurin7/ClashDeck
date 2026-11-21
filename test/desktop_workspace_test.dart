@@ -51,7 +51,31 @@ void main() {
     expect(find.text('下载'), findsOneWidget);
     expect(find.text('上传'), findsOneWidget);
     expect(find.text('节点测速'), findsOneWidget);
-    await tester.tap(find.text('桌面演示').first);
+    expect(find.text('备用配置'), findsNothing);
+    expect(find.text('我的配置'), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    final library = find.byType(DesktopProfiles);
+    final search = find.descendant(
+      of: library,
+      matching: find.byType(TextField),
+    );
+    expect(tester.widget<TextField>(search).focusNode?.hasFocus, isTrue);
+    await tester.enterText(search, '备用');
+    await tester.pumpAndSettle();
+    expect(find.text('桌面演示'), findsNothing);
+    expect(find.text('备用配置'), findsOneWidget);
+    await tester.tap(find.byTooltip('清除搜索'));
+    await tester.pumpAndSettle();
+    final originalCard = find.ancestor(
+      of: find.text('桌面演示'),
+      matching: find.byType(AppCard),
+    );
+    await tester.tap(
+      find.descendant(of: originalCard, matching: find.byTooltip('编辑配置')),
+    );
     await _pumpUntil(tester, () => find.text('节点列表').evaluate().isNotEmpty);
     expect(find.text('策略组'), findsOneWidget);
 
@@ -65,7 +89,7 @@ void main() {
     await tester.enterText(source, draft);
     await tester.pump();
 
-    await tester.tap(find.text('备用配置'));
+    await tester.tap(find.widgetWithText(ListTile, '配置'));
     await tester.pumpAndSettle();
     expect(find.text('有未保存的改动'), findsOneWidget);
     await tester.tap(find.text('取消'));
@@ -97,7 +121,6 @@ void main() {
     await _pumpUntil(tester, () => find.text('实时流量').evaluate().isNotEmpty);
     await tester.tap(find.text('切换配置'));
     await tester.pumpAndSettle();
-    final library = find.byType(DesktopProfiles);
     final imported = find.descendant(of: library, matching: find.text('备用配置'));
     expect(
       find.descendant(
@@ -121,6 +144,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(EditorPage), findsNothing);
+    final importedCard = find.ancestor(
+      of: imported,
+      matching: find.byType(AppCard),
+    );
+    await tester.tap(
+      find.descendant(of: importedCard, matching: find.byTooltip('配置操作')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('重命名'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

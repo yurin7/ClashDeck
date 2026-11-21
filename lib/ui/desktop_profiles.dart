@@ -2,12 +2,15 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/model/config_summary.dart';
 import '../data/profile_store.dart';
+import 'fields.dart';
 import 'motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/profile_icon.dart';
 
 typedef DesktopProfileInfo = ({ProfileOrigin origin, ConfigSummary summary});
+
+enum _ProfileAction { rename, delete }
 
 class DesktopProfiles extends StatelessWidget {
   const DesktopProfiles({
@@ -17,9 +20,12 @@ class DesktopProfiles extends StatelessWidget {
     required this.activeFile,
     required this.activeStatus,
     required this.switchingFile,
-    required this.filtered,
+    required this.search,
+    required this.searchFocus,
     this.onActivate,
     this.onEdit,
+    this.onRename,
+    this.onDelete,
     this.onCreate,
     this.onImport,
   });
@@ -29,14 +35,28 @@ class DesktopProfiles extends StatelessWidget {
   final String? activeFile;
   final String activeStatus;
   final String? switchingFile;
-  final bool filtered;
+  final TextEditingController search;
+  final FocusNode searchFocus;
   final ValueChanged<String>? onActivate;
   final ValueChanged<StoredProfile>? onEdit;
+  final ValueChanged<StoredProfile>? onRename;
+  final ValueChanged<StoredProfile>? onDelete;
   final VoidCallback? onCreate;
   final VoidCallback? onImport;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: search,
+    builder: (context, _) => _buildLibrary(context),
+  );
+
+  Widget _buildLibrary(BuildContext context) {
+    final keyword = search.text.trim().toLowerCase();
+    final visible = keyword.isEmpty
+        ? profiles
+        : profiles
+              .where((profile) => profile.name.toLowerCase().contains(keyword))
+              .toList(growable: false);
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.xl, 11, Insets.xl, Insets.xl),
       child: Column(
@@ -59,21 +79,41 @@ class DesktopProfiles extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: Insets.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              activeStatus == '运行中' ? '选用另一份配置会重启内核' : '点击配置卡片选用，点击右侧图标编辑',
-              style: hintStyle(context),
-            ),
+          const SizedBox(height: Insets.lg),
+          Row(
+            children: [
+              SizedBox(
+                width: 256,
+                child: AppTextField(
+                  controller: search,
+                  focusNode: searchFocus,
+                  hint: '搜索配置',
+                  prefixIcon: const Icon(Icons.search, size: 17),
+                  suffixIcon: search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清除搜索',
+                          onPressed: search.clear,
+                          icon: const Icon(Icons.close, size: 17),
+                        ),
+                ),
+              ),
+              const SizedBox(width: Insets.lg),
+              Expanded(
+                child: Text(
+                  activeStatus == '运行中' ? '选用另一份配置会重启内核' : '点击配置卡片选用，点击右侧图标编辑',
+                  style: hintStyle(context),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: Insets.xl),
           Expanded(
-            child: profiles.isEmpty
+            child: visible.isEmpty
                 ? Center(
                     child: EmptyHint(
                       icon: Icons.layers_outlined,
-                      title: filtered ? '未找到匹配的配置' : '暂无配置',
+                      title: keyword.isEmpty ? '暂无配置' : '未找到匹配的配置',
                     ),
                   )
                 : LayoutBuilder(
@@ -84,9 +124,9 @@ class DesktopProfiles extends StatelessWidget {
                         mainAxisSpacing: Insets.md,
                         crossAxisSpacing: Insets.md,
                       ),
-                      itemCount: profiles.length,
+                      itemCount: visible.length,
                       itemBuilder: (context, index) {
-                        final profile = profiles[index];
+                        final profile = visible[index];
                         final active = profile.fileName == activeFile;
                         return _ProfileCard(
                           profile: profile,
@@ -103,6 +143,12 @@ class DesktopProfiles extends StatelessWidget {
                           onEdit: onEdit == null
                               ? null
                               : () => onEdit!(profile),
+                          onRename: onRename == null
+                              ? null
+                              : () => onRename!(profile),
+                          onDelete: onDelete == null
+                              ? null
+                              : () => onDelete!(profile),
                         );
                       },
                     ),
@@ -122,6 +168,8 @@ class _ProfileCard extends StatelessWidget {
     required this.status,
     this.onActivate,
     this.onEdit,
+    this.onRename,
+    this.onDelete,
   });
 
   final StoredProfile profile;
@@ -130,6 +178,8 @@ class _ProfileCard extends StatelessWidget {
   final String? status;
   final VoidCallback? onActivate;
   final VoidCallback? onEdit;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +259,31 @@ class _ProfileCard extends StatelessWidget {
                 size: 19,
                 color: active ? colors.primary : colors.onSurfaceVariant,
               ),
+            ),
+            PopupMenuButton<_ProfileAction>(
+              enabled: onRename != null || onDelete != null,
+              tooltip: '配置操作',
+              icon: const Icon(Icons.more_horiz, size: 19),
+              onSelected: (action) {
+                switch (action) {
+                  case _ProfileAction.rename:
+                    onRename?.call();
+                  case _ProfileAction.delete:
+                    onDelete?.call();
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: _ProfileAction.rename,
+                  enabled: onRename != null,
+                  child: const Text('重命名'),
+                ),
+                PopupMenuItem(
+                  value: _ProfileAction.delete,
+                  enabled: onDelete != null,
+                  child: const Text('删除'),
+                ),
+              ],
             ),
           ],
         ),

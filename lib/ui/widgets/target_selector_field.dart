@@ -10,8 +10,7 @@ import 'app_ink.dart';
 
 /// 所有「目标组」输入的唯一组件：点开 = 选择面板（分类 + 胶囊 + 高亮行）。
 ///
-/// 不再用 `AppDropdown` 选目标；编辑规则、导入规则、改挂规则等入口都走这里，
-/// 这样以后只改一处，所有入口一起变。见 docs/DESIGN_SYSTEM.md 第 7.B 节。
+/// 编辑规则、导入规则和改挂规则共用此组件。
 class TargetSelectorField extends StatelessWidget {
   const TargetSelectorField({
     super.key,

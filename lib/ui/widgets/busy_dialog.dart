@@ -5,8 +5,7 @@ import '../theme.dart';
 
 /// 阻塞式「正在…」弹窗：只有进度与说明，没有标题和确认按钮。
 ///
-/// 由 `showAppDialog(barrierDismissible: false)` 承载；不直接用 `AlertDialog`
-/// （规范要求业务弹窗只走共享封装，见 docs/DESIGN_SYSTEM.md）。
+/// 由 `showAppDialog(barrierDismissible: false)` 承载。
 class BusyDialog extends StatelessWidget {
   const BusyDialog({
     super.key,

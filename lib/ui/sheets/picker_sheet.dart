@@ -48,7 +48,7 @@ class PickerSheetSection {
 /// 搜索框 → 全选/反选/清空 + 已选 N → 分区列表（多选高亮行）→ 底部操作栏。
 ///
 /// `NodePickerSheet`、`RulePickerSheet`、`TargetPickerSheet` 都只能基于它，
-/// 不允许再各自写 Column + CheckboxListTile。见 docs/DESIGN_SYSTEM.md 第 7.B 节。
+/// 这些入口共享同一套面板布局与选中态。
 class PickerSheetScaffold extends StatefulWidget {
   const PickerSheetScaffold({
     super.key,

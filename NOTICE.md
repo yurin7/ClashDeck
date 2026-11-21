@@ -11,14 +11,11 @@ LICENSE 文件（GPL-3.0）。
 ## 第三方组件
 
 1. **mihomo**（https://github.com/MetaCubeX/mihomo），GPL-3.0。
-   本仓库 `android/app/src/main/jniLibs/{arm64-v8a,x86_64}/libmihomo.so`
-   是由 mihomo 源码（Alpha 分支，v1.19.34 时期）构建的静态二进制，构建方式见
-   `tool/build_core.ps1`。相对上游有**一处构建约束补丁**：
-   `component/iface/anet/{interface_android.go,netlink_android.go}` 的文件名
-   从 `*_android.go` 改为 `*_anet.go` 并把构建约束改成 `android || linux`，
-   `interface.go` 改成 `!android && !linux`。补丁只改编译期可见性，不改行为；
-   目的见 `docs/ARCHITECTURE.md` §5.2。按 GPL-3.0 要求，本仓库同时提供该补丁的
-   生成脚本与文档说明。
+   随 APK 分发的 `libmihomo.so` 由 mihomo Alpha 源码交叉编译。构建脚本将
+   `component/iface/anet` 的 Android 网络接口查询实现用于 Linux 构建目标，
+   以适配 Android 对网络接口查询的限制。`system` 与 `mixed` 模式通过仓库中的
+   套接字保护入口调用 Android `VpnService.protect()`。
+   [Windows 构建脚本](tool/build_core.ps1) · [CI 构建脚本](tool/build_core.sh) · [套接字保护源码](tool/mihomo/clashdeck_protect_linux.go)
 
 2. **GEOIP / GEOSITE 数据**：`assets/geo/geoip.metadb`、`assets/geo/geosite.dat`
    来自 https://github.com/MetaCubeX/meta-rules-dat （GPL-3.0），随包分发以避免

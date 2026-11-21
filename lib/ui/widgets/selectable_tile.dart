@@ -3,10 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../theme.dart';
 import './app_ink.dart';
 
-/// 可选行：整行点击切换，选中态 = 高亮底 + 描边 + 行尾 ✓。
+/// 可选行：整行点击切换，选中态使用高亮底和描边。
 ///
-/// 约定（见 docs/DESIGN_SYSTEM.md）：节点、规则、规则集这类「多选」一律
-/// 用高亮行，不再用 Checkbox；只有设置里的开关类保留 Switch。
+/// 节点、规则和规则集的多选面板共用高亮行。
 class SelectableTile extends StatelessWidget {
   const SelectableTile({
     super.key,

@@ -1,6 +1,6 @@
 /// UI 约定自检：扫码 `lib/ui`，拦「绕过共享封装」的写法。
 ///
-/// 规则见 `docs/DESIGN_SYSTEM.md` 第 6 节，全部为 **0 基线**（不留历史欠账）：
+/// 以下规则全部为 **0 基线**：
 /// 1. `AlertDialog(` → `EditDialog` / `ConfirmDialog` / `NoticeDialog`；
 /// 2. `InkWell(` / `InkResponse(` → `AppInkWell`；
 /// 3. `MaterialPageRoute(` → `appRoute`；
@@ -388,7 +388,7 @@ void main(List<String> args) {
     stderr.writeln('  $violation');
   }
   stderr.writeln(
-    '\n规范见 docs/DESIGN_SYSTEM.md；共享封装见 lib/ui/sheets.dart、'
+    '\n检查规则位于 tool/check_ui_conventions.dart。共享封装见 lib/ui/sheets.dart、'
     'lib/ui/widgets/selectable_tile.dart、lib/ui/app_dialog.dart、'
     'lib/ui/widgets/edit_dialog.dart、lib/ui/widgets/app_ink.dart、'
     'lib/ui/navigation.dart。',

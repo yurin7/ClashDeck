@@ -3,7 +3,6 @@ import 'package:yaml_edit/yaml_edit.dart';
 
 /// 一次"无损"编辑的结果：新的源码文本 + 重新解析的语法树。
 ///
-/// 设计约定（见 docs/ARCHITECTURE.md）：
 /// * 配置的唯一真相是**源码文本**；所有编辑都是 `旧文本 -> 新文本` 的纯函数；
 /// * 具体写操作交给 [YamlEditor]（yaml_edit），它只替换受影响的 span，
 ///   因此注释、空行、键顺序、未知字段全部逐字保留；

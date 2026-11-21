@@ -15,7 +15,6 @@ double confirmDialogWidth(BuildContext context) =>
 
 /// 统一编辑弹窗：标题行 + 内容区（可滚） + 按钮区（固定）。
 ///
-/// 结构见 docs/DESIGN_SYSTEM.md「弹窗规范 / A. 编辑类弹窗」：
 /// - 宽度由 `showEditDialog` 传入 `showAppDialog(width: dialogWidthOf(...))`；
 /// - 高度自适应，封顶 [editDialogMaxHeight]；超高只滚内容；
 /// - 底部按钮右对齐，最多两个；删除放内容左下角，不进按钮区。

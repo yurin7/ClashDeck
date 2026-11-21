@@ -1,12 +1,29 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'data/profile_store.dart';
 import 'ui/app_shell.dart';
+import 'ui/desktop_window.dart';
 import 'ui/desktop_workspace.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isWindows) {
+    final font = File.fromUri(
+      File(Platform.resolvedExecutable).parent.uri
+          .resolve('data/fonts/ResourceHanRoundedCN-Regular.ttf'),
+    );
+    try {
+      await (FontLoader(
+        kDesktopCjkFont,
+      )..addFont(font.readAsBytes().then(ByteData.sublistView))).load();
+    } on FileSystemException {
+      // 调试构建没有复制字体时仍可使用 Windows 的系统字体。
+    }
+  }
   runApp(const ClashDeckApp());
 }
 
@@ -23,6 +40,19 @@ class ClashDeckApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       theme: ClashDeckTheme.light(),
       darkTheme: ClashDeckTheme.dark(),
+      builder: Platform.isWindows
+          ? (context, child) => Stack(
+              fit: StackFit.expand,
+              children: [
+                ?child,
+                const Positioned(
+                  top: 0,
+                  right: 0,
+                  child: DesktopWindowCaption(),
+                ),
+              ],
+            )
+          : null,
       home: const _Bootstrap(),
     );
   }

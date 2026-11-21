@@ -52,6 +52,7 @@ class RuntimeController extends ChangeNotifier {
     this.pruneSavedGlobalExit,
     this.apiOverride,
     this.windowsKernel,
+    this.windowsTunStackProvider,
   }) : _channel = channel ?? const MethodChannel(channelName) {
     if (windowsKernel == null) _channel.setMethodCallHandler(_handleDartCall);
   }
@@ -70,6 +71,7 @@ class RuntimeController extends ChangeNotifier {
   final bool? androidOverride;
   final Future<String> Function()? workDirProvider;
   final WindowsKernel? windowsKernel;
+  final String? Function()? windowsTunStackProvider;
 
   /// 测试注入：替代真实 REST 的单节点测速。
   final Future<int?> Function(String name)? delayProbe;
@@ -98,6 +100,7 @@ class RuntimeController extends ChangeNotifier {
   final String? secret;
   final Duration pollInterval;
   int? _windowsPort;
+  String? _windowsTunStack;
   int _windowsOperation = 0;
   bool _windowsClosing = false;
 
@@ -205,6 +208,7 @@ class RuntimeController extends ChangeNotifier {
       _phase == RuntimePhase.starting || _phase == RuntimePhase.stopping;
 
   int get _controllerPort => _windowsPort ?? port;
+  bool get isTemporaryConfig => _tempConfigActive;
 
   MihomoApi get api =>
       apiOverride ??
@@ -357,6 +361,18 @@ class RuntimeController extends ChangeNotifier {
     final operation = ++_windowsOperation;
     _setPhase(RuntimePhase.starting);
     try {
+      if (windows != null) {
+        final stack = proxyModeOverride == 'port'
+            ? null
+            : windowsTunStackProvider?.call();
+        _windowsTunStack = RuntimeConfig.tunStacks.contains(stack)
+            ? stack
+            : null;
+        if (_windowsTunStack != null && !await WindowsKernel.isElevated()) {
+          _setError('TUN 需要管理员权限，请以管理员身份重新打开 ClashDeck。');
+          return false;
+        }
+      }
       // 先做语义自检：组成员/规则目标/规则集引用不存在时 mihomo 会直接退出，
       // 与其让用户看到「启动失败」再猜，不如在 spawn 前拦下并列出问题。
       final config = _activeConfig();
@@ -381,9 +397,12 @@ class RuntimeController extends ChangeNotifier {
         if (_disposed || operation != _windowsOperation) return false;
         _windowsPort = await WindowsKernel.controllerPort(excluding: proxyPort);
         if (_disposed || operation != _windowsOperation) return false;
+        final controllerPort = _controllerPort;
+        final tun = _windowsTunStack != null;
+        final localPort = proxyPort;
         final probe = MihomoApi(
           host: '127.0.0.1',
-          port: _controllerPort,
+          port: controllerPort,
           secret: secret,
           timeout: const Duration(milliseconds: 800),
         );
@@ -391,8 +410,33 @@ class RuntimeController extends ChangeNotifier {
         try {
           pid = await windows.start(
             yaml: _buildRuntimeYaml(0),
-            proxyPort: proxyPort,
-            ready: probe.ping,
+            proxyPort: localPort,
+            ready: () async {
+              try {
+                final config = await probe.configs();
+                if (config['mixed-port'] != localPort) return false;
+                final state = config['tun'];
+                return !tun || (state is Map && state['enable'] == true);
+              } catch (_) {
+                return false;
+              }
+            },
+            closeTun: !tun
+                ? null
+                : () async {
+                    final client = MihomoApi(
+                      port: controllerPort,
+                      secret: secret,
+                      timeout: const Duration(seconds: 3),
+                    );
+                    try {
+                      await client.patchConfigs({
+                        'tun': {'enable': false},
+                      });
+                    } finally {
+                      client.close();
+                    }
+                  },
             onExit: (exitCode) {
               if (operation != _windowsOperation) return;
               _clearWindowsSession();
@@ -466,6 +510,7 @@ class RuntimeController extends ChangeNotifier {
   void _clearWindowsSession() {
     _stopPolling();
     _pid = null;
+    _windowsTunStack = null;
     _up = 0;
     _down = 0;
     _latestTraffic = null;
@@ -952,6 +997,8 @@ class RuntimeController extends ChangeNotifier {
       secret: secret,
       tunStack: _startedTunStack,
       mixedPort: windowsKernel == null ? null : proxyPort,
+      windows: windowsKernel != null,
+      windowsTunStack: _windowsTunStack,
     );
   }
 

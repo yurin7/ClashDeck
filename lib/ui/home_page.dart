@@ -21,6 +21,7 @@ import './widgets/text_input_dialog.dart';
 import 'widgets/delete_confirm.dart';
 import 'widgets/file_pick.dart';
 import 'widgets/edit_dialog.dart';
+import 'widgets/profile_icon.dart';
 import 'motion.dart';
 
 class HomePage extends StatefulWidget {
@@ -722,9 +723,6 @@ class _ProfileRow extends StatelessWidget {
         : '';
     final switching = phase == ProfileRowPhase.switching;
     final active = phase == ProfileRowPhase.active;
-    final iconColor = active || hasSubscription
-        ? scheme.primary
-        : scheme.onSurfaceVariant;
 
     final meta = <String>[
       s == null ? '— 节点' : '${s.proxies} 节点',
@@ -755,43 +753,13 @@ class _ProfileRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedContainer(
-                duration: Motion.of(context).expand,
-                curve: Curves.easeOutCubic,
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: active
-                      ? scheme.primaryContainer
-                      : scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(Radiuses.sm),
-                  border: Border.all(
-                    color: active ? scheme.primary : scheme.outlineVariant,
-                  ),
-                ),
-                child: AnimatedSwitcher(
-                  duration: Motion.of(context).expand,
-                  child: Icon(
-                    switching
-                        ? Icons.sync
-                        : active
-                        ? Icons.play_circle_outline
-                        : hasSubscription
-                        ? Icons.rss_feed
-                        : Icons.description_outlined,
-                    key: ValueKey<String>(
-                      switching
-                          ? 'switching'
-                          : active
-                          ? 'active'
-                          : hasSubscription
-                          ? 'subscription'
-                          : 'plain',
-                    ),
-                    size: 20,
-                    color: iconColor,
-                  ),
-                ),
+              ProfileIcon(
+                origin: hasSubscription
+                    ? ProfileOrigin.subscription
+                    : ProfileOrigin.local,
+                selected: active,
+                running: active,
+                switching: switching,
               ),
               const SizedBox(width: Insets.md),
               Expanded(

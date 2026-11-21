@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show FileSystemException;
 import 'dart:math' show Random;
 import 'dart:ui' show AppExitResponse;
 
@@ -7,22 +8,30 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/model/app_settings.dart';
+import '../core/model/config_summary.dart';
 import '../core/model/profile.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../data/app_prefs.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_config.dart';
 import '../runtime/runtime_controller.dart';
+import '../runtime/windows_connections.dart';
 import '../runtime/windows_kernel.dart';
 import '../state/settings_state.dart';
+import 'desktop_connections.dart';
 import 'desktop_overview.dart';
+import 'desktop_profiles.dart';
+import 'desktop_window.dart';
 import 'editor_page.dart';
 import 'fields.dart';
 import 'home_page.dart';
+import 'motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/app_ink.dart';
 import 'widgets/delete_confirm.dart';
+import 'widgets/profile_icon.dart';
 import 'widgets/text_input_dialog.dart';
 
 /// 桌面版常驻配置库，配置在同一窗口内切换和编辑。
@@ -35,22 +44,44 @@ class DesktopWorkspace extends StatefulWidget {
   State<DesktopWorkspace> createState() => _DesktopWorkspaceState();
 }
 
+enum _DesktopPage { overview, profiles, connections, edit }
+
 class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
+  final _connectionSearchFocus = FocusNode();
   var _editor = GlobalKey<EditorPageState>();
   late final AppLifecycleListener _lifecycle;
   late final RuntimeController _runtime;
+  late final WindowsConnectionMonitor _connections;
   AppPrefs? _prefs;
   SettingsState? _activeSettings;
   static final _emptyDoc = YamlDoc.parse('proxies: []');
+  Profile _activeProfile = Profile.from(_emptyDoc);
   String _appVersion = '';
-  bool _showOverview = true;
+  _DesktopPage _page = _DesktopPage.overview;
   List<StoredProfile> _profiles = const [];
+  Map<String, DesktopProfileInfo> _profileInfo = const {};
   String? _current;
+  String? _switchingFile;
+  RuntimePhase _phase = RuntimePhase.idle;
   String? _error;
   bool _loading = true;
   bool _busy = false;
+  bool _admin = false;
+
+  String get _activeStatus => switch (_phase) {
+    RuntimePhase.running => _runtime.isTemporaryConfig ? '测速中' : '运行中',
+    RuntimePhase.starting => '启动中',
+    RuntimePhase.stopping => '停止中',
+    RuntimePhase.error => '启动失败',
+    RuntimePhase.idle => '当前选用',
+  };
+
+  String? get _tunStack {
+    final stack = _prefs?.windowsTunStack;
+    return RuntimeConfig.tunStacks.contains(stack) ? stack : null;
+  }
 
   @override
   void initState() {
@@ -60,8 +91,14 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       configProvider: () => _activeSettings?.doc ?? _emptyDoc,
       settingsProvider: () => _activeSettings?.app ?? AppSettings.defaults,
       windowsKernel: WindowsKernel(),
+      windowsTunStackProvider: () => _tunStack,
       secret: base64UrlEncode(List.generate(24, (_) => random.nextInt(256))),
     );
+    _connections = WindowsConnectionMonitor(
+      _runtime,
+      () => {..._activeProfile.groupNames, 'GLOBAL'},
+    );
+    _runtime.addListener(_onRuntimeChanged);
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     _initialize();
   }
@@ -70,10 +107,19 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   void dispose() {
     _lifecycle.dispose();
     _searchFocus.dispose();
+    _connectionSearchFocus.dispose();
     _search.dispose();
+    _connections.dispose();
+    _runtime.removeListener(_onRuntimeChanged);
     _runtime.dispose();
     _activeSettings?.dispose();
     super.dispose();
+  }
+
+  void _onRuntimeChanged() {
+    if (mounted && _phase != _runtime.phase) {
+      setState(() => _phase = _runtime.phase);
+    }
   }
 
   Future<AppExitResponse> _onExitRequested() async {
@@ -92,6 +138,12 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   Future<void> _initialize() async {
     _prefs = await AppPrefs.load(directory: widget.store.dir.parent);
     await _load();
+    try {
+      final elevated = await WindowsKernel.isElevated();
+      if (mounted) setState(() => _admin = elevated);
+    } on MissingPluginException {
+      // Widget tests have no native window.
+    }
     try {
       final version = (await PackageInfo.fromPlatform()).version;
       if (mounted) setState(() => _appVersion = version);
@@ -115,7 +167,6 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
         settings?.dispose();
         return;
       }
-      if (!mounted) return;
       final wanted = select ?? _current;
       final next = items.any((item) => item.fileName == wanted)
           ? wanted
@@ -123,12 +174,14 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       setState(() {
         _profiles = items;
         _activeSettings = settings;
+        _activeProfile = Profile.from(settings?.doc ?? _emptyDoc);
         _loading = false;
         _error = null;
         if (next != _current) _selectFile(next);
-        if (select != null) _showOverview = false;
+        if (select != null) _page = _DesktopPage.edit;
       });
       oldSettings?.dispose();
+      await _loadProfileInfo(items);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -136,6 +189,26 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
         _error = '无法读取配置库：$error';
       });
     }
+  }
+
+  Future<void> _loadProfileInfo(List<StoredProfile> profiles) async {
+    final info = <String, DesktopProfileInfo>{};
+    for (final profile in profiles) {
+      if (!mounted || !identical(_profiles, profiles)) return;
+      final file = profile.fileName;
+      try {
+        final meta = await widget.store.readMeta(file);
+        final text = await widget.store.read(file);
+        info[file] = (
+          origin: ProfileOrigin.fromMeta(meta),
+          summary: ConfigSummary.fromText(text),
+        );
+      } on FileSystemException {
+        // 单份配置可能已被移走。
+      }
+    }
+    if (!mounted || !identical(_profiles, profiles)) return;
+    setState(() => _profileInfo = info);
   }
 
   void _selectFile(String? fileName) {
@@ -158,36 +231,66 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   }
 
   Future<void> _open(StoredProfile profile) => _withProfileAction(() async {
-    if ((!_showOverview && _current == profile.fileName) ||
+    if ((_page == _DesktopPage.edit && _current == profile.fileName) ||
         !await _canLeave() ||
         !mounted) {
       return;
     }
     setState(() {
       _selectFile(profile.fileName);
-      _showOverview = false;
+      _page = _DesktopPage.edit;
     });
   });
 
-  Future<void> _openOverview() => _withProfileAction(() async {
-    if (_showOverview || !await _canLeave() || !mounted) return;
-    await _load();
-    if (!mounted) return;
-    setState(() => _showOverview = true);
+  Future<void> _navigate(_DesktopPage page) => _withProfileAction(() async {
+    if (_page == page || !await _canLeave() || !mounted) return;
+    setState(() => _page = page);
   });
+
+  Future<void> _setTunStack(String? stack) => _withProfileAction(() async {
+    if (_runtime.phase == RuntimePhase.running || _runtime.isBusy) return;
+    await _prefs?.setWindowsTunStack(stack);
+  });
+
+  Future<void> _requestElevation() async {
+    if (_busy || _runtime.isBusy || _runtime.phase == RuntimePhase.running) {
+      return;
+    }
+    if (await WindowsKernel.relaunchElevated()) await closeDesktopWindow();
+  }
 
   Future<void> _selectRuntimeProfile(String fileName) =>
       _withProfileAction(() async {
         if (fileName == _activeSettings?.fileName || _runtime.isBusy) return;
-        final restart = _runtime.phase == RuntimePhase.running;
-        if (restart) {
-          await _runtime.stop();
-          if (_runtime.phase != RuntimePhase.idle) return;
+        final settings = await SettingsState.load(widget.store, fileName);
+        if (!mounted) {
+          settings.dispose();
+          return;
         }
-        await _load(active: fileName);
-        if (!mounted || _activeSettings?.fileName != fileName) return;
-        await _prefs?.setActiveProfile(fileName);
-        if (restart) await _runtime.start();
+        setState(() => _switchingFile = fileName);
+        try {
+          if (!settings.valid) {
+            _notify('这份配置的 YAML 无法解析，请先编辑修复。');
+            return;
+          }
+          final restart = _runtime.phase == RuntimePhase.running;
+          if (restart) {
+            await _runtime.stop();
+            if (_runtime.phase != RuntimePhase.idle) return;
+          }
+          if (!mounted) return;
+          final previous = _activeSettings;
+          setState(() {
+            _activeSettings = settings;
+            _activeProfile = Profile.from(settings.doc);
+          });
+          previous?.dispose();
+          await _prefs?.setActiveProfile(fileName);
+          if (mounted && restart) await _runtime.start();
+        } finally {
+          if (!identical(settings, _activeSettings)) settings.dispose();
+          if (mounted) setState(() => _switchingFile = null);
+        }
       });
 
   Future<void> _create() => _withProfileAction(() async {
@@ -217,10 +320,12 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       yaml = buildConfigFromText(text, name: name);
     }
     if (!mounted || !await _canLeave() || !mounted) return;
-    final created = await widget.store.create(name, yaml);
-    if (isSubscription) {
-      await widget.store.setSubscriptionUrl(created.fileName, text);
-    }
+    final created = await widget.store.create(
+      name,
+      yaml,
+      imported: true,
+      subscriptionUrl: isSubscription ? text : null,
+    );
     await _load(select: created.fileName);
     _notify('已导入「${created.name}」');
   });
@@ -289,6 +394,9 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     final selected = _profiles
         .where((item) => item.fileName == _current)
         .firstOrNull;
+    final active = _profiles
+        .where((item) => item.fileName == _activeSettings?.fileName)
+        .firstOrNull;
 
     return Theme(
       data: theme.copyWith(
@@ -301,8 +409,11 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
               _create,
           const SingleActivator(LogicalKeyboardKey.keyO, control: true):
               _import,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-              _searchFocus.requestFocus,
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+              (_page == _DesktopPage.connections
+                      ? _connectionSearchFocus
+                      : _searchFocus)
+                  .requestFocus(),
         },
         child: Focus(
           autofocus: true,
@@ -318,7 +429,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(18, 20, 16, 22),
+                            padding: const EdgeInsets.fromLTRB(18, 13, 16, 22),
                             child: Row(
                               children: [
                                 Image.asset(
@@ -341,23 +452,26 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(11, 0, 11, 14),
-                            child: ListTile(
-                              dense: true,
-                              selected: _showOverview,
-                              selectedTileColor: colors.primary.withValues(
-                                alpha: 0.13,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  Radiuses.xs,
+                            child: Column(
+                              children: [
+                                _destination(
+                                  _DesktopPage.overview,
+                                  Icons.space_dashboard_outlined,
+                                  '概览',
                                 ),
-                              ),
-                              leading: const Icon(
-                                Icons.space_dashboard_outlined,
-                                size: 19,
-                              ),
-                              title: const Text('概览'),
-                              onTap: _busy ? null : _openOverview,
+                                const SizedBox(height: Insets.xs),
+                                _destination(
+                                  _DesktopPage.profiles,
+                                  Icons.layers_outlined,
+                                  '配置',
+                                ),
+                                const SizedBox(height: Insets.xs),
+                                _destination(
+                                  _DesktopPage.connections,
+                                  Icons.swap_vert_circle_outlined,
+                                  '连接',
+                                ),
+                              ],
                             ),
                           ),
                           Padding(
@@ -368,7 +482,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                   child: Padding(
                                     padding: const EdgeInsets.only(left: 4),
                                     child: Text(
-                                      '配置库',
+                                      '我的配置',
                                       style: theme.textTheme.titleSmall,
                                     ),
                                   ),
@@ -377,7 +491,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                   onPressed: _busy ? null : _import,
                                   tooltip: '导入配置 (Ctrl+O)',
                                   icon: const Icon(
-                                    Icons.file_open_outlined,
+                                    Icons.file_download_outlined,
                                     size: 19,
                                   ),
                                 ),
@@ -417,11 +531,24 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                         const SizedBox(height: 3),
                                     itemBuilder: (context, index) {
                                       final item = visible[index];
+                                      final isActive =
+                                          item.fileName == active?.fileName;
                                       return _ProfileListItem(
+                                        key: ValueKey(item.fileName),
                                         profile: item,
                                         selected:
-                                            !_showOverview &&
+                                            _page == _DesktopPage.edit &&
                                             item.fileName == _current,
+                                        active: isActive,
+                                        origin:
+                                            _profileInfo[item.fileName]
+                                                ?.origin ??
+                                            ProfileOrigin.local,
+                                        status: item.fileName == _switchingFile
+                                            ? '切换中'
+                                            : isActive
+                                            ? _activeStatus
+                                            : null,
                                         onOpen: _busy
                                             ? null
                                             : () => _open(item),
@@ -463,80 +590,111 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                   ),
                   VerticalDivider(width: 1, color: colors.outlineVariant),
                   Expanded(
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _error != null
-                        ? EmptyHint(
-                            icon: Icons.error_outline,
-                            title: '打开配置库失败',
-                            message: _error,
-                            action: TextButton(
-                              onPressed: _load,
-                              child: const Text('重试'),
-                            ),
-                          )
-                        : IndexedStack(
-                            index: _showOverview ? 0 : 1,
-                            children: [
-                              DesktopOverview(
-                                runtime: _runtime,
-                                profiles: _profiles,
-                                activeFile: _activeSettings?.fileName,
-                                profile: Profile.from(
-                                  _activeSettings?.doc ?? _emptyDoc,
-                                ),
-                                prefs: _prefs,
-                                appVersion: _appVersion,
-                                busy: _busy,
-                                onSelectProfile: _selectRuntimeProfile,
-                                onEditProfile: () {
-                                  final active = _profiles
-                                      .where(
-                                        (entry) =>
-                                            entry.fileName ==
-                                            _activeSettings?.fileName,
-                                      )
-                                      .firstOrNull;
-                                  if (active != null) _open(active);
-                                },
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: desktopCaptionHeight),
+                      child: _loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _error != null
+                          ? EmptyHint(
+                              icon: Icons.error_outline,
+                              title: '打开配置库失败',
+                              message: _error,
+                              action: TextButton(
+                                onPressed: _load,
+                                child: const Text('重试'),
                               ),
-                              if (_showOverview)
-                                const SizedBox.shrink()
-                              else if (selected != null)
-                                EditorPage(
-                                  key: _editor,
-                                  store: widget.store,
-                                  fileName: selected.fileName,
-                                  displayName: selected.name,
-                                  embedded: true,
-                                  autoSave: false,
+                            )
+                          : IndexedStack(
+                              index: _page.index,
+                              children: [
+                                DesktopOverview(
                                   runtime: _runtime,
-                                  isActiveProfile:
-                                      selected.fileName ==
-                                      _activeSettings?.fileName,
-                                  cachedDelays:
-                                      _prefs?.latenciesOf(selected.fileName) ??
-                                      const {},
-                                  onSaved: _load,
-                                )
-                              else
-                                Center(
-                                  child: EmptyHint(
-                                    icon: Icons.folder_open_outlined,
-                                    title: '打开一份配置',
-                                    message: '导入本地 YAML、节点分享链接或订阅地址。',
-                                    action: FilledButton.icon(
-                                      onPressed: _busy ? null : _import,
-                                      icon: const Icon(
-                                        Icons.file_open_outlined,
-                                        size: 17,
+                                  active: active,
+                                  origin:
+                                      _profileInfo[active?.fileName]?.origin ??
+                                      ProfileOrigin.local,
+                                  profile: _activeProfile,
+                                  prefs: _prefs,
+                                  appVersion: _appVersion,
+                                  busy: _busy,
+                                  visible: _page == _DesktopPage.overview,
+                                  connectionCount: () async =>
+                                      _connections.count,
+                                  tunStack: _tunStack,
+                                  admin: _admin,
+                                  onTunStack: _setTunStack,
+                                  onRequestElevation: _requestElevation,
+                                  onOpenProfiles: () =>
+                                      _navigate(_DesktopPage.profiles),
+                                  onEditProfile: () {
+                                    if (active != null) _open(active);
+                                  },
+                                ),
+                                DesktopProfiles(
+                                  profiles: visible,
+                                  info: _profileInfo,
+                                  activeFile: active?.fileName,
+                                  activeStatus: _activeStatus,
+                                  switchingFile: _switchingFile,
+                                  filtered: keyword.isNotEmpty,
+                                  onActivate:
+                                      _busy ||
+                                          _runtime.isBusy ||
+                                          _runtime.restarting ||
+                                          _runtime.isTemporaryConfig
+                                      ? null
+                                      : _selectRuntimeProfile,
+                                  onEdit: _busy ? null : _open,
+                                  onCreate: _busy ? null : _create,
+                                  onImport: _busy ? null : _import,
+                                ),
+                                DesktopConnections(
+                                  monitor: _connections,
+                                  visible: _page == _DesktopPage.connections,
+                                  searchFocus: _connectionSearchFocus,
+                                  onOpenOverview: () =>
+                                      _navigate(_DesktopPage.overview),
+                                ),
+                                if (_page != _DesktopPage.edit)
+                                  const SizedBox.shrink()
+                                else if (selected != null)
+                                  EditorPage(
+                                    key: _editor,
+                                    store: widget.store,
+                                    fileName: selected.fileName,
+                                    displayName: selected.name,
+                                    embedded: true,
+                                    autoSave: false,
+                                    runtime: _runtime,
+                                    isActiveProfile:
+                                        selected.fileName ==
+                                        _activeSettings?.fileName,
+                                    cachedDelays:
+                                        _prefs?.latenciesOf(
+                                          selected.fileName,
+                                        ) ??
+                                        const {},
+                                    onSaved: _load,
+                                  )
+                                else
+                                  Center(
+                                    child: EmptyHint(
+                                      icon: Icons.folder_open_outlined,
+                                      title: '打开一份配置',
+                                      message: '导入本地 YAML、节点分享链接或订阅地址。',
+                                      action: FilledButton.icon(
+                                        onPressed: _busy ? null : _import,
+                                        icon: const Icon(
+                                          Icons.file_open_outlined,
+                                          size: 17,
+                                        ),
+                                        label: const Text('导入配置'),
                                       ),
-                                      label: const Text('导入配置'),
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
+                              ],
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -546,12 +704,31 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       ),
     );
   }
+
+  Widget _destination(_DesktopPage page, IconData icon, String label) {
+    final colors = Theme.of(context).colorScheme;
+    return ListTile(
+      dense: true,
+      selected: _page == page,
+      selectedTileColor: colors.primary.withValues(alpha: 0.13),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radiuses.xs),
+      ),
+      leading: Icon(icon, size: 19),
+      title: Text(label),
+      onTap: _busy ? null : () => _navigate(page),
+    );
+  }
 }
 
 class _ProfileListItem extends StatelessWidget {
   const _ProfileListItem({
+    super.key,
     required this.profile,
     required this.selected,
+    required this.active,
+    required this.origin,
+    required this.status,
     this.onOpen,
     this.onRename,
     this.onDelete,
@@ -559,6 +736,9 @@ class _ProfileListItem extends StatelessWidget {
 
   final StoredProfile profile;
   final bool selected;
+  final bool active;
+  final ProfileOrigin origin;
+  final String? status;
   final VoidCallback? onOpen;
   final VoidCallback? onRename;
   final VoidCallback? onDelete;
@@ -585,24 +765,43 @@ class _ProfileListItem extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.description_outlined,
-                        size: 19,
-                        color: selected
-                            ? colors.primary
-                            : colors.onSurfaceVariant,
+                      ProfileIcon(
+                        origin: origin,
+                        size: 28,
+                        selected: active || status == '切换中',
+                        running: status == '运行中',
+                        switching: status == '切换中' || status == '启动中',
                       ),
                       const SizedBox(width: 9),
                       Expanded(
-                        child: Text(
-                          profile.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: selected || active
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: Motion.of(context).fast,
+                              child: status == null
+                                  ? const SizedBox.shrink()
+                                  : Align(
+                                      key: ValueKey(status),
+                                      alignment: Alignment.centerLeft,
+                                      child: Pill(
+                                        label: status!,
+                                        color: colors.primary,
+                                        dense: true,
+                                      ),
+                                    ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

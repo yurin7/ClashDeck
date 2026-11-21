@@ -57,4 +57,40 @@ rules:
     expect(doc.plainAt(['dns', 'fake-ip-range']), '198.18.0.1/16');
     expect(doc.plainAt(['tun', 'dns-hijack']), ['any:53']);
   });
+
+  test('Windows TUN 由内核建网卡，禁用时即使 YAML 含 TUN 也只监听端口', () {
+    final source = YamlDoc.parse('''
+$base
+tun:
+  enable: true
+  file-descriptor: 42
+  mtu: 1500
+''');
+    final tun = YamlDoc.parse(
+      RuntimeConfig.buildRuntimeYaml(
+        source,
+        tunFileDescriptor: 0,
+        windows: true,
+        windowsTunStack: RuntimeConfig.defaultWindowsStack,
+      ),
+    );
+    expect(tun.plainAt(['tun', 'enable']), isTrue);
+    expect(tun.plainAt(['tun', 'stack']), 'mixed');
+    expect(tun.plainAt(['tun', 'auto-route']), isTrue);
+    expect(tun.plainAt(['tun', 'auto-detect-interface']), isTrue);
+    expect(tun.plainAt(['tun', 'mtu']), 1500);
+    expect(tun.has(['tun', 'file-descriptor']), isFalse);
+    expect(tun.plainAt(['dns', 'enable']), isFalse);
+    expect(tun.plainAt(['find-process-mode']), 'always');
+
+    final local = YamlDoc.parse(
+      RuntimeConfig.buildRuntimeYaml(
+        source,
+        tunFileDescriptor: 0,
+        windows: true,
+      ),
+    );
+    expect(local.plainAt(['tun', 'enable']), isFalse);
+    expect(source.plainAt(['tun', 'enable']), isTrue);
+  });
 }

@@ -40,6 +40,14 @@ class AppPrefs {
   Future<void> setActiveProfile(String? fileName) =>
       _put('activeProfile', fileName);
 
+  String? get windowsTunStack {
+    final value = _data['windowsTunStack'];
+    return value is String ? value : null;
+  }
+
+  Future<void> setWindowsTunStack(String? stack) =>
+      _put('windowsTunStack', stack);
+
   Future<void> setLastSubscriptionUpdate(DateTime? time) =>
       _put('lastSubscriptionUpdate', time?.toIso8601String());
 

@@ -8,15 +8,18 @@ import '../core/model/profile.dart';
 import '../core/update/update_check.dart';
 import '../data/app_prefs.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_config.dart';
 import '../runtime/runtime_controller.dart';
 import '../runtime/speed_test.dart';
 import 'dropdown.dart';
+import 'motion.dart';
 import 'overview_page.dart' show rateParts;
 import 'pulse_page.dart';
 import 'startup_issues_dialog.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/edit_dialog.dart';
+import 'widgets/profile_icon.dart';
 import 'widgets/runtime_status.dart';
 import 'widgets/start_stop_button.dart';
 
@@ -24,24 +27,36 @@ class DesktopOverview extends StatefulWidget {
   const DesktopOverview({
     super.key,
     required this.runtime,
-    required this.profiles,
-    required this.activeFile,
+    required this.active,
+    required this.origin,
     required this.profile,
     required this.prefs,
     required this.appVersion,
     required this.busy,
-    required this.onSelectProfile,
+    required this.visible,
+    required this.connectionCount,
+    required this.tunStack,
+    required this.admin,
+    required this.onTunStack,
+    required this.onRequestElevation,
+    required this.onOpenProfiles,
     required this.onEditProfile,
   });
 
   final RuntimeController runtime;
-  final List<StoredProfile> profiles;
-  final String? activeFile;
+  final StoredProfile? active;
+  final ProfileOrigin origin;
   final Profile profile;
   final AppPrefs? prefs;
   final String appVersion;
   final bool busy;
-  final ValueChanged<String> onSelectProfile;
+  final bool visible;
+  final Future<int?> Function() connectionCount;
+  final String? tunStack;
+  final bool admin;
+  final ValueChanged<String?> onTunStack;
+  final VoidCallback onRequestElevation;
+  final VoidCallback onOpenProfiles;
   final VoidCallback onEditProfile;
 
   @override
@@ -78,7 +93,7 @@ class _DesktopOverviewState extends State<DesktopOverview> {
         _samples.add(sample);
       }
     }
-    setState(() {});
+    if (widget.visible) setState(() {});
   }
 
   Future<void> _start() async {
@@ -141,9 +156,10 @@ class _DesktopOverviewState extends State<DesktopOverview> {
     final scheme = Theme.of(context).colorScheme;
     final status = runtimeStatusColor(context, _runtime.phase);
     final blocked = _testing || widget.busy || _runtime.restarting;
-    final active = widget.profiles
-        .where((profile) => profile.fileName == widget.activeFile)
-        .firstOrNull;
+    final running = _runtime.phase == RuntimePhase.running;
+    final startingOrStopping = _runtime.isBusy;
+    final needsAdmin = widget.tunStack != null && !widget.admin && !running;
+    final active = widget.active;
     final prefs = widget.prefs;
     final traffic = _TrafficCard(
       samples: List.of(_samples),
@@ -155,7 +171,7 @@ class _DesktopOverviewState extends State<DesktopOverview> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1420),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 23, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 11, 24, 24),
           children: [
             Row(
               children: [
@@ -193,6 +209,15 @@ class _DesktopOverviewState extends State<DesktopOverview> {
                           onPressed: null,
                           child: Text(_testing ? '测速中…' : '启动内核'),
                         )
+                      : needsAdmin
+                      ? FilledButton.icon(
+                          onPressed: widget.onRequestElevation,
+                          icon: const Icon(
+                            Icons.admin_panel_settings_outlined,
+                            size: 17,
+                          ),
+                          label: const Text('授权 TUN'),
+                        )
                       : StartStopButton(
                           phase: _runtime.phase,
                           onStart: _start,
@@ -202,37 +227,23 @@ class _DesktopOverviewState extends State<DesktopOverview> {
               ],
             ),
             const SizedBox(height: Insets.md),
-            Wrap(
-              spacing: Insets.lg,
-              runSpacing: Insets.sm,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (active != null) ...[
-                  Text('运行配置', style: hintStyle(context)),
-                  SizedBox(
-                    width: 196,
-                    child: AppDropdown<String>(
-                      value: active.fileName,
-                      options: [
-                        for (final profile in widget.profiles)
-                          DropdownOption(profile.fileName, profile.name),
-                      ],
-                      compact: true,
-                      expand: true,
-                      onChanged: widget.onSelectProfile,
-                      enabled: !blocked && !_runtime.isBusy,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: widget.onEditProfile,
-                    tooltip: '编辑运行配置',
-                    icon: const Icon(Icons.edit_outlined, size: 17),
-                  ),
-                  _ProxyEndpoint(port: _runtime.proxyPort),
-                ] else
-                  Text('从配置库新建或导入配置后即可启动内核。', style: hintStyle(context)),
-              ],
-            ),
+            if (active != null)
+              _ActiveProfileCard(
+                profile: active,
+                origin: widget.origin,
+                running: running && !_testing,
+                testing: _testing,
+                port: _runtime.proxyPort,
+                stack: widget.tunStack,
+                needsAdmin: needsAdmin,
+                onSwitch: widget.busy ? null : widget.onOpenProfiles,
+                onEdit: widget.busy ? null : widget.onEditProfile,
+                onStack: blocked || running || startingOrStopping
+                    ? null
+                    : widget.onTunStack,
+              )
+            else
+              Text('从配置库新建或导入配置后即可启动内核。', style: hintStyle(context)),
             if (_runtime.lastError case final error?)
               Padding(
                 padding: const EdgeInsets.only(top: Insets.sm),
@@ -248,6 +259,7 @@ class _DesktopOverviewState extends State<DesktopOverview> {
                 profile: widget.profile,
                 prefs: prefs,
                 runtime: _runtime,
+                connectionCount: widget.connectionCount,
                 speedTest: _speedTest,
                 desktopLayout: (speed, updates, runtime) => LayoutBuilder(
                   builder: (context, bounds) {
@@ -303,6 +315,132 @@ class _DesktopOverviewState extends State<DesktopOverview> {
   }
 }
 
+class _ActiveProfileCard extends StatelessWidget {
+  const _ActiveProfileCard({
+    required this.profile,
+    required this.origin,
+    required this.running,
+    required this.testing,
+    required this.port,
+    required this.stack,
+    required this.needsAdmin,
+    this.onSwitch,
+    this.onEdit,
+    this.onStack,
+  });
+
+  final StoredProfile profile;
+  final ProfileOrigin origin;
+  final bool running;
+  final bool testing;
+  final int port;
+  final String? stack;
+  final bool needsAdmin;
+  final VoidCallback? onSwitch;
+  final VoidCallback? onEdit;
+  final ValueChanged<String?>? onStack;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.primary;
+    return AppCard(
+      accent: accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              ProfileIcon(
+                origin: origin,
+                selected: true,
+                running: running,
+                size: 42,
+              ),
+              const SizedBox(width: Insets.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      testing
+                          ? '测速前选用的配置'
+                          : running
+                          ? '运行中'
+                          : '当前选用',
+                      style: hintStyle(context)?.copyWith(color: accent),
+                    ),
+                    const SizedBox(height: Insets.xs),
+                    AnimatedSwitcher(
+                      duration: Motion.of(context).fast,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...previous, ?current],
+                      ),
+                      child: Text(
+                        key: ValueKey(profile.fileName),
+                        profile.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: display(19, weight: 670),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Insets.md),
+              OutlinedButton.icon(
+                onPressed: onSwitch,
+                icon: const Icon(Icons.swap_horiz, size: 16),
+                label: const Text('切换配置'),
+              ),
+              const SizedBox(width: Insets.xs),
+              IconButton(
+                onPressed: onEdit,
+                tooltip: '编辑已选配置',
+                icon: const Icon(Icons.edit_outlined, size: 17),
+              ),
+            ],
+          ),
+          const SizedBox(height: Insets.md),
+          const Hairline(),
+          const SizedBox(height: Insets.sm),
+          Wrap(
+            spacing: Insets.md,
+            runSpacing: Insets.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('接管方式', style: hintStyle(context)),
+              SizedBox(
+                width: 145,
+                child: AppDropdown<String?>(
+                  compact: true,
+                  expand: true,
+                  value: stack,
+                  onChanged: (value) => onStack?.call(value),
+                  enabled: onStack != null,
+                  options: const [
+                    DropdownOption(null, '本地代理端口'),
+                    DropdownOption(
+                      RuntimeConfig.defaultWindowsStack,
+                      'TUN · Mixed',
+                    ),
+                    DropdownOption('system', 'TUN · System'),
+                    DropdownOption('gvisor', 'TUN · gVisor'),
+                  ],
+                ),
+              ),
+              _ProxyEndpoint(port: port),
+              if (needsAdmin)
+                Text('授权后会以管理员身份重新打开应用', style: hintStyle(context)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProxyEndpoint extends StatelessWidget {
   const _ProxyEndpoint({required this.port});
 
@@ -314,8 +452,6 @@ class _ProxyEndpoint extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('仅代理端口', style: hintStyle(context)),
-        const SizedBox(width: Insets.sm),
         Text(address, style: monoStyle(context, size: 11.5)),
         IconButton(
           tooltip: '复制本地代理地址',

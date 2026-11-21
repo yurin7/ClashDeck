@@ -3,11 +3,13 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:clashdeck/data/profile_store.dart';
 import 'package:clashdeck/state/editor_state.dart';
+import 'package:clashdeck/ui/desktop_profiles.dart';
 import 'package:clashdeck/ui/desktop_workspace.dart';
 import 'package:clashdeck/ui/editor_page.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:clashdeck/ui/raw_yaml_tab.dart';
 import 'package:clashdeck/ui/theme.dart';
+import 'package:clashdeck/ui/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -32,6 +34,8 @@ void main() {
       ..setLastModifiedSync(
         active.lastModifiedSync().subtract(const Duration(minutes: 1)),
       );
+    File('${directory.path}/备用配置.yaml.meta.json')
+        .writeAsStringSync('{"imported":true}');
 
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1;
@@ -91,6 +95,32 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, '概览'));
     await _pumpUntil(tester, () => find.text('实时流量').evaluate().isNotEmpty);
+    await tester.tap(find.text('切换配置'));
+    await tester.pumpAndSettle();
+    final library = find.byType(DesktopProfiles);
+    final imported = find.descendant(of: library, matching: find.text('备用配置'));
+    expect(
+      find.descendant(
+        of: library,
+        matching: find.byIcon(Icons.file_download_outlined),
+      ),
+      findsNWidgets(2),
+    );
+    await tester.tap(imported);
+    final preferences = File('${workspace.path}/app_prefs.json');
+    final create = find.descendant(
+      of: library,
+      matching: find.byType(AccentButton),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          tester.widget<AccentButton>(create).onPressed != null &&
+          preferences.existsSync() &&
+          preferences.readAsStringSync().contains('备用配置.yaml'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(EditorPage), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,10 +1,41 @@
 #include "flutter_window.h"
 
 #include <flutter/standard_method_codec.h>
+#include <shellapi.h>
 
+#include <filesystem>
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+
+namespace {
+
+bool IsElevated() {
+  HANDLE token = nullptr;
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+  TOKEN_ELEVATION elevation{};
+  DWORD size = 0;
+  const bool elevated =
+      GetTokenInformation(token, TokenElevation, &elevation,
+                          sizeof(elevation), &size) &&
+      elevation.TokenIsElevated;
+  CloseHandle(token);
+  return elevated;
+}
+
+bool RelaunchElevated(HWND window) {
+  std::wstring path(32768, L'\0');
+  const DWORD length =
+      GetModuleFileName(nullptr, path.data(), static_cast<DWORD>(path.size()));
+  if (length == 0 || length >= path.size()) return false;
+  path.resize(length);
+  const auto directory = std::filesystem::path(path).parent_path();
+  return reinterpret_cast<INT_PTR>(
+             ShellExecute(window, L"runas", path.c_str(), nullptr,
+                          directory.c_str(), SW_SHOWNORMAL)) > 32;
+}
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -46,6 +77,14 @@ bool FlutterWindow::OnCreate() {
           "dev.clashdeck/windows-kernel", &flutter::StandardMethodCodec::GetInstance());
   kernel_channel_->SetMethodCallHandler(
       [this](const auto& call, auto result) {
+        if (call.method_name() == "isElevated") {
+          result->Success(flutter::EncodableValue(IsElevated()));
+          return;
+        }
+        if (call.method_name() == "relaunchElevated") {
+          result->Success(flutter::EncodableValue(RelaunchElevated(GetHandle())));
+          return;
+        }
         if (call.method_name() != "track") {
           result->NotImplemented();
           return;
@@ -67,6 +106,27 @@ bool FlutterWindow::OnCreate() {
         }
       });
 
+  window_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "dev.clashdeck/windows-window", &flutter::StandardMethodCodec::GetInstance());
+  window_channel_->SetMethodCallHandler(
+      [this](const auto& call, auto result) {
+        const HWND window = GetHandle();
+        if (call.method_name() == "minimize") {
+          PostMessage(window, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+        } else if (call.method_name() == "toggleMaximize") {
+          PostMessage(window, WM_SYSCOMMAND,
+                      IsZoomed(window) ? SC_RESTORE : SC_MAXIMIZE, 0);
+        } else if (call.method_name() == "close") {
+          PostMessage(window, WM_CLOSE, 0, 0);
+        } else {
+          result->NotImplemented();
+          return;
+        }
+        result->Success();
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -80,6 +140,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  window_channel_.reset();
   kernel_channel_.reset();
   if (kernel_job_) {
     CloseHandle(kernel_job_);
@@ -107,8 +168,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_SIZE: {
+      const bool maximized = wparam == SIZE_MAXIMIZED;
+      if (!window_channel_ || wparam == SIZE_MINIMIZED ||
+          maximized == maximized_) break;
+      maximized_ = maximized;
+      window_channel_->InvokeMethod(
+          "maximized", std::make_unique<flutter::EncodableValue>(maximized_));
+      break;
+    }
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_) flutter_controller_->engine()->ReloadSystemFonts();
       break;
   }
 

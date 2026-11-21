@@ -25,3 +25,6 @@ LICENSE 文件（GPL-3.0）。
 
 3. Flutter / Dart 生态依赖（`yaml`、`yaml_edit`、`path_provider`、`material_ui` 等）
    各自遵循其原始许可证，见 `pubspec.lock`。
+
+4. Windows 中文界面字体 [资源圆体简体中文版 v0.990](https://github.com/CyanoHao/Resource-Han-Rounded/releases/tag/v0.990)，
+   随桌面版分发 Regular 字重，许可证见 [SIL OFL 1.1](windows/resources/fonts/ResourceHanRounded-OFL.md)。

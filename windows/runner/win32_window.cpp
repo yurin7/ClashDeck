@@ -1,11 +1,55 @@
 #include "win32_window.h"
 
+#include <commctrl.h>
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
 namespace {
+
+// Keep these dimensions in sync with DesktopWindowCaption in Flutter.
+constexpr int kCaptionHeight = 36;
+constexpr int kCaptionButtonsWidth = 44 * 3;
+
+LRESULT HitTestFrame(HWND window, LPARAM coordinates) {
+  POINT point{GET_X_LPARAM(coordinates), GET_Y_LPARAM(coordinates)};
+  ScreenToClient(window, &point);
+  RECT client{};
+  GetClientRect(window, &client);
+  const UINT dpi = GetDpiForWindow(window);
+  if (!IsZoomed(window)) {
+    const int padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+    const int edge_x = GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi) + padding;
+    const int edge_y = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + padding;
+    const bool left = point.x < edge_x;
+    const bool right = point.x >= client.right - edge_x;
+    if (point.y < edge_y)
+      return left ? HTTOPLEFT : right ? HTTOPRIGHT : HTTOP;
+    if (point.y >= client.bottom - edge_y)
+      return left ? HTBOTTOMLEFT : right ? HTBOTTOMRIGHT : HTBOTTOM;
+    if (left) return HTLEFT;
+    if (right) return HTRIGHT;
+  }
+  if (point.y < MulDiv(kCaptionHeight, dpi, USER_DEFAULT_SCREEN_DPI) &&
+      point.x < client.right -
+                    MulDiv(kCaptionButtonsWidth, dpi, USER_DEFAULT_SCREEN_DPI)) {
+    return HTCAPTION;
+  }
+  return HTCLIENT;
+}
+
+LRESULT CALLBACK HitTestFlutterView(HWND window, UINT message, WPARAM wparam,
+                                   LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
+  if (message == WM_NCDESTROY) {
+    RemoveWindowSubclass(window, HitTestFlutterView, id);
+  }
+  if (message == WM_NCHITTEST && HitTestFrame(GetParent(window), lparam) != HTCLIENT) {
+    return HTTRANSPARENT;
+  }
+  return DefSubclassProc(window, message, wparam, lparam);
+}
 
 /// Window attribute that enables dark mode window decorations.
 ///
@@ -145,6 +189,9 @@ bool Win32Window::Create(const std::wstring& title,
   }
 
   UpdateTheme(window);
+  SetWindowPos(window, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                   SWP_FRAMECHANGED);
 
   return OnCreate();
 }
@@ -179,6 +226,22 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_NCCALCSIZE:
+      if (wparam) {
+        if (IsZoomed(hwnd)) {
+          auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+          MONITORINFO monitor{sizeof(MONITORINFO)};
+          if (GetMonitorInfo(MonitorFromRect(&params->rgrc[0],
+                                             MONITOR_DEFAULTTONEAREST),
+                             &monitor)) {
+            params->rgrc[0] = monitor.rcWork;
+          }
+        }
+        return 0;
+      }
+      break;
+    case WM_NCHITTEST:
+      return HitTestFrame(hwnd, lparam);
     case WM_GETMINMAXINFO: {
       auto* limits = reinterpret_cast<MINMAXINFO*>(lparam);
       const auto dpi = GetDpiForWindow(hwnd);
@@ -249,6 +312,7 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
+  SetWindowSubclass(content, HitTestFlutterView, 1, 0);
   RECT frame = GetClientArea();
 
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,

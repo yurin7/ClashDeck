@@ -11,7 +11,15 @@ class WindowsKernel {
   final _logs = ListQueue<String>();
   Future<Directory>? _workDir;
   Process? _process;
+  Future<void> Function()? _closeTun;
+  Future<void>? _stopping;
   int _operation = 0;
+
+  static Future<bool> isElevated() async =>
+      await _channel.invokeMethod<bool>('isElevated') ?? false;
+
+  static Future<bool> relaunchElevated() async =>
+      await _channel.invokeMethod<bool>('relaunchElevated') ?? false;
 
   Future<Directory> get workDir =>
       _workDir ??= Directory.systemTemp.createTemp('clashdeck-windows-');
@@ -45,6 +53,7 @@ class WindowsKernel {
     required int proxyPort,
     required Future<bool> Function() ready,
     required void Function(int) onExit,
+    Future<void> Function()? closeTun,
   }) async {
     if (_process != null) throw StateError('内核进程仍在运行');
     final operation = ++_operation;
@@ -55,13 +64,22 @@ class WindowsKernel {
       throw StateError('应用目录缺少 mihomo.exe');
     }
     try {
-      final socket = await ServerSocket.bind(
+      final tcp = await ServerSocket.bind(
         InternetAddress.loopbackIPv4,
         proxyPort,
       );
-      await socket.close();
+      try {
+        final udp = await RawDatagramSocket.bind(
+          InternetAddress.loopbackIPv4,
+          proxyPort,
+          reuseAddress: false,
+        );
+        udp.close();
+      } finally {
+        await tcp.close();
+      }
     } on SocketException {
-      throw StateError('本地代理端口 $proxyPort 已被占用');
+      throw StateError('本地代理端口 $proxyPort 已被占用或被系统保留');
     }
     clearLogs();
     final dir = await workDir;
@@ -80,12 +98,14 @@ class WindowsKernel {
       throw StateError('启动已取消');
     }
     _process = process;
+    _closeTun = closeTun;
     _readLogs(process.stdout);
     _readLogs(process.stderr);
     unawaited(
       process.exitCode.then((code) {
         if (_process != process) return;
         _process = null;
+        _closeTun = null;
         if (operation == _operation) onExit(code);
       }),
     );
@@ -97,12 +117,22 @@ class WindowsKernel {
         if (_process != process) {
           throw StateError(_logs.isEmpty ? 'mihomo 已退出' : _logs.last);
         }
-        if (await ready() && _process == process && operation == _operation) {
+        final listening = await ready();
+        final listenerError = _logs
+            .where(
+              (line) =>
+                  line.contains('Start Mixed(http+socks) server error') ||
+                  (closeTun != null &&
+                      line.contains('Start TUN listening error')),
+            )
+            .lastOrNull;
+        if (listenerError != null) throw StateError(listenerError);
+        if (listening && _process == process && operation == _operation) {
           return process.pid;
         }
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
-      throw StateError('等待 mihomo 控制接口超时');
+      throw StateError(closeTun == null ? '等待 mihomo 控制接口超时' : '等待 TUN 网卡就绪超时');
     } catch (_) {
       if (operation == _operation) await stop();
       rethrow;
@@ -119,10 +149,22 @@ class WindowsKernel {
         }, onError: (Object _) {});
   }
 
-  Future<void> stop() async {
+  Future<void> stop() {
     _operation++;
+    return _stopping ??= _stopProcess().whenComplete(() {
+      _stopping = null;
+    });
+  }
+
+  Future<void> _stopProcess() async {
     final process = _process;
     if (process == null) return;
+    try {
+      // 给内核机会撤销 TUN 路由和 DNS 设置，再结束子进程。
+      await _closeTun?.call();
+    } catch (_) {
+      // 控制接口可能已经退出，仍需回收子进程。
+    }
     process.kill();
     await process.exitCode.timeout(const Duration(seconds: 4));
     if (_process == process) _process = null;

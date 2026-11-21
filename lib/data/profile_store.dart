@@ -3,6 +3,18 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+enum ProfileOrigin {
+  local,
+  imported,
+  subscription;
+
+  static ProfileOrigin fromMeta(Map<String, Object?> meta) {
+    final url = meta['subscriptionUrl'];
+    if (url is String && url.isNotEmpty) return subscription;
+    return meta['imported'] == true ? imported : local;
+  }
+}
+
 /// 磁盘上的一份配置（一个 `.yaml` 文件 = 一份配置）。
 class StoredProfile {
   const StoredProfile({
@@ -72,12 +84,19 @@ class ProfileStore {
       File('${dir.path}${Platform.pathSeparator}$fileName').readAsString();
 
   /// 新建一份配置，名字冲突时自动加 `-2`、`-3`…
-  Future<StoredProfile> create(String name, String text) async {
+  Future<StoredProfile> create(
+    String name,
+    String text, {
+    bool imported = false,
+    String? subscriptionUrl,
+  }) async {
     final fileName = await _freeFileName(name);
     await write(fileName, text);
     // 新配置默认让 DEFAULT 组走 DIRECT：代理页一打开就有高亮，
     // 停止状态下切组内节点也只需要改这份 sidecar。
     await writeMeta(fileName, {
+      if (imported) 'imported': true,
+      'subscriptionUrl': ?subscriptionUrl,
       'app': {
         'groupNodes': {'DEFAULT': 'DIRECT'},
       },

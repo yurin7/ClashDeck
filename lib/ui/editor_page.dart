@@ -31,6 +31,7 @@ class EditorPage extends StatefulWidget {
     this.autoSave = true,
     this.cachedDelays = const <String, int?>{},
     this.isActiveProfile = true,
+    this.onSaved,
   });
 
   final ProfileStore store;
@@ -51,6 +52,9 @@ class EditorPage extends StatefulWidget {
 
   /// 编辑的是不是当前运行配置。只有它保存后才需要自动重启内核。
   final bool isActiveProfile;
+
+  /// 保存后同步主页面的活动配置，再由内核读取最新的内容与选择。
+  final Future<void> Function()? onSaved;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -139,6 +143,7 @@ class _EditorPageState extends State<EditorPage> {
       // 已经排好时是空操作，文本不变，不会白触发内核 reload。
       state.normalizeRules();
       await state.save(widget.store);
+      await widget.onSaved?.call();
       if (!mounted) return;
       final runtime = widget.runtime;
       final coreActive =

@@ -375,19 +375,22 @@ class _ProxyBoardState extends State<ProxyBoard>
   /// 组内点节点 = 把这个组当前出口改成该节点。
   ///
   /// 选择先写入当前配置的 sidecar，内核运行此配置时同步切换出口。
-  Future<void> _selectNodeForGroup(
-    String group,
-    String name, {
-    bool waitForSave = false,
-  }) async {
+  Future<void> _selectNodeForGroup(String group, String name) async {
     await widget.onGroupSelection?.call(group, name);
     if (!mounted) return;
     setState(() {});
     final runtime = _selectionRuntime;
-    if (runtime == null || waitForSave) return;
+    if (runtime == null) return;
+    if (s.dirty &&
+        runtime.members.isNotEmpty &&
+        runtime.members[group]?.contains(name) != true) {
+      _toast('已记住「$name」，保存配置后切换');
+      return;
+    }
     final ok = await runtime.selectNode(group, name);
+    if (!mounted) return;
     if (!ok) {
-      _toast('切换失败，内核可能已经退出');
+      _toast(runtime.lastError ?? '内核未确认切换到「$name」');
       return;
     }
     _toast('「$group」现在用 $name');
@@ -786,20 +789,9 @@ class _ProxyBoardState extends State<ProxyBoard>
                   return;
                 }
                 final runtime = _selectionRuntime;
-                // 新拖入的策略组引用要在保存配置后才会出现在内核里。
-                final waitForSave =
-                    data is DragGroupData &&
-                    runtime != null &&
-                    runtime.members[group.name]?.contains(name) != true;
-                await _selectNodeForGroup(
-                  group.name,
-                  name,
-                  waitForSave: waitForSave,
-                );
-                if (mounted && (runtime == null || waitForSave)) {
-                  _toast(
-                    waitForSave ? '已移动到「${group.name}」' : '已加入并切换到「$name」',
-                  );
+                await _selectNodeForGroup(group.name, name);
+                if (mounted && runtime == null) {
+                  _toast('已加入并切换到「$name」');
                 }
               },
               onRemove: (name) {
@@ -1287,14 +1279,11 @@ class _GroupCard extends StatelessWidget {
       builder: (context, candidate, _) {
         final active = candidate.isNotEmpty;
         final duplicate = dragState.duplicateGroup == group.name;
+        final ruleDrop = candidate.any((data) => data is RuleDragData);
         return AppCard(
-          color: duplicate && !isRelay
-              ? scheme.error.withValues(alpha: 0.07)
-              : issueColor != null
-              ? issueColor.withValues(alpha: 0.06)
-              : active
-              ? scheme.primaryContainer
-              : null,
+          color:
+              issueColor?.withValues(alpha: 0.06) ??
+              (ruleDrop ? scheme.primaryContainer : null),
           // 红/黄问题优先于「当前出口」的紫色提示；链式卡不做整卡高亮。
           borderColor: duplicate && !isRelay
               ? scheme.error

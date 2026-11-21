@@ -28,6 +28,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var channel: MethodChannel? = null
+    private var updateChannel: MethodChannel? = null
     private var pendingStart: Map<*, *>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,11 +53,17 @@ class MainActivity : FlutterActivity() {
                 result.error("runtime", t.message ?: t.toString(), null)
             }
         }
+        val updater = AndroidUpdate(this)
+        updateChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AndroidUpdate.CHANNEL).apply {
+            setMethodCallHandler(updater::handle)
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         channel?.let { RuntimeBridge.detach(it) }
         channel = null
+        updateChannel?.setMethodCallHandler(null)
+        updateChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

@@ -5,7 +5,9 @@ import '../net/fetch_text.dart';
 import '../yaml/yaml_doc.dart';
 import 'semver.dart';
 
-/// 检查更新时 `releases/latest` 的地址（只读，不下载资产）。
+const String clashDeckProjectUrl = 'https://github.com/yurin7/ClashDeck';
+
+/// 检查更新使用的正式发布信息。
 const String latestReleaseUrl =
     'https://api.github.com/repos/yurin7/ClashDeck/releases/latest';
 
@@ -19,6 +21,14 @@ class UpdateFailure {
   final String message;
 }
 
+class UpdateApk {
+  const UpdateApk({required this.name, required this.url, required this.size});
+
+  final String name;
+  final Uri url;
+  final int size;
+}
+
 /// 一次成功解析出的版本信息。
 class UpdateInfo {
   const UpdateInfo({
@@ -26,6 +36,7 @@ class UpdateInfo {
     required this.url,
     required this.notes,
     this.publishedAt,
+    this.androidApks = const {},
   });
 
   /// 规范化的 `major.minor.patch`。
@@ -38,6 +49,9 @@ class UpdateInfo {
   final String notes;
 
   final DateTime? publishedAt;
+
+  /// 可直接安装的 APK，按 Android ABI 索引。
+  final Map<String, UpdateApk> androidApks;
 }
 
 /// 检查结果：有新版本 / 已是最新 / 失败。
@@ -139,9 +153,35 @@ Future<UpdateCheckResult> checkForUpdate({
     url: '${data['html_url'] ?? ''}'.trim(),
     notes: '${data['body'] ?? ''}'.trim(),
     publishedAt: DateTime.tryParse('${data['published_at'] ?? ''}'),
+    androidApks: _androidApks(data['assets'], tag, remote.display),
   );
 
   return remote > local ? UpdateAvailable(info) : UpToDate(info);
+}
+
+Map<String, UpdateApk> _androidApks(
+  Object? assets,
+  String tag,
+  String version,
+) {
+  if (assets is! List) return const {};
+  final apks = <String, UpdateApk>{};
+  for (final abi in ['arm64-v8a', 'x86_64']) {
+    final name = 'ClashDeck-$version-$abi.apk';
+    final url = '$clashDeckProjectUrl/releases/download/$tag/$name';
+    for (final asset in assets) {
+      if (asset is! Map ||
+          asset['name'] != name ||
+          asset['browser_download_url'] != url) {
+        continue;
+      }
+      final size = asset['size'];
+      if (size is! int || size <= 0) continue;
+      apks[abi] = UpdateApk(name: name, url: Uri.parse(url), size: size);
+      break;
+    }
+  }
+  return apks;
 }
 
 UpdateFailure _classifyFetchError(String message) {

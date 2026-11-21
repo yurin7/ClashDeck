@@ -385,6 +385,7 @@ class _AppShellState extends State<AppShell>
           autoSave: _settings?.autoSave ?? false,
           cachedDelays: _latencyCache,
           isActiveProfile: fileName == _activeFileName,
+          onSaved: _reloadProfiles,
         ),
       ),
     );
@@ -538,6 +539,7 @@ class _AppShellState extends State<AppShell>
           autoSave: _settings?.autoSave ?? false,
           cachedDelays: _latencyCache,
           isActiveProfile: fileName == _activeFileName,
+          onSaved: _reloadProfiles,
         ),
       ),
     );

@@ -206,6 +206,7 @@ class _HomePageState extends State<HomePage> {
           runtime: widget.runtime,
           autoSave: widget.autoSave,
           isActiveProfile: item.fileName == widget.activeFileName,
+          onSaved: widget.onProfilesChanged,
         ),
       ),
     );

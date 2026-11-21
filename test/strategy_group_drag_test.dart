@@ -116,4 +116,40 @@ void main() {
       expect(dragState.animating, isFalse);
     }
   });
+
+  testWidgets('拖动节点时，可放入与重复的选择组只改变边框颜色', (tester) async {
+    final state = await _pumpBoard(tester);
+    expect(state.addGroupMember('目标', '节点'), isTrue);
+    await tester.pumpAndSettle();
+
+    final scheme = Theme.of(tester.element(find.byType(ProxyBoard)))
+        .colorScheme;
+    final nodeName = find.descendant(
+      of: find.byWidgetPredicate(
+        (widget) => widget is NodeChip && widget.fromGroup == '后备',
+      ),
+      matching: find.text('节点'),
+    );
+    final gesture = await tester.startGesture(tester.getCenter(nodeName));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    for (final (title, border) in [
+      ('来源', scheme.primary),
+      ('目标', scheme.error),
+    ]) {
+      final heading = find.text(title);
+      final card = find
+          .ancestor(of: heading, matching: find.byType(AppCard))
+          .first;
+      final idleColor = tester.widget<AppCard>(card).color;
+      await gesture.moveTo(tester.getCenter(heading));
+      await tester.pump();
+      expect(tester.widget<AppCard>(card).borderColor, border);
+      expect(tester.widget<AppCard>(card).color, idleColor);
+    }
+
+    await gesture.cancel();
+    await tester.pumpAndSettle();
+  });
 }

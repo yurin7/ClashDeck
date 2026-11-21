@@ -10,12 +10,14 @@ String releaseJson({
   String url = 'https://github.com/yurin7/ClashDeck/releases/tag/v0.2.2',
   String body = '- 新增检查更新\n- 修复若干问题',
   String published = '2026-11-19T00:00:00Z',
+  List<Object?> assets = const [],
 }) {
   return jsonEncode({
     'tag_name': tag,
     'html_url': url,
     'body': body,
     'published_at': published,
+    'assets': assets,
   });
 }
 
@@ -48,6 +50,33 @@ void main() {
   test('远端相同或更旧 → UpToDate', () async {
     expect(await run(releaseJson(tag: 'v0.2.1')), isA<UpToDate>());
     expect(await run(releaseJson(tag: 'v0.1.9')), isA<UpToDate>());
+  });
+
+  test('按 Android 架构识别项目 Release 中的 APK', () async {
+    const arm64 = 'ClashDeck-0.2.2-arm64-v8a.apk';
+    const x64 = 'ClashDeck-0.2.2-x86_64.apk';
+    final result = await run(
+      releaseJson(
+        tag: 'v0.2.2',
+        assets: [
+          {
+            'name': arm64,
+            'size': 1234,
+            'browser_download_url':
+                '$clashDeckProjectUrl/releases/download/v0.2.2/$arm64',
+          },
+          {
+            'name': x64,
+            'size': 5678,
+            'browser_download_url': 'https://example.com/$x64',
+          },
+        ],
+      ),
+    );
+    final packages = (result as UpdateAvailable).info.androidApks;
+    expect(packages.keys, ['arm64-v8a']);
+    expect(packages['arm64-v8a']!.name, arm64);
+    expect(packages['arm64-v8a']!.size, 1234);
   });
 
   test('本机版本带 build 元数据也能比较', () async {

@@ -11,7 +11,7 @@ class _FakeApi extends MihomoApi {
 
   /// groupName -> member names
   final Map<String, List<String>> members;
-  final bool failSelect;
+  bool failSelect;
 
   final List<String> selects = <String>[];
   int pings = 0;
@@ -154,6 +154,21 @@ rules:
       'kernelState': 'running',
     });
     expect(controller.phase, RuntimePhase.running);
+    expect(controller.lastError, isNull);
+  });
+
+  test('手动切换失败后，运行状态保留并可继续切换', () async {
+    final api = _FakeApi(failSelect: true);
+    final controller = build(api)..debugSetPhase(RuntimePhase.running);
+    addTearDown(controller.dispose);
+
+    expect(await controller.selectNode('链式', 'B'), isFalse);
+    expect(controller.phase, RuntimePhase.running);
+    expect(controller.lastError, contains('404'));
+
+    api.failSelect = false;
+    expect(await controller.selectNode('链式', 'A'), isTrue);
+    expect(controller.selected['链式'], 'A');
     expect(controller.lastError, isNull);
   });
 

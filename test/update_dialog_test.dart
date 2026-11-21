@@ -1,20 +1,67 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:clashdeck/core/update/update_check.dart';
+import 'package:clashdeck/runtime/android_update.dart';
 import 'package:clashdeck/ui/update_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-UpdateInfo _info() => UpdateInfo(
+UpdateInfo _info({UpdateApk? apk}) => UpdateInfo(
   version: '0.2.2',
   url: 'https://github.com/yurin7/ClashDeck/releases/tag/v0.2.2',
   notes: '- 修复 A\n- 修复 B\n- 新增 C',
   publishedAt: DateTime(2026, 11, 19),
+  androidApks: {'x86_64': ?apk},
 );
+
+class _TestInstaller extends AndroidUpdateInstaller {
+  final package = UpdateApk(
+    name: 'ClashDeck-0.2.2-x86_64.apk',
+    url: Uri.parse(
+      '$clashDeckProjectUrl/releases/download/v0.2.2/ClashDeck-0.2.2-x86_64.apk',
+    ),
+    size: 1024,
+  );
+  final transfer = Completer<File>();
+  var downloads = 0;
+  var installs = 0;
+  var settingsOpened = 0;
+  var allowed = false;
+
+  @override
+  Future<UpdateApk?> selectApk(UpdateInfo info) async =>
+      info.androidApks['x86_64'];
+
+  @override
+  Future<File> download(
+    UpdateApk apk, {
+    required HttpClient client,
+    required void Function(double progress) onProgress,
+  }) {
+    downloads++;
+    onProgress(0.5);
+    return transfer.future;
+  }
+
+  @override
+  Future<bool> openInstaller(File apk) async {
+    installs++;
+    return allowed;
+  }
+
+  @override
+  Future<void> openInstallSettings() async {
+    settingsOpened++;
+  }
+}
 
 void main() {
   Future<void> pumpHost(
     WidgetTester tester, {
     required Future<bool> Function(String) openUrl,
     void Function(bool?)? onResult,
+    _TestInstaller? installer,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -25,8 +72,9 @@ void main() {
                 onPressed: () async {
                   final result = await showUpdateDialog(
                     context,
-                    _info(),
+                    _info(apk: installer?.package),
                     openUrl: openUrl,
+                    installer: installer,
                   );
                   onResult?.call(result);
                 },
@@ -84,6 +132,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened, 0);
     expect(result, isFalse);
+  });
+
+  testWidgets('下载后打开安装授权，返回后继续使用同一安装包', (tester) async {
+    final installer = _TestInstaller();
+    bool? result;
+    await pumpHost(
+      tester,
+      openUrl: (_) async => throw StateError('Unexpected external URL'),
+      installer: installer,
+      onResult: (value) => result = value,
+    );
+    await tester.tap(find.text('下载并安装'));
+    await tester.pumpAndSettle();
+    expect(find.text('已下载 50%'), findsOneWidget);
+
+    installer.transfer.complete(File(installer.package.name));
+    await tester.pumpAndSettle();
+    expect(find.text('允许安装'), findsOneWidget);
+    expect(installer.installs, 1);
+
+    await tester.tap(find.text('允许安装'));
+    await tester.pump();
+    expect(installer.settingsOpened, 1);
+    installer.allowed = true;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(installer.downloads, 1);
+    expect(installer.installs, 2);
+    expect(result, isTrue);
+    expect(find.text('发现新版本'), findsNothing);
+  });
+
+  testWidgets('关闭下载弹窗后，已完成的下载不会拉起安装界面', (tester) async {
+    final installer = _TestInstaller()..allowed = true;
+    await pumpHost(tester, openUrl: (_) async => true, installer: installer);
+    await tester.tap(find.text('下载并安装'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('取消'));
+    installer.transfer.complete(File(installer.package.name));
+    await tester.pumpAndSettle();
+    expect(installer.installs, 0);
+    expect(find.text('打开'), findsOneWidget);
   });
 
   testWidgets('说明为空时给占位文案', (tester) async {

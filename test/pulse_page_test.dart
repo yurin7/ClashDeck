@@ -248,7 +248,7 @@ void main() {
     expect(find.text('demo'), findsWidgets);
   });
 
-  testWidgets('检查更新发现新版显示去查看，点击打开浏览器', (tester) async {
+  testWidgets('检查更新显示新版，去查看打开统一更新弹窗', (tester) async {
     await loadPrefs(tester);
     var opened = '';
     await tester.pumpWidget(
@@ -270,7 +270,30 @@ void main() {
     expect(find.textContaining('发现 0.3.0'), findsOneWidget);
     await tester.tap(find.text('去查看'));
     await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('发现新版本'), findsOneWidget);
+    await tester.tap(find.text('去下载'));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(opened, contains('v0.3.0'));
+  });
+
+  testWidgets('点击图标或字标打开项目主页', (tester) async {
+    await loadPrefs(tester);
+    final opened = <String>[];
+    await tester.pumpWidget(
+      host(
+        page(
+          openUrl: (url) async {
+            opened.add(url);
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.byType(Image));
+    await tester.tap(find.text('ClashDeck'));
+    expect(opened, [clashDeckProjectUrl, clashDeckProjectUrl]);
   });
 
   testWidgets('已是最新版本时轻提示', (tester) async {

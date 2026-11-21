@@ -15,7 +15,9 @@ import 'pulse_time.dart';
 import 'chips.dart';
 import 'fields.dart';
 import 'theme.dart';
+import 'update_dialog.dart';
 import 'widgets.dart';
+import 'widgets/app_ink.dart';
 import 'widgets/delay_badge.dart';
 
 /// 批量测速的注入点（测试用假实现替换真实内核请求）。
@@ -370,7 +372,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _openRelease(String url) async {
+  Future<void> _openLink(String url) async {
     final open = widget.openUrl;
     try {
       final ok = open != null
@@ -455,16 +457,23 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
       RuntimePhase.error => '内核出错',
       RuntimePhase.idle => '未运行',
     };
+    void openProject() => unawaited(_openLink(clashDeckProjectUrl));
     return _GlassCard(
       child: Row(
         children: [
-          _Mascot(animation: _float, disabled: disable),
+          AppInkWell(
+            onTap: openProject,
+            child: _Mascot(animation: _float, disabled: disable),
+          ),
           const SizedBox(width: Insets.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _GradientWordmark(),
+                AppInkWell(
+                  onTap: openProject,
+                  child: const _GradientWordmark(),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -528,12 +537,16 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
               Text('下载测速', style: hintStyle(context)),
             ],
           ),
-          if (stage == SpeedTestStage.starting)
-            const _SpeedBanner(text: '测速会临时用独立内核，不影响当前配置')
-          else if (stage == SpeedTestStage.waiting)
-            const _SpeedBanner(text: '等待内核就绪…')
-          else if (stage == SpeedTestStage.restoring)
-            const _SpeedBanner(text: '正在恢复连接…'),
+          MotionSize(
+            child: switch (stage) {
+              SpeedTestStage.starting => const _SpeedBanner(
+                text: '测速会临时用独立内核，不影响当前配置',
+              ),
+              SpeedTestStage.waiting => const _SpeedBanner(text: '等待内核就绪…'),
+              SpeedTestStage.restoring => const _SpeedBanner(text: '正在恢复连接…'),
+              _ => const SizedBox.shrink(),
+            },
+          ),
           const SizedBox(height: Insets.sm),
           if (_allNodes.isEmpty)
             Text('还没有节点。去「配置」页添加或导入节点后再来测速。', style: hintStyle(context))
@@ -669,7 +682,14 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
 
   Widget _updateCard(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
     final result = _updateResult;
+    final status = switch (result) {
+      UpdateAvailable() => '发现 ${result.info.version}',
+      UpToDate() => '已是最新版本',
+      UpdateFailed() => result.failure.message,
+      null => '最新正式版',
+    };
     return _GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -684,20 +704,25 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  switch (result) {
-                    UpdateAvailable() => '发现 ${result.info.version}',
-                    UpToDate() => '已是最新版本',
-                    UpdateFailed() => result.failure.message,
-                    null => '从 GitHub 读取最新正式版，不会自动下载',
-                  },
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: result is UpdateAvailable
-                        ? scheme.primary
-                        : scheme.onSurfaceVariant,
+                child: AnimatedSwitcher(
+                  duration: motion.fast,
+                  switchInCurve: motion.enter,
+                  switchOutCurve: motion.exit,
+                  layoutBuilder: (child, previous) => Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [...previous, ?child],
+                  ),
+                  child: Text(
+                    status,
+                    key: ValueKey(status),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: result is UpdateAvailable
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -711,7 +736,11 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
                   textStyle: const TextStyle(fontSize: 12.5),
                 ),
                 onPressed: result is UpdateAvailable
-                    ? () => _openRelease(result.info.url)
+                    ? () => showUpdateDialog(
+                        context,
+                        result.info,
+                        openUrl: widget.openUrl,
+                      )
                     : (_checking ? null : _checkUpdate),
                 child: Text(
                   result is UpdateAvailable
@@ -770,14 +799,17 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
           ),
           _Kv(label: '当前配置', value: widget.profileName),
           _Kv(label: '全局出口', value: exit),
-          if (phase == RuntimePhase.error && runtime?.lastError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Insets.sm),
-              child: Text(
-                runtime!.lastError!,
-                style: TextStyle(fontSize: 12, color: scheme.error),
-              ),
-            ),
+          MotionSize(
+            child: phase == RuntimePhase.error && runtime?.lastError != null
+                ? Padding(
+                    padding: const EdgeInsets.only(top: Insets.sm),
+                    child: Text(
+                      runtime!.lastError!,
+                      style: TextStyle(fontSize: 12, color: scheme.error),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );

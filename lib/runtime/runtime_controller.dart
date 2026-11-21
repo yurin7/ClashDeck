@@ -552,14 +552,20 @@ class RuntimeController extends ChangeNotifier {
     final client = api;
     try {
       await client.selectProxy(group, node);
+      if (_disposed) return false;
       _selected = {..._selected, group: node};
+      if (!quiet && (_lastError?.startsWith('切换节点失败：') ?? false)) {
+        _lastError = null;
+      }
       notifyListeners();
       return true;
     } catch (error) {
+      if (_disposed) return false;
       if (quiet) {
         unawaited(_refreshRuntimeView());
       } else {
-        _setError('切换节点失败：$error');
+        _lastError = '切换节点失败：$error';
+        notifyListeners();
       }
       return false;
     } finally {

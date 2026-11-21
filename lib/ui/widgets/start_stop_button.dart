@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../runtime/runtime_controller.dart';
 import '../motion.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -15,22 +16,18 @@ import '../widgets.dart';
 class StartStopButton extends StatelessWidget {
   const StartStopButton({
     super.key,
-    required this.running,
-    required this.busy,
+    required this.phase,
     required this.onStart,
     required this.onStop,
     this.busySpinner = false,
-    this.busyLabel = '启动中…',
   });
 
-  final bool running;
-  final bool busy;
+  final RuntimePhase phase;
   final VoidCallback onStart;
   final VoidCallback onStop;
 
   /// 处理中是否显示转圈（概览页）；false 时显示禁用按钮（运行页）。
   final bool busySpinner;
-  final String busyLabel;
 
   /// 与 [AccentButton] 的 46 高、24 横向内边距、14 圆角保持一致。
   static ButtonStyle get _outlinedStyle => OutlinedButton.styleFrom(
@@ -44,25 +41,36 @@ class StartStopButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final motion = Motion.of(context);
+    final stopping = phase == RuntimePhase.stopping;
+    final busy = phase == RuntimePhase.starting || stopping;
     final Widget child;
     if (busy) {
+      final label = stopping ? '停止中…' : '启动中…';
       child = busySpinner
-          ? const Center(
-              key: ValueKey('start-stop-busy'),
+          ? Center(
+              key: ValueKey(phase),
               child: SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  semanticsLabel: label,
+                ),
               ),
             )
           : OutlinedButton.icon(
-              key: const ValueKey('start-stop-busy'),
+              key: ValueKey(phase),
               style: _outlinedStyle,
               onPressed: null,
-              icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: Text(busyLabel),
+              icon: Icon(
+                stopping
+                    ? Icons.stop_circle_outlined
+                    : Icons.play_arrow_rounded,
+                size: 20,
+              ),
+              label: Text(label),
             );
-    } else if (running) {
+    } else if (phase == RuntimePhase.running) {
       child = OutlinedButton.icon(
         key: const ValueKey('start-stop-stop'),
         style: _outlinedStyle,
@@ -89,7 +97,20 @@ class StartStopButton extends StatelessWidget {
         layoutBuilder: (current, previous) => Stack(
           fit: StackFit.expand,
           alignment: Alignment.center,
-          children: [...previous, ?current],
+          children: [
+            for (final button in [...previous, ?current])
+              IgnorePointer(
+                key: button.key,
+                ignoring: button != current,
+                child: ExcludeSemantics(
+                  excluding: button != current,
+                  child: ExcludeFocus(
+                    excluding: button != current,
+                    child: button,
+                  ),
+                ),
+              ),
+          ],
         ),
         transitionBuilder: (child, animation) =>
             FadeTransition(opacity: animation, child: child),

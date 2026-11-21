@@ -11,6 +11,7 @@ import '../core/model/profile.dart';
 import 'chips.dart';
 import 'sheets/sectioned_picker.dart';
 import 'widgets.dart';
+import 'widgets/runtime_status.dart';
 import 'widgets/start_stop_button.dart';
 import 'motion.dart';
 import 'startup_issues_dialog.dart';
@@ -86,19 +87,10 @@ class _OverviewPageState extends State<OverviewPage> {
     });
   }
 
-  bool get _running => widget.runtime.phase == RuntimePhase.running;
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final runtime = widget.runtime;
-    final semantic = context.semantic;
-    final statusColor = switch (runtime.phase) {
-      RuntimePhase.running => semantic.ok,
-      RuntimePhase.starting || RuntimePhase.stopping => semantic.warn,
-      RuntimePhase.error => semantic.danger,
-      RuntimePhase.idle => scheme.onSurfaceVariant,
-    };
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -114,12 +106,7 @@ class _OverviewPageState extends State<OverviewPage> {
               children: [
                 MicroLabel('OVERVIEW', color: scheme.onSurfaceVariant),
                 const SizedBox(height: Insets.sm),
-                _StatusCard(
-                  runtime: runtime,
-                  statusColor: statusColor,
-                  history: _history,
-                  running: _running,
-                ),
+                _StatusCard(runtime: runtime, history: _history),
               ],
             ),
           ),
@@ -179,17 +166,10 @@ class _OverviewPageState extends State<OverviewPage> {
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({
-    required this.runtime,
-    required this.statusColor,
-    required this.history,
-    required this.running,
-  });
+  const _StatusCard({required this.runtime, required this.history});
 
   final RuntimeController runtime;
-  final Color statusColor;
   final List<double> history;
-  final bool running;
 
   /// 启动前校验有错误时，先弹清单让用户确认；确认后强制启动。
   Future<void> _startKernel(BuildContext context) async {
@@ -200,64 +180,18 @@ class _StatusCard extends StatelessWidget {
     if (force) await runtime.start(force: true);
   }
 
-  String get _phaseLabel => switch (runtime.phase) {
-    RuntimePhase.idle => 'IDLE · 未运行',
-    RuntimePhase.starting => 'STARTING · 启动中',
-    RuntimePhase.running => 'RUNNING · 运行中',
-    RuntimePhase.stopping => 'STOPPING · 停止中',
-    RuntimePhase.error => 'ERROR · 出错',
-  };
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final semantic = context.semantic;
+    final phase = runtime.phase;
+    final running = phase == RuntimePhase.running;
     return AppCard(
-      accent: statusColor,
+      accent: runtimeStatusColor(context, phase),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              StatusDot(color: statusColor, size: 7, pulsing: running),
-              const SizedBox(width: Insets.sm),
-              // 状态文字用 AnimatedSwitcher 淡入淡出 + 尺寸过渡：
-              // starting/stopping 这类中间态连续切换时不闪、不抖。
-              AnimatedSize(
-                duration: Motion.of(context).expand,
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.centerLeft,
-                child: AnimatedSwitcher(
-                  duration: Motion.of(context).expand,
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeOutCubic,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axis: Axis.horizontal,
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    _phaseLabel,
-                    key: ValueKey(_phaseLabel),
-                    style: mono(
-                      11,
-                      weight: 700,
-                      color: statusColor,
-                    ).copyWith(letterSpacing: 0.8),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (runtime.pid != null && runtime.pid! > 0)
-                Text(
-                  'PID ${runtime.pid}',
-                  style: mono(10.5, color: scheme.onSurfaceVariant),
-                ),
-            ],
-          ),
+          RuntimeStatusHeader(phase: phase, pid: runtime.pid),
           const SizedBox(height: Insets.lg),
           Row(
             children: [
@@ -281,35 +215,38 @@ class _StatusCard extends StatelessWidget {
               ),
             ],
           ),
-          if (running && history.length > 1) ...[
-            const SizedBox(height: Insets.sm),
-            Sparkline(values: history, color: semantic.ok),
-          ],
+          RuntimeTrafficChart(running: running, values: history),
           const SizedBox(height: Insets.lg),
           StartStopButton(
-            running: running,
-            busy: runtime.isBusy,
+            phase: phase,
             busySpinner: true,
             onStart: () => _startKernel(context),
             onStop: () => runtime.stop(),
           ),
-          if (runtime.lastError != null) ...[
-            const SizedBox(height: Insets.md),
-            Text(
-              runtime.lastError!,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(height: 1.4, color: semantic.danger),
+          MotionSize(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (runtime.lastError != null) ...[
+                  const SizedBox(height: Insets.md),
+                  Text(
+                    runtime.lastError!,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(height: 1.4, color: semantic.danger),
+                  ),
+                ],
+                if (runtime.missingRuleCaches > 0) ...[
+                  const SizedBox(height: Insets.md),
+                  Text(
+                    '规则缓存缺失，${runtime.missingRuleCaches} 个规则集未生效；'
+                    '重新导入该配置的规则集即可补齐。',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(height: 1.4, color: semantic.warn),
+                  ),
+                ],
+              ],
             ),
-          ],
-          if (runtime.missingRuleCaches > 0) ...[
-            const SizedBox(height: Insets.md),
-            Text(
-              '规则缓存缺失，${runtime.missingRuleCaches} 个规则集未生效；'
-              '重新导入该配置的规则集即可补齐。',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(height: 1.4, color: semantic.warn),
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -801,36 +738,48 @@ class _LogCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: Insets.sm),
-          if (lines.isEmpty)
-            Text(
-              runtime.phase == RuntimePhase.idle ? '内核未运行，暂无日志' : '等待内核输出…',
-              style: hintStyle(context),
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(Insets.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(Insets.sm),
-                ),
-              ),
-              child: SelectableText(
-                lines.join('\n'),
-                style: mono(10.5, color: semantic.ok.withValues(alpha: 0.85)),
-                maxLines: 12,
-              ),
+          MotionSize(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (lines.isEmpty)
+                  Text(
+                    runtime.phase == RuntimePhase.idle
+                        ? '内核未运行，暂无日志'
+                        : '等待内核输出…',
+                    style: hintStyle(context),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(Insets.md),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(Insets.sm),
+                      ),
+                    ),
+                    child: SelectableText(
+                      lines.join('\n'),
+                      style: mono(
+                        10.5,
+                        color: semantic.ok.withValues(alpha: 0.85),
+                      ),
+                      maxLines: 12,
+                    ),
+                  ),
+                if (runtime.lastError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Insets.sm),
+                    child: Text(
+                      runtime.lastError!,
+                      style: Theme.of(context).textTheme.labelMedium
+                          ?.copyWith(height: 1.4, color: semantic.danger),
+                    ),
+                  ),
+              ],
             ),
-          if (runtime.lastError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Insets.sm),
-              child: Text(
-                runtime.lastError!,
-                style: Theme.of(context).textTheme.labelMedium
-                    ?.copyWith(height: 1.4, color: semantic.danger),
-              ),
-            ),
+          ),
         ],
       ),
     );

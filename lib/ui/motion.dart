@@ -89,6 +89,24 @@ class Motion {
   Curve get exit => Curves.easeInCubic;
 }
 
+/// 内容增减时平滑调整区块尺寸，后续内容随之移动。
+class MotionSize extends StatelessWidget {
+  const MotionSize({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = Motion.of(context);
+    return AnimatedSize(
+      duration: motion.expand,
+      curve: motion.enter,
+      alignment: Alignment.topLeft,
+      child: child,
+    );
+  }
+}
+
 /// 单项进场：fade + 0.98→1 缩放。
 ///
 /// 只包变化的那一项（新加的成员 chip、新插入的行），**不要**包整张列表，

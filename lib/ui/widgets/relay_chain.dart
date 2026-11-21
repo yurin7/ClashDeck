@@ -165,7 +165,7 @@ class _RelayChainState extends State<RelayChain>
       group == widget.group.name &&
           from >= 0 &&
           from < widget.group.members.length,
-    DragNodeData(:final node) => !widget.group.members.contains(node),
+    DragNodeData(:final name) => !widget.group.members.contains(name),
     _ => false,
   };
 
@@ -296,8 +296,8 @@ class _RelayChainState extends State<RelayChain>
       final center =
           (details.offset & (dragState.feedbackSize ?? Size.zero)).center;
       final gap = _nearestInsertion(ids, center);
-      _rememberDrop(data.node, gap, details.offset);
-      widget.onInsertAt(data.node, gap);
+      _rememberDrop(data.name, gap, details.offset);
+      widget.onInsertAt(data.name, gap);
     }
   }
 

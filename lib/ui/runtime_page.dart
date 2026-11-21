@@ -2,9 +2,11 @@ import 'package:material_ui/material_ui.dart';
 
 import '../runtime/runtime_controller.dart';
 import '../state/editor_state.dart';
+import 'motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/delay_badge.dart';
+import 'widgets/runtime_status.dart';
 import 'widgets/start_stop_button.dart';
 import './widgets/app_ink.dart';
 import './widgets/select_sheet.dart';
@@ -95,10 +97,14 @@ class _RuntimePageState extends State<RuntimePage> {
             ),
             children: [
               _statusCard(phase),
-              if (_controller.lastError != null) ...[
-                const SizedBox(height: Insets.md),
-                _errorCard(),
-              ],
+              MotionSize(
+                child: _controller.lastError == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: Insets.md),
+                        child: _errorCard(),
+                      ),
+              ),
               if (!RuntimeController.supported) ...[
                 const SizedBox(height: Insets.md),
                 AppCard(
@@ -115,15 +121,22 @@ class _RuntimePageState extends State<RuntimePage> {
               const SizedBox(height: Insets.xl),
               SectionTitle(title: '配置', icon: Icons.description_outlined),
               _configCard(),
-              if (phase == RuntimePhase.running) ...[
-                const SizedBox(height: Insets.xl),
-                SectionTitle(
-                  title: '运行期策略组',
-                  subtitle: '点一行切换节点，右下角可测速',
-                  icon: Icons.hub_outlined,
-                ),
-                _groupsCard(),
-              ],
+              MotionSize(
+                child: phase == RuntimePhase.running
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: Insets.xl),
+                          SectionTitle(
+                            title: '运行期策略组',
+                            subtitle: '点一行切换节点，右下角可测速',
+                            icon: Icons.hub_outlined,
+                          ),
+                          _groupsCard(),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
               const SizedBox(height: Insets.xl),
               _logsCard(),
             ],
@@ -138,40 +151,17 @@ class _RuntimePageState extends State<RuntimePage> {
   Widget _statusCard(RuntimePhase phase) {
     final scheme = Theme.of(context).colorScheme;
     final semantic = context.semantic;
-    final (label, dot) = switch (phase) {
-      RuntimePhase.idle => ('IDLE · 未运行', scheme.onSurfaceVariant),
-      RuntimePhase.starting => ('STARTING · 启动中', semantic.warn),
-      RuntimePhase.running => ('RUNNING · 运行中', semantic.ok),
-      RuntimePhase.stopping => ('STOPPING · 停止中', semantic.warn),
-      RuntimePhase.error => ('ERROR · 出错', semantic.danger),
-    };
-    final busy = _controller.isBusy;
     final running = phase == RuntimePhase.running;
 
     return AppCard(
-      accent: running ? semantic.ok : null,
+      // 保持状态卡结构，启停时保留内部过渡的 widget 状态。
+      accent: running ? semantic.ok : Colors.transparent,
       color: running ? scheme.primary.withValues(alpha: 0.05) : null,
       padding: const EdgeInsets.all(Insets.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              StatusDot(color: dot, size: 7, pulsing: running),
-              const SizedBox(width: Insets.sm),
-              Expanded(
-                child: Text(
-                  label,
-                  style: mono(11, color: dot, weight: 700, letterSpacing: 0.8),
-                ),
-              ),
-              if (_controller.pid != null && _controller.pid! > 0)
-                Text(
-                  'PID ${_controller.pid}',
-                  style: mono(10.5, color: scheme.onSurfaceVariant),
-                ),
-            ],
-          ),
+          RuntimeStatusHeader(phase: phase, pid: _controller.pid),
           const SizedBox(height: Insets.lg),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -198,14 +188,15 @@ class _RuntimePageState extends State<RuntimePage> {
               ),
             ],
           ),
-          if (running && _history.length > 1) ...[
-            const SizedBox(height: Insets.md),
-            Sparkline(values: _history, color: semantic.ok, height: 42),
-          ],
+          RuntimeTrafficChart(
+            running: running,
+            values: _history,
+            spacing: Insets.md,
+            height: 42,
+          ),
           const SizedBox(height: Insets.lg),
           StartStopButton(
-            running: running,
-            busy: busy,
+            phase: phase,
             onStart: _controller.start,
             onStop: _controller.stop,
           ),
@@ -442,21 +433,23 @@ class _RuntimePageState extends State<RuntimePage> {
               ),
             ],
           ),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxHeight: 300),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(Radiuses.sm),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(Insets.md),
-              child: SelectableText(
-                tail.isEmpty ? '（还没有日志）' : tail.join('\n'),
-                style: monoStyle(
-                  context,
-                  size: 11.5,
-                  color: scheme.onSurfaceVariant,
+          MotionSize(
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 300),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(Radiuses.sm),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(Insets.md),
+                child: SelectableText(
+                  tail.isEmpty ? '（还没有日志）' : tail.join('\n'),
+                  style: monoStyle(
+                    context,
+                    size: 11.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),

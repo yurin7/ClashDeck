@@ -11,7 +11,7 @@ void main() {
 
   test('开始拖拽记录源位置，结束后可取回弹请求', () {
     state.begin(
-      node: '日本 01',
+      member: '日本 01',
       group: 'DEFAULT',
       sourceRect: const Rect.fromLTWH(12, 30, 100, 36),
       feedbackSize: const Size(100, 36),
@@ -24,7 +24,7 @@ void main() {
 
     final snap = state.takeSnapBack();
     expect(snap, isNotNull);
-    expect(snap!.node, '日本 01');
+    expect(snap!.member, '日本 01');
     expect(snap.fromGroup, 'DEFAULT');
     expect(snap.sourceRect, const Rect.fromLTWH(12, 30, 100, 36));
     expect(snap.endOffset, const Offset(200, 300));
@@ -41,7 +41,7 @@ void main() {
 
   test('落在合法目标上不回弹', () {
     state.begin(
-      node: 'a',
+      member: 'a',
       group: 'g1',
       sourceRect: const Rect.fromLTWH(0, 0, 80, 32),
       feedbackSize: const Size(80, 32),
@@ -53,7 +53,7 @@ void main() {
 
   test('重复悬停标记 blocked，回弹请求带上重复组名', () {
     state.begin(
-      node: 'a',
+      member: 'a',
       group: 'g1',
       sourceRect: const Rect.fromLTWH(0, 0, 80, 32),
       feedbackSize: const Size(80, 32),

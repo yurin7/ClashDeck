@@ -3,7 +3,7 @@ import 'package:material_ui/material_ui.dart';
 /// 一次拖拽结束时的回弹请求：把拖拽浮层从落点滑回源胶囊的位置。
 class DragSnapBack {
   const DragSnapBack({
-    required this.node,
+    required this.member,
     required this.fromGroup,
     required this.sourceRect,
     required this.endOffset,
@@ -11,26 +11,26 @@ class DragSnapBack {
     this.duplicateGroup,
   });
 
-  final String node;
+  final String member;
   final String? fromGroup;
   final Rect sourceRect;
   final Offset endOffset;
   final Size feedbackSize;
 
-  /// 非空表示这次拖拽撞上了「组里已有该节点」，回弹结束后要提示。
+  /// 非空表示目标组已有该成员，回弹结束后要提示。
   final String? duplicateGroup;
 }
 
 /// 跨组件共享的拖拽状态：
 ///
-/// - `NodeChip` 在拖拽开始时登记源位置，结束时登记落点；
-/// - 组卡的 `DragTarget` 在悬停到「已含该节点」的组时标记重复；
+/// - 成员胶囊在拖拽开始时登记源位置，结束时登记落点；
+/// - 组卡的 `DragTarget` 在悬停到已有该成员的组时标记重复；
 /// - `ProxyBoard` 用源位置与落点播放一次 240ms 的回弹动画。
 class DragState extends ChangeNotifier {
   bool _dragging = false;
   bool _accepted = false;
   bool _animating = false;
-  String? _nodeName;
+  String? _memberName;
   String? _fromGroup;
   Rect? _sourceRect;
   Size? _feedbackSize;
@@ -46,8 +46,6 @@ class DragState extends ChangeNotifier {
 
   String? get duplicateGroup => _duplicateGroup;
 
-  String? get nodeName => _nodeName;
-
   String? get fromGroup => _fromGroup;
 
   Rect? get sourceRect => _sourceRect;
@@ -55,7 +53,7 @@ class DragState extends ChangeNotifier {
   Size? get feedbackSize => _feedbackSize;
 
   void begin({
-    required String node,
+    required String member,
     String? group,
     required Rect sourceRect,
     required Size feedbackSize,
@@ -63,7 +61,7 @@ class DragState extends ChangeNotifier {
     _dragging = true;
     _accepted = false;
     _animating = false;
-    _nodeName = node;
+    _memberName = member;
     _fromGroup = group;
     _sourceRect = sourceRect;
     _feedbackSize = feedbackSize;
@@ -72,7 +70,7 @@ class DragState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 悬停在「已含该节点」的组上；传 null 清除。
+  /// 悬停在已有该成员的组上；传 null 清除。
   void hintDuplicate(String? group) {
     if (_duplicateGroup == group) return;
     _duplicateGroup = group;
@@ -99,7 +97,7 @@ class DragState extends ChangeNotifier {
       _sourceRect = null;
       _feedbackSize = null;
       _endOffset = null;
-      _nodeName = null;
+      _memberName = null;
       _fromGroup = null;
       _duplicateGroup = null;
     }
@@ -112,14 +110,14 @@ class DragState extends ChangeNotifier {
     final source = _sourceRect;
     final end = _endOffset;
     final size = _feedbackSize;
-    final node = _nodeName;
-    if (source == null || end == null || size == null || node == null) {
+    final member = _memberName;
+    if (source == null || end == null || size == null || member == null) {
       return null;
     }
     if (_animating) return null;
     _animating = true;
     return DragSnapBack(
-      node: node,
+      member: member,
       fromGroup: _fromGroup,
       sourceRect: source,
       endOffset: end,
@@ -134,7 +132,7 @@ class DragState extends ChangeNotifier {
     _sourceRect = null;
     _feedbackSize = null;
     _endOffset = null;
-    _nodeName = null;
+    _memberName = null;
     _fromGroup = null;
     _duplicateGroup = null;
     notifyListeners();
@@ -144,7 +142,7 @@ class DragState extends ChangeNotifier {
     _dragging = false;
     _accepted = false;
     _animating = false;
-    _nodeName = null;
+    _memberName = null;
     _fromGroup = null;
     _sourceRect = null;
     _feedbackSize = null;

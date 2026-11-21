@@ -34,7 +34,7 @@ void main() {
     final baseChips = find.byType(NodeChip).evaluate().length;
 
     dragState.begin(
-      node: 'a',
+      member: 'a',
       group: 'DEFAULT',
       sourceRect: const Rect.fromLTWH(24, 360, 120, 36),
       feedbackSize: const Size(120, 36),

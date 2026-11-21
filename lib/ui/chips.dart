@@ -19,15 +19,22 @@ Color chipSelectionColor(ColorScheme scheme) =>
 
 const double kChipRadius = 9;
 
-/// 拖拽节点时携带的数据。
+/// 跨组移动时携带的成员和来源组。
 ///
-/// 从「未归类节点」拖出时 [fromGroup] 为 null；放进组卡的 [DragTarget] 时
-/// 需要知道来源组，才能把成员从旧组里摘掉。
-class DragNodeData {
-  const DragNodeData(this.node, this.fromGroup);
+/// 从节点列表拖出时 [fromGroup] 为 null。
+sealed class DragMemberData {
+  const DragMemberData(this.name, this.fromGroup);
 
-  final String node;
+  final String name;
   final String? fromGroup;
+}
+
+class DragNodeData extends DragMemberData {
+  const DragNodeData(super.name, super.fromGroup);
+}
+
+class DragGroupData extends DragMemberData {
+  const DragGroupData(super.name, String super.fromGroup);
 }
 
 /// 内置出站（DIRECT / REJECT / PASS…）用的小图标。
@@ -365,10 +372,92 @@ class NodeChip extends StatelessWidget {
 
     if (!draggable) return shell;
 
-    return ListenableBuilder(
+    return _DraggableChip(
+      data: dragData ?? DragNodeData(node.name, fromGroup),
+      name: node.name,
+      fromGroup: fromGroup,
+      shell: shell,
+      placeholder: dragPlaceholder,
+      child: GestureDetector(
+        onSecondaryTapDown: (details) async {
+          final choice = await showMenu<String>(
+            context: context,
+            position: RelativeRect.fromLTRB(
+              details.globalPosition.dx,
+              details.globalPosition.dy,
+              details.globalPosition.dx,
+              details.globalPosition.dy,
+            ),
+            items: const [
+              PopupMenuItem(value: 'edit', child: Text('编辑节点')),
+              PopupMenuItem(value: 'move', child: Text('移动到…')),
+              PopupMenuItem(value: 'delete', child: Text('删除节点')),
+            ],
+          );
+          switch (choice) {
+            case 'edit':
+              onOpen();
+            case 'move':
+              onMove();
+            case 'delete':
+              onDelete();
+          }
+        },
+        child: Tooltip(
+          message: onSelect != null
+              ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
+              : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
+          triggerMode: TooltipTriggerMode.manual,
+          child: shell,
+        ),
+      ),
+    );
+  }
+}
+
+/// 节点、链节和策略组胶囊共用长按拿起、浮层及占位。
+class _DraggableChip extends StatefulWidget {
+  const _DraggableChip({
+    required this.data,
+    required this.name,
+    required this.fromGroup,
+    required this.shell,
+    this.child,
+    this.placeholder,
+    this.holdTooltip,
+  });
+
+  final Object data;
+  final String name;
+  final String? fromGroup;
+  final Widget shell;
+  final Widget? child;
+  final Widget? placeholder;
+  final String? holdTooltip;
+
+  @override
+  State<_DraggableChip> createState() => _DraggableChipState();
+}
+
+class _DraggableChipState extends State<_DraggableChip> {
+  late final _tooltipKey = GlobalKey<TooltipState>();
+  bool _holdingTooltip = false;
+
+  void _dismissHoldTooltip() {
+    if (!_holdingTooltip) return;
+    _holdingTooltip = false;
+    Tooltip.dismissAllToolTips();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final shell = widget.shell;
+    final holdTooltip = widget.holdTooltip;
+    final draggable = ListenableBuilder(
       listenable: dragState,
       builder: (context, _) => LongPressDraggable<Object>(
-        data: dragData ?? DragNodeData(node.name, fromGroup),
+        data: widget.data,
         // 回弹动画期间不允许再起拖，避免两层浮层叠在一起。
         maxSimultaneousDrags: dragState.animating ? 0 : null,
         // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
@@ -379,13 +468,21 @@ class NodeChip extends StatelessWidget {
           final box = context.findRenderObject() as RenderBox?;
           if (box == null || !box.hasSize) return;
           dragState.begin(
-            node: node.name,
-            group: fromGroup,
+            member: widget.name,
+            group: widget.fromGroup,
             sourceRect: box.localToGlobal(Offset.zero) & box.size,
             feedbackSize: box.size,
           );
+          if (holdTooltip != null) {
+            _holdingTooltip = true;
+            _tooltipKey.currentState?.ensureTooltipVisible();
+          }
         },
-        onDragEnd: (details) => dragState.end(details.offset),
+        onDragUpdate: holdTooltip == null ? null : (_) => _dismissHoldTooltip(),
+        onDragEnd: (details) {
+          _dismissHoldTooltip();
+          dragState.end(details.offset);
+        },
         feedback: Material(
           color: Colors.transparent,
           child: Opacity(
@@ -422,43 +519,17 @@ class NodeChip extends StatelessWidget {
           ),
         ),
         childWhenDragging:
-            dragPlaceholder ?? Opacity(opacity: 0.3, child: shell),
-        child: GestureDetector(
-          onSecondaryTapDown: (details) async {
-            final choice = await showMenu<String>(
-              context: context,
-              position: RelativeRect.fromLTRB(
-                details.globalPosition.dx,
-                details.globalPosition.dy,
-                details.globalPosition.dx,
-                details.globalPosition.dy,
-              ),
-              items: const [
-                PopupMenuItem(value: 'edit', child: Text('编辑节点')),
-                PopupMenuItem(value: 'move', child: Text('移动到…')),
-                PopupMenuItem(value: 'delete', child: Text('删除节点')),
-              ],
-            );
-            switch (choice) {
-              case 'edit':
-                onOpen();
-              case 'move':
-                onMove();
-              case 'delete':
-                onDelete();
-            }
-          },
-          child: Tooltip(
-            message: onSelect != null
-                ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
-                : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
-            // 关键：默认 triggerMode 是 longPress，会和 LongPressDraggable 抢手势，
-            // 结果长按只弹提示、拖不起来。这里改成只能代码触发。
-            triggerMode: TooltipTriggerMode.manual,
-            child: shell,
-          ),
-        ),
+            widget.placeholder ?? Opacity(opacity: 0.3, child: shell),
+        child: widget.child ?? shell,
       ),
+    );
+    if (holdTooltip == null) return draggable;
+    // Tooltip 放在拖拽控件外，换成占位时描述仍能留在原处并淡出。
+    return Tooltip(
+      key: _tooltipKey,
+      message: holdTooltip,
+      triggerMode: TooltipTriggerMode.manual,
+      child: draggable,
     );
   }
 }
@@ -505,6 +576,7 @@ class GroupChip extends StatelessWidget {
     this.onTap,
     this.onRemove,
     this.tooltip,
+    this.fromGroup,
   });
 
   final String name;
@@ -516,6 +588,9 @@ class GroupChip extends StatelessWidget {
   /// 非空表示这是某个组的成员，可以点 × 移除。
   final VoidCallback? onRemove;
   final String? tooltip;
+
+  /// 组内引用的来源。提供来源时可长按移动这条引用。
+  final String? fromGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -551,6 +626,16 @@ class GroupChip extends StatelessWidget {
         ],
       ),
     );
+    final source = fromGroup;
+    if (source != null) {
+      return _DraggableChip(
+        data: DragGroupData(name, source),
+        name: name,
+        fromGroup: source,
+        shell: chip,
+        holdTooltip: tooltip,
+      );
+    }
     return tooltip == null ? chip : Tooltip(message: tooltip!, child: chip);
   }
 }

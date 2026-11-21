@@ -4,6 +4,9 @@
 /// 行为测试（同组/重复/relay）直接断言这里比驱动真实手势更稳。
 library;
 
+import '../../core/edit/config_ops.dart';
+import '../../core/model/profile.dart';
+
 /// 组卡是否应该接受这次节点拖放。
 ///
 /// - 链式组只接受链内间隙拖拽，整卡一律拒绝；
@@ -27,3 +30,42 @@ bool shouldHintDuplicate({
   required String targetGroup,
   required bool alreadyMember,
 }) => fromGroup == targetGroup || alreadyMember;
+
+/// 只有可编辑的手动选择组能接收其他策略组。
+bool acceptsGroupMembers(GroupEntry group) =>
+    group.type == 'select' &&
+    !group.computedMembers &&
+    group.name != kAutoGroupName &&
+    !Profile.builtinTargets.contains(group.name);
+
+/// 跨组移动的是一条引用，落点不能让被引用的组绕回来引用自己。
+bool shouldAcceptGroupDrop({
+  required Map<String, GroupEntry> groups,
+  required String name,
+  required String? fromGroup,
+  required String targetGroup,
+}) {
+  final source = groups[fromGroup];
+  final target = groups[targetGroup];
+  if (source == null ||
+      source.computedMembers ||
+      source.name == kAutoGroupName ||
+      !source.members.contains(name) ||
+      !groups.containsKey(name) ||
+      target == null ||
+      !acceptsGroupMembers(target) ||
+      target.name == fromGroup ||
+      target.members.contains(name)) {
+    return false;
+  }
+
+  final pending = [name];
+  final visited = <String>{};
+  while (pending.isNotEmpty) {
+    final member = pending.removeLast();
+    if (member == targetGroup) return false;
+    if (!visited.add(member)) continue;
+    if (groups[member] case final group?) pending.addAll(group.members);
+  }
+  return true;
+}

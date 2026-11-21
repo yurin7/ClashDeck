@@ -1,20 +1,69 @@
 import 'dart:io';
-import 'dart:ui' show PointerDeviceKind;
+import 'dart:ui' show ImageByteFormat, PointerDeviceKind;
 
 import 'package:clashdeck/data/profile_store.dart';
 import 'package:clashdeck/state/editor_state.dart';
 import 'package:clashdeck/ui/desktop_profiles.dart';
+import 'package:clashdeck/ui/desktop_window.dart';
 import 'package:clashdeck/ui/desktop_workspace.dart';
 import 'package:clashdeck/ui/editor_page.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:clashdeck/ui/raw_yaml_tab.dart';
 import 'package:clashdeck/ui/theme.dart';
 import 'package:clashdeck/ui/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 void main() {
+  testWidgets('鼠标离开窗口按钮后恢复初始底色', (tester) async {
+    final boundaryKey = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        home: Scaffold(
+          body: Center(
+            child: RepaintBoundary(
+              key: boundaryKey,
+              child: const DesktopWindowCaption(),
+            ),
+          ),
+        ),
+      ),
+    );
+    Future<int?> sample() => tester.runAsync(() async {
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final image = await boundary.toImage();
+      try {
+        final rgba = await image.toByteData(format: ImageByteFormat.rawRgba);
+        return rgba!.getUint32((image.width * 16 + 12) * 4);
+      } finally {
+        image.dispose();
+      }
+    });
+
+    final caption = tester.getTopLeft(find.byType(DesktopWindowCaption));
+    final outside = caption + const Offset(-30, 16);
+    final inside = caption + const Offset(12, 16);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: outside);
+    await tester.pumpAndSettle();
+    final initial = await sample();
+    expect(initial, isNotNull);
+
+    await mouse.moveTo(inside);
+    await tester.pumpAndSettle();
+    expect(await sample(), isNot(initial));
+
+    await mouse.moveTo(outside);
+    await tester.pumpAndSettle();
+    expect(await sample(), initial);
+    await mouse.removePointer();
+  });
+
   testWidgets('桌面工作区切换配置前保留修改，Ctrl+S 保存源码', (tester) async {
     final workspace = Directory.systemTemp.createTempSync('clashdeck_desktop_');
     addTearDown(() => workspace.deleteSync(recursive: true));
@@ -154,6 +203,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('重命名'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '搜索操作或配置'), '查看');
+    await tester.pumpAndSettle();
+    expect(find.text('查看连接'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('暂无内核日志'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

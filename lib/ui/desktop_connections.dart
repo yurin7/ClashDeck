@@ -9,6 +9,8 @@ import 'widgets.dart';
 import 'widgets/app_ink.dart';
 import 'widgets/edit_dialog.dart';
 
+enum _ConnectionOrder { time, download, upload }
+
 class DesktopConnections extends StatefulWidget {
   const DesktopConnections({
     super.key,
@@ -16,11 +18,13 @@ class DesktopConnections extends StatefulWidget {
     required this.visible,
     required this.searchFocus,
     required this.onOpenOverview,
+    this.inspectProcess,
   });
 
   final WindowsConnectionMonitor monitor;
   final bool visible;
   final FocusNode searchFocus;
+  final String? inspectProcess;
   final VoidCallback onOpenOverview;
 
   @override
@@ -33,6 +37,7 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
   String? _group;
   String? _process;
   String? _rule;
+  var _order = _ConnectionOrder.time;
 
   WindowsConnectionMonitor get _monitor => widget.monitor;
 
@@ -48,6 +53,15 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.visible != widget.visible) {
       _monitor.setVisible(widget.visible);
+    }
+    if (widget.inspectProcess != null &&
+        oldWidget.inspectProcess != widget.inspectProcess) {
+      _search.clear();
+      _closed = false;
+      _group = null;
+      _rule = null;
+      _process = widget.inspectProcess;
+      _order = _ConnectionOrder.download;
     }
   }
 
@@ -68,6 +82,51 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
     _process = null;
     _rule = null;
   });
+
+  int _sortScore(WindowsConnection entry) => switch (_order) {
+    _ConnectionOrder.time => entry.startedAt?.microsecondsSinceEpoch ?? 0,
+    _ConnectionOrder.download =>
+      _closed ? entry.downloaded : entry.downRate ?? -1,
+    _ConnectionOrder.upload => _closed ? entry.uploaded : entry.upRate ?? -1,
+  };
+
+  Widget _sortHeader(String label, _ConnectionOrder order) {
+    final selected = _order == order;
+    final colors = Theme.of(context).colorScheme;
+    final unit = _closed ? '流量' : '速率';
+    return Tooltip(
+      message: selected ? '恢复默认顺序' : '按$label$unit排序',
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: AppInkWell(
+          borderRadius: BorderRadius.circular(Radiuses.xs),
+          onTap: () => setState(() {
+            _order = selected ? _ConnectionOrder.time : order;
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Insets.sm),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    style: selected ? TextStyle(color: colors.primary) : null,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: Insets.xs),
+                  Icon(Icons.arrow_downward, size: 12, color: colors.primary),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _disconnect({String? id}) async {
     if (id == null) {
@@ -166,12 +225,11 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
         entries.add(entry);
       }
     }
-    if (!_closed) {
-      entries.sort(
-        (a, b) => (b.startedAt?.microsecondsSinceEpoch ?? 0).compareTo(
-          a.startedAt?.microsecondsSinceEpoch ?? 0,
-        ),
-      );
+    if (!_closed || _order != _ConnectionOrder.time) {
+      entries.sort((a, b) {
+        final byScore = _sortScore(b).compareTo(_sortScore(a));
+        return byScore != 0 ? byScore : a.id.compareTo(b.id);
+      });
     }
     final colors = Theme.of(context).colorScheme;
     return Padding(
@@ -315,12 +373,15 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
                       height: 36,
                       child: DefaultTextStyle(
                         style: display(11, color: colors.onSurfaceVariant),
-                        child: const _ConnectionColumns(
-                          destination: Text('主机'),
-                          process: Text('进程'),
-                          route: Text('链路 / 规则'),
-                          download: Text('下载'),
-                          upload: Text('上传'),
+                        child: _ConnectionColumns(
+                          destination: const Text('主机'),
+                          process: const Text('进程'),
+                          route: const Text('链路 / 规则'),
+                          download: _sortHeader(
+                            '下载',
+                            _ConnectionOrder.download,
+                          ),
+                          upload: _sortHeader('上传', _ConnectionOrder.upload),
                         ),
                       ),
                     ),

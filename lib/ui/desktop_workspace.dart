@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show FileSystemException;
-import 'dart:math' show Random;
+import 'dart:math' show Random, min;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/services.dart';
@@ -19,15 +19,20 @@ import '../runtime/runtime_controller.dart';
 import '../runtime/windows_connections.dart';
 import '../runtime/windows_kernel.dart';
 import '../state/settings_state.dart';
+import 'desktop_commands.dart';
 import 'desktop_connections.dart';
 import 'desktop_overview.dart';
 import 'desktop_profiles.dart';
 import 'desktop_window.dart';
 import 'editor_page.dart';
 import 'home_page.dart';
+import 'motion.dart';
+import 'startup_issues_dialog.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'widgets/delete_confirm.dart';
+import 'widgets/edit_dialog.dart';
+import 'widgets/runtime_status.dart';
 import 'widgets/text_input_dialog.dart';
 
 /// 桌面工作区，配置可在同一窗口选用和编辑。
@@ -42,7 +47,8 @@ class DesktopWorkspace extends StatefulWidget {
 
 enum _DesktopPage { overview, profiles, connections, edit }
 
-class _DesktopWorkspaceState extends State<DesktopWorkspace> {
+class _DesktopWorkspaceState extends State<DesktopWorkspace>
+    with SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _connectionSearchFocus = FocusNode();
@@ -50,6 +56,9 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   late final AppLifecycleListener _lifecycle;
   late final RuntimeController _runtime;
   late final WindowsConnectionMonitor _connections;
+  late final AnimationController _pageMotion;
+  late final Animation<double> _pageFade;
+  late final Animation<Offset> _pageSlide;
   AppPrefs? _prefs;
   SettingsState? _activeSettings;
   static final _emptyDoc = YamlDoc.parse('proxies: []');
@@ -60,11 +69,13 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   Map<String, DesktopProfileInfo> _profileInfo = const {};
   String? _current;
   String? _switchingFile;
+  String? _inspectProcess;
   RuntimePhase _phase = RuntimePhase.idle;
   String? _error;
   bool _loading = true;
   bool _busy = false;
   bool _admin = false;
+  bool _commandsOpen = false;
 
   String get _activeStatus => switch (_phase) {
     RuntimePhase.running => _runtime.isTemporaryConfig ? '测速中' : '运行中',
@@ -82,6 +93,12 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   @override
   void initState() {
     super.initState();
+    _pageMotion = AnimationController(vsync: this, value: 1);
+    final enter = _pageMotion.drive(CurveTween(curve: Motion.normal.enter));
+    _pageFade = enter.drive(Tween(begin: 0.68, end: 1));
+    _pageSlide = enter.drive(
+      Tween(begin: const Offset(0, 0.01), end: Offset.zero),
+    );
     final random = Random.secure();
     _runtime = RuntimeController(
       configProvider: () => _activeSettings?.doc ?? _emptyDoc,
@@ -101,6 +118,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
 
   @override
   void dispose() {
+    _pageMotion.dispose();
     _lifecycle.dispose();
     _searchFocus.dispose();
     _connectionSearchFocus.dispose();
@@ -174,7 +192,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
         _loading = false;
         _error = null;
         if (next != _current) _selectFile(next);
-        if (select != null) _page = _DesktopPage.edit;
+        if (select != null) _showPage(_DesktopPage.edit);
       });
       oldSettings?.dispose();
       await _loadProfileInfo(items);
@@ -234,13 +252,35 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     }
     setState(() {
       _selectFile(profile.fileName);
-      _page = _DesktopPage.edit;
+      _showPage(_DesktopPage.edit);
     });
   });
 
   Future<void> _navigate(_DesktopPage page) => _withProfileAction(() async {
     if (_page == page || !await _canLeave() || !mounted) return;
-    setState(() => _page = page);
+    setState(() => _showPage(page));
+  });
+
+  void _showPage(_DesktopPage page) {
+    if (_page == page) return;
+    _page = page;
+    if (page != _DesktopPage.connections) _inspectProcess = null;
+    final motion = Motion.of(context);
+    if (motion.reduceMotion) {
+      _pageMotion.value = 1;
+    } else {
+      _pageMotion
+        ..duration = motion.expand
+        ..forward(from: 0);
+    }
+  }
+
+  Future<void> _inspect(String process) => _withProfileAction(() async {
+    if (!await _canLeave() || !mounted) return;
+    setState(() {
+      _inspectProcess = process;
+      _showPage(_DesktopPage.connections);
+    });
   });
 
   Future<void> _focusSearch() async {
@@ -271,6 +311,130 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       return;
     }
     if (await WindowsKernel.relaunchElevated()) await closeDesktopWindow();
+  }
+
+  Future<void> _startKernel() async {
+    if (_activeSettings == null ||
+        _busy ||
+        _runtime.isBusy ||
+        _runtime.isTemporaryConfig ||
+        _runtime.restarting) {
+      return;
+    }
+    if (_tunStack != null && !_admin) {
+      await _requestElevation();
+      return;
+    }
+    if (await _runtime.start() || !mounted) return;
+    final report = _runtime.startupReport;
+    if (report != null && await showStartupIssuesDialog(context, report)) {
+      if (mounted) await _runtime.start(force: true);
+    }
+  }
+
+  Future<void> _showLogs() async {
+    final logs = await _runtime.loadLogs();
+    if (!mounted) return;
+    await showAppDialog<void>(
+      context,
+      width: min(720, MediaQuery.sizeOf(context).width - 48),
+      builder: (context) => EditDialog(
+        title: '内核日志',
+        confirmLabel: '关闭',
+        onConfirm: () => Navigator.pop(context),
+        content: SizedBox(
+          height: 320,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              logs.isEmpty ? '暂无内核日志' : logs.join('\n'),
+              style: monoStyle(context, size: 11),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCommands() async {
+    if (_commandsOpen || _busy || _loading) return;
+    final running = _runtime.phase == RuntimePhase.running;
+    final active = _profiles
+        .where((profile) => profile.fileName == _activeSettings?.fileName)
+        .firstOrNull;
+    final canChangeRuntime =
+        !_runtime.isBusy && !_runtime.restarting && !_runtime.isTemporaryConfig;
+    _commandsOpen = true;
+    DesktopCommand? chosen;
+    try {
+      chosen = await showDesktopCommands(context, [
+        DesktopCommand(
+          icon: Icons.space_dashboard_outlined,
+          label: '前往概览',
+          keywords: '主页 流量',
+          run: () => _navigate(_DesktopPage.overview),
+        ),
+        DesktopCommand(
+          icon: Icons.layers_outlined,
+          label: '打开配置库',
+          run: () => _navigate(_DesktopPage.profiles),
+        ),
+        DesktopCommand(
+          icon: Icons.swap_vert_circle_outlined,
+          label: '查看连接',
+          keywords: '流量 进程 规则',
+          run: () => _navigate(_DesktopPage.connections),
+        ),
+        if (active != null && canChangeRuntime)
+          DesktopCommand(
+            icon: running
+                ? Icons.stop_circle_outlined
+                : Icons.play_circle_outline,
+            label: running
+                ? '停止内核'
+                : _tunStack != null && !_admin
+                ? '授权 TUN'
+                : '启动内核',
+            run: running ? _runtime.stop : _startKernel,
+          ),
+        DesktopCommand(
+          icon: Icons.terminal_outlined,
+          label: '查看内核日志',
+          keywords: '日志 诊断',
+          run: _showLogs,
+        ),
+        if (active != null)
+          DesktopCommand(
+            icon: Icons.tune,
+            label: '编辑已选配置',
+            hint: active.name,
+            run: () => _open(active),
+          ),
+        DesktopCommand(icon: Icons.add, label: '新建配置', run: _create),
+        DesktopCommand(
+          icon: Icons.file_download_outlined,
+          label: '导入配置',
+          run: _import,
+        ),
+        if (canChangeRuntime)
+          for (final profile in _profiles)
+            if (profile.fileName != _activeSettings?.fileName)
+              DesktopCommand(
+                icon: Icons.description_outlined,
+                label: '选用 ${profile.name}',
+                hint: running ? '切换时会重启内核' : profile.fileName,
+                keywords: '切换 配置 ${profile.fileName}',
+                run: () async {
+                  await _navigate(_DesktopPage.profiles);
+                  if (mounted && _page == _DesktopPage.profiles) {
+                    await _selectRuntimeProfile(profile.fileName);
+                  }
+                },
+              ),
+      ]);
+    } finally {
+      _commandsOpen = false;
+    }
+    if (mounted) chosen?.run();
   }
 
   Future<void> _selectRuntimeProfile(String fileName) =>
@@ -416,6 +580,8 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
               _import,
           const SingleActivator(LogicalKeyboardKey.keyF, control: true):
               _focusSearch,
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+              _showCommands,
         },
         child: Focus(
           autofocus: true,
@@ -456,6 +622,12 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                             padding: const EdgeInsets.fromLTRB(11, 0, 11, 14),
                             child: Column(
                               children: [
+                                DesktopCommandLauncher(
+                                  onTap: _busy || _loading
+                                      ? null
+                                      : _showCommands,
+                                ),
+                                const SizedBox(height: Insets.md),
                                 _destination(
                                   _DesktopPage.overview,
                                   Icons.space_dashboard_outlined,
@@ -482,15 +654,16 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                             padding: const EdgeInsets.fromLTRB(18, 13, 14, 14),
                             child: Row(
                               children: [
-                                Icon(
-                                  Icons.desktop_windows_outlined,
-                                  size: 16,
-                                  color: colors.onSurfaceVariant,
+                                StatusDot(
+                                  color: runtimeStatusColor(context, _phase),
+                                  size: 7,
                                 ),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
-                                    'Windows 预览',
+                                    _phase == RuntimePhase.idle
+                                        ? '内核未运行'
+                                        : '内核$_activeStatus',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: hintStyle(context),
@@ -519,101 +692,113 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                 child: const Text('重试'),
                               ),
                             )
-                          : IndexedStack(
-                              index: _page.index,
-                              children: [
-                                DesktopOverview(
-                                  runtime: _runtime,
-                                  active: active,
-                                  origin:
-                                      _profileInfo[active?.fileName]?.origin ??
-                                      ProfileOrigin.local,
-                                  profile: _activeProfile,
-                                  prefs: _prefs,
-                                  appVersion: _appVersion,
-                                  busy: _busy,
-                                  visible: _page == _DesktopPage.overview,
-                                  connectionCount: () async =>
-                                      _connections.count,
-                                  tunStack: _tunStack,
-                                  admin: _admin,
-                                  onTunStack: _setTunStack,
-                                  onRequestElevation: _requestElevation,
-                                  onOpenProfiles: () =>
-                                      _navigate(_DesktopPage.profiles),
-                                  onEditProfile: () {
-                                    if (active != null) _open(active);
-                                  },
-                                ),
-                                ExcludeFocus(
-                                  excluding: _page != _DesktopPage.profiles,
-                                  child: DesktopProfiles(
-                                    profiles: _profiles,
-                                    info: _profileInfo,
-                                    activeFile: active?.fileName,
-                                    activeStatus: _activeStatus,
-                                    switchingFile: _switchingFile,
-                                    search: _search,
-                                    searchFocus: _searchFocus,
-                                    onActivate:
-                                        _busy ||
-                                            _runtime.isBusy ||
-                                            _runtime.restarting ||
-                                            _runtime.isTemporaryConfig
-                                        ? null
-                                        : _selectRuntimeProfile,
-                                    onEdit: _busy ? null : _open,
-                                    onRename: _busy ? null : _rename,
-                                    onDelete: _busy ? null : _delete,
-                                    onCreate: _busy ? null : _create,
-                                    onImport: _busy ? null : _import,
-                                  ),
-                                ),
-                                DesktopConnections(
-                                  monitor: _connections,
-                                  visible: _page == _DesktopPage.connections,
-                                  searchFocus: _connectionSearchFocus,
-                                  onOpenOverview: () =>
-                                      _navigate(_DesktopPage.overview),
-                                ),
-                                if (_page != _DesktopPage.edit)
-                                  const SizedBox.shrink()
-                                else if (selected != null)
-                                  EditorPage(
-                                    key: _editor,
-                                    store: widget.store,
-                                    fileName: selected.fileName,
-                                    displayName: selected.name,
-                                    embedded: true,
-                                    autoSave: false,
-                                    runtime: _runtime,
-                                    isActiveProfile:
-                                        selected.fileName ==
-                                        _activeSettings?.fileName,
-                                    cachedDelays:
-                                        _prefs?.latenciesOf(
-                                          selected.fileName,
-                                        ) ??
-                                        const {},
-                                    onSaved: _load,
-                                  )
-                                else
-                                  Center(
-                                    child: EmptyHint(
-                                      icon: Icons.folder_open_outlined,
-                                      title: '打开一份配置',
-                                      message: '导入本地 YAML、节点分享链接或订阅地址。',
-                                      action: FilledButton.icon(
-                                        onPressed: _busy ? null : _import,
-                                        icon: const Icon(
-                                          Icons.file_open_outlined,
-                                          size: 17,
-                                        ),
-                                        label: const Text('导入配置'),
+                          : FadeTransition(
+                              opacity: _pageFade,
+                              child: SlideTransition(
+                                position: _pageSlide,
+                                child: IndexedStack(
+                                  index: _page.index,
+                                  children: [
+                                    DesktopOverview(
+                                      runtime: _runtime,
+                                      active: active,
+                                      origin:
+                                          _profileInfo[active?.fileName]
+                                              ?.origin ??
+                                          ProfileOrigin.local,
+                                      profile: _activeProfile,
+                                      prefs: _prefs,
+                                      appVersion: _appVersion,
+                                      busy: _busy,
+                                      visible: _page == _DesktopPage.overview,
+                                      connections: _connections,
+                                      tunStack: _tunStack,
+                                      admin: _admin,
+                                      onTunStack: _setTunStack,
+                                      onStart: _startKernel,
+                                      onShowLogs: _showLogs,
+                                      onOpenConnections: () =>
+                                          _navigate(_DesktopPage.connections),
+                                      onInspectProcess: _inspect,
+                                      onOpenProfiles: () =>
+                                          _navigate(_DesktopPage.profiles),
+                                      onEditProfile: () {
+                                        if (active != null) _open(active);
+                                      },
+                                    ),
+                                    ExcludeFocus(
+                                      excluding: _page != _DesktopPage.profiles,
+                                      child: DesktopProfiles(
+                                        profiles: _profiles,
+                                        info: _profileInfo,
+                                        activeFile: active?.fileName,
+                                        activeStatus: _activeStatus,
+                                        switchingFile: _switchingFile,
+                                        search: _search,
+                                        searchFocus: _searchFocus,
+                                        onActivate:
+                                            _busy ||
+                                                _runtime.isBusy ||
+                                                _runtime.restarting ||
+                                                _runtime.isTemporaryConfig
+                                            ? null
+                                            : _selectRuntimeProfile,
+                                        onEdit: _busy ? null : _open,
+                                        onRename: _busy ? null : _rename,
+                                        onDelete: _busy ? null : _delete,
+                                        onCreate: _busy ? null : _create,
+                                        onImport: _busy ? null : _import,
                                       ),
                                     ),
-                                  ),
-                              ],
+                                    DesktopConnections(
+                                      monitor: _connections,
+                                      visible:
+                                          _page == _DesktopPage.connections,
+                                      searchFocus: _connectionSearchFocus,
+                                      inspectProcess: _inspectProcess,
+                                      onOpenOverview: () =>
+                                          _navigate(_DesktopPage.overview),
+                                    ),
+                                    if (_page != _DesktopPage.edit)
+                                      const SizedBox.shrink()
+                                    else if (selected != null)
+                                      EditorPage(
+                                        key: _editor,
+                                        store: widget.store,
+                                        fileName: selected.fileName,
+                                        displayName: selected.name,
+                                        embedded: true,
+                                        autoSave: false,
+                                        runtime: _runtime,
+                                        isActiveProfile:
+                                            selected.fileName ==
+                                            _activeSettings?.fileName,
+                                        cachedDelays:
+                                            _prefs?.latenciesOf(
+                                              selected.fileName,
+                                            ) ??
+                                            const {},
+                                        onSaved: _load,
+                                      )
+                                    else
+                                      Center(
+                                        child: EmptyHint(
+                                          icon: Icons.folder_open_outlined,
+                                          title: '打开一份配置',
+                                          message: '导入本地 YAML、节点分享链接或订阅地址。',
+                                          action: FilledButton.icon(
+                                            onPressed: _busy ? null : _import,
+                                            icon: const Icon(
+                                              Icons.file_open_outlined,
+                                              size: 17,
+                                            ),
+                                            label: const Text('导入配置'),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                     ),
                   ),
@@ -628,18 +813,25 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
 
   Widget _destination(_DesktopPage page, IconData icon, String label) {
     final colors = Theme.of(context).colorScheme;
-    return ListTile(
-      dense: true,
-      selected:
-          _page == page ||
-          (_page == _DesktopPage.edit && page == _DesktopPage.profiles),
-      selectedTileColor: colors.primary.withValues(alpha: 0.13),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radiuses.xs),
+    final selected =
+        _page == page ||
+        (_page == _DesktopPage.edit && page == _DesktopPage.profiles);
+    final radius = BorderRadius.circular(Radiuses.sm);
+    return Material(
+      animationDuration: Motion.of(context).fast,
+      color: selected
+          ? colors.primary.withValues(alpha: 0.13)
+          : Colors.transparent,
+      borderRadius: radius,
+      child: ListTile(
+        dense: true,
+        selected: selected,
+        hoverColor: colors.primary.withValues(alpha: 0.07),
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        leading: Icon(icon, size: 19),
+        title: Text(label),
+        onTap: _busy ? null : () => _navigate(page),
       ),
-      leading: Icon(icon, size: 19),
-      title: Text(label),
-      onTap: _busy ? null : () => _navigate(page),
     );
   }
 }

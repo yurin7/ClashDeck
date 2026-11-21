@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'motion.dart';
+
 const desktopCaptionHeight = 36.0;
 const _buttonWidth = 44.0;
 const _windowChannel = MethodChannel('dev.clashdeck/windows-window');
@@ -37,7 +39,7 @@ class _DesktopWindowCaptionState extends State<DesktopWindowCaption> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.transparent,
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Padding(
         padding: const EdgeInsets.only(top: 7),
         child: Row(
@@ -70,19 +72,45 @@ class _DesktopWindowCaptionState extends State<DesktopWindowCaption> {
     IconData icon,
     VoidCallback onPressed, {
     Color? error,
-  }) => SizedBox(
-    width: _buttonWidth,
-    height: desktopCaptionHeight - 7,
-    child: IconButton(
-      onPressed: onPressed,
-      tooltip: tooltip,
-      icon: Icon(icon, size: 16),
-      style: IconButton.styleFrom(
-        padding: EdgeInsets.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-        hoverColor: error?.withValues(alpha: 0.2),
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final tint = error ?? colors.primary;
+    return SizedBox(
+      width: _buttonWidth,
+      height: desktopCaptionHeight - 7,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, size: 15),
+        style: ButtonStyle(
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.hovered)
+                ? error ?? colors.onSurface
+                : colors.onSurfaceVariant;
+          }),
+          overlayColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.pressed)) {
+              return tint.withValues(alpha: 0.25);
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return tint.withValues(alpha: 0.13);
+            }
+            return Colors.transparent;
+          }),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          side: WidgetStateProperty.resolveWith((states) {
+            return states.contains(WidgetState.focused)
+                ? BorderSide(color: tint.withValues(alpha: 0.65))
+                : BorderSide.none;
+          }),
+          splashFactory: NoSplash.splashFactory,
+          animationDuration: Motion.of(context).fast,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

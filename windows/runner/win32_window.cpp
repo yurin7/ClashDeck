@@ -12,6 +12,10 @@ namespace {
 // Keep these dimensions in sync with DesktopWindowCaption in Flutter.
 constexpr int kCaptionHeight = 36;
 constexpr int kCaptionButtonsWidth = 44 * 3;
+// Attribute IDs are stable even when building with a Windows 10 SDK.
+constexpr DWORD kCornerPreference = 33;
+constexpr DWORD kBorderColor = 34;
+constexpr DWORD kRoundCorners = 2;
 
 LRESULT HitTestFrame(HWND window, LPARAM coordinates) {
   POINT point{GET_X_LPARAM(coordinates), GET_Y_LPARAM(coordinates)};
@@ -189,9 +193,16 @@ bool Win32Window::Create(const std::wstring& title,
   }
 
   UpdateTheme(window);
+  native_corners_ = SUCCEEDED(DwmSetWindowAttribute(
+      window, kCornerPreference, &kRoundCorners, sizeof(kRoundCorners)));
+  if (native_corners_) {
+    const COLORREF outline = RGB(37, 43, 55);
+    DwmSetWindowAttribute(window, kBorderColor, &outline, sizeof(outline));
+  }
   SetWindowPos(window, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
                    SWP_FRAMECHANGED);
+  UpdateCornerRegion(window);
 
   return OnCreate();
 }
@@ -226,20 +237,25 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
-    case WM_NCCALCSIZE:
-      if (wparam) {
-        if (IsZoomed(hwnd)) {
-          auto* params = reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
-          MONITORINFO monitor{sizeof(MONITORINFO)};
-          if (GetMonitorInfo(MonitorFromRect(&params->rgrc[0],
-                                             MONITOR_DEFAULTTONEAREST),
-                             &monitor)) {
-            params->rgrc[0] = monitor.rcWork;
-          }
+    case WM_NCCALCSIZE: {
+      auto* rect = wparam ? &reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam)->rgrc[0]
+                          : reinterpret_cast<RECT*>(lparam);
+      if (IsZoomed(hwnd)) {
+        MONITORINFO monitor{sizeof(MONITORINFO)};
+        if (GetMonitorInfo(MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST),
+                           &monitor)) {
+          *rect = monitor.rcWork;
         }
-        return 0;
+      } else if (native_corners_) {
+        InflateRect(rect, -1, -1);
       }
-      break;
+      return 0;
+    }
+    case WM_NCPAINT:
+      // Only DWM draws the perimeter. The client draws all caption buttons.
+      return 0;
+    case WM_NCACTIVATE:
+      return DefWindowProc(hwnd, message, wparam, -1);
     case WM_NCHITTEST:
       return HitTestFrame(hwnd, lparam);
     case WM_GETMINMAXINFO: {
@@ -265,21 +281,23 @@ Win32Window::MessageHandler(HWND hwnd,
 
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
+      if (child_content_) UpdateCornerRegion(hwnd);
       return 0;
     }
     case WM_SIZE: {
+      if (wparam == SIZE_MINIMIZED) return 0;
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
         // Size and position the child window.
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
                    rect.bottom - rect.top, TRUE);
+        UpdateCornerRegion(hwnd);
       }
       return 0;
     }
 
     case WM_ACTIVATE:
-      if (child_content_ != nullptr) {
+      if (LOWORD(wparam) != WA_INACTIVE && child_content_ != nullptr) {
         SetFocus(child_content_);
       }
       return 0;
@@ -299,8 +317,42 @@ void Win32Window::Destroy() {
     DestroyWindow(window_handle_);
     window_handle_ = nullptr;
   }
+  child_content_ = nullptr;
+  native_corners_ = false;
+  region_dpi_ = 0;
   if (g_active_window_count == 0) {
     WindowClassRegistrar::GetInstance()->UnregisterWindowClass();
+  }
+}
+
+void Win32Window::UpdateCornerRegion(HWND window) {
+  if (native_corners_ || IsIconic(window)) return;
+  if (IsZoomed(window)) {
+    if (region_dpi_ != 0) {
+      region_dpi_ = 0;
+      SetWindowRgn(window, nullptr, TRUE);
+    }
+    return;
+  }
+
+  // Fall back to a rounded window region on Windows 10.
+  RECT bounds{};
+  if (!GetWindowRect(window, &bounds)) return;
+  const SIZE size{bounds.right - bounds.left, bounds.bottom - bounds.top};
+  const UINT dpi = GetDpiForWindow(window);
+  if (dpi == 0 || (size.cx == region_size_.cx && size.cy == region_size_.cy &&
+                   region_dpi_ == dpi)) {
+    return;
+  }
+  const int diameter = MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
+  HRGN clip = CreateRoundRectRgn(0, 0, size.cx + 1, size.cy + 1,
+                                diameter, diameter);
+  if (!clip) return;
+  region_size_ = size;
+  region_dpi_ = dpi;
+  if (!SetWindowRgn(window, clip, TRUE)) {
+    region_dpi_ = 0;
+    DeleteObject(clip);
   }
 }
 

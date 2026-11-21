@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -27,6 +29,44 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // Only the core spawned by this window belongs to this job.
+  kernel_job_ = CreateJobObject(nullptr, nullptr);
+  if (kernel_job_) {
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!SetInformationJobObject(kernel_job_, JobObjectExtendedLimitInformation,
+                                 &limits, static_cast<DWORD>(sizeof(limits)))) {
+      CloseHandle(kernel_job_);
+      kernel_job_ = nullptr;
+    }
+  }
+  kernel_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "dev.clashdeck/windows-kernel", &flutter::StandardMethodCodec::GetInstance());
+  kernel_channel_->SetMethodCallHandler(
+      [this](const auto& call, auto result) {
+        if (call.method_name() != "track") {
+          result->NotImplemented();
+          return;
+        }
+        const auto* pid = call.arguments()
+                              ? std::get_if<int32_t>(call.arguments())
+                              : nullptr;
+        HANDLE process = pid && *pid > 0
+                             ? OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE,
+                                           FALSE, static_cast<DWORD>(*pid))
+                             : nullptr;
+        const bool attached = process && kernel_job_ &&
+                              AssignProcessToJobObject(kernel_job_, process);
+        if (process) CloseHandle(process);
+        if (attached) {
+          result->Success();
+        } else {
+          result->Error("kernel-job", "Windows could not track the core process");
+        }
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -40,6 +80,11 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  kernel_channel_.reset();
+  if (kernel_job_) {
+    CloseHandle(kernel_job_);
+    kernel_job_ = nullptr;
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

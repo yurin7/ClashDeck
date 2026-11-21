@@ -17,6 +17,8 @@ LICENSE 文件（GPL-3.0）。
    套接字保护入口调用 Android `VpnService.protect()`。
    [Windows 构建脚本](tool/build_core.ps1) · [CI 构建脚本](tool/build_core.sh) · [套接字保护源码](tool/mihomo/clashdeck_protect_linux.go)
 
+   Windows x64 预览随包附带 [mihomo v1.19.34](https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.34) 官方兼容版。下载脚本会校验发布包的 SHA-256。
+
 2. **GEOIP / GEOSITE 数据**：`assets/geo/geoip.metadb`、`assets/geo/geosite.dat`
    来自 https://github.com/MetaCubeX/meta-rules-dat （GPL-3.0），随包分发以避免
    首次运行联网下载。

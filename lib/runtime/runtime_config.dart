@@ -79,6 +79,7 @@ class RuntimeConfig {
     bool allowLan = false,
     bool ensureDns = true,
     String? tunStack,
+    int? mixedPort,
   }) {
     var next = doc;
 
@@ -91,7 +92,9 @@ class RuntimeConfig {
       next = _set(next, ['secret'], secret);
     }
     next = _set(next, ['allow-lan'], allowLan);
-    next = _setIfAbsent(next, ['mixed-port'], 7890);
+    next = mixedPort == null
+        ? _setIfAbsent(next, ['mixed-port'], 7890)
+        : _set(next, ['mixed-port'], mixedPort);
     next = _setIfAbsent(next, ['log-level'], 'info');
     next = _setIfAbsent(next, ['mode'], 'rule');
 

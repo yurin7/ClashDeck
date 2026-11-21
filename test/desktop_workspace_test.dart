@@ -4,6 +4,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:clashdeck/data/profile_store.dart';
 import 'package:clashdeck/state/editor_state.dart';
 import 'package:clashdeck/ui/desktop_workspace.dart';
+import 'package:clashdeck/ui/editor_page.dart';
 import 'package:clashdeck/ui/proxy_board.dart';
 import 'package:clashdeck/ui/raw_yaml_tab.dart';
 import 'package:clashdeck/ui/theme.dart';
@@ -13,8 +14,13 @@ import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('桌面工作区切换配置前保留修改，Ctrl+S 保存源码', (tester) async {
-    final directory = Directory.systemTemp.createTempSync('clashdeck_desktop_');
-    addTearDown(() => directory.deleteSync(recursive: true));
+    final workspace = Directory.systemTemp.createTempSync('clashdeck_desktop_');
+    addTearDown(() => workspace.deleteSync(recursive: true));
+    const paths = MethodChannel('plugins.flutter.io/path_provider');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(paths, (_) async => workspace.path);
+    addTearDown(() => messenger.setMockMethodCallHandler(paths, null));
+    final directory = Directory('${workspace.path}/profiles')..createSync();
     final config = ProfileStore.starterConfig(name: '桌面演示').replaceFirst(
       'rules:',
       'rules:\n  - DOMAIN-SUFFIX,editor.example.org,DIRECT',
@@ -37,6 +43,11 @@ void main() {
         home: DesktopWorkspace(store: ProfileStore(directory)),
       ),
     );
+    await _pumpUntil(tester, () => find.text('实时流量').evaluate().isNotEmpty);
+    expect(find.text('下载'), findsOneWidget);
+    expect(find.text('上传'), findsOneWidget);
+    expect(find.text('节点测速'), findsOneWidget);
+    await tester.tap(find.text('桌面演示').first);
     await _pumpUntil(tester, () => find.text('节点列表').evaluate().isNotEmpty);
     expect(find.text('策略组'), findsOneWidget);
 
@@ -66,6 +77,10 @@ void main() {
       tester,
       () => active.readAsStringSync().startsWith('# 桌面更新'),
     );
+    await _pumpUntil(
+      tester,
+      () => !tester.state<EditorPageState>(find.byType(EditorPage)).saving,
+    );
 
     tester.view.physicalSize = const Size(820, 560);
     await tester.pumpAndSettle();
@@ -74,6 +89,8 @@ void main() {
     expect(find.text('editor.example.org'), findsOneWidget);
     await tester.tap(find.text('代理与策略组'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '概览'));
+    await _pumpUntil(tester, () => find.text('实时流量').evaluate().isNotEmpty);
     expect(tester.takeException(), isNull);
   });
 

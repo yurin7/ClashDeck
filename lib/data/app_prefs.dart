@@ -14,8 +14,8 @@ class AppPrefs {
 
   static const _fileName = 'app_prefs.json';
 
-  static Future<AppPrefs> load() async {
-    final base = await getApplicationSupportDirectory();
+  static Future<AppPrefs> load({Directory? directory}) async {
+    final base = directory ?? await getApplicationSupportDirectory();
     final file = File('${base.path}${Platform.pathSeparator}$_fileName');
     Map<String, Object?> data = const {};
     try {

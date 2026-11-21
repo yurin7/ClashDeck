@@ -1,11 +1,21 @@
+import 'dart:convert';
+import 'dart:math' show Random;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/model/app_settings.dart';
+import '../core/model/profile.dart';
 import '../core/parse/subscription.dart';
 import '../core/yaml/yaml_doc.dart';
+import '../data/app_prefs.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_controller.dart';
+import '../runtime/windows_kernel.dart';
+import '../state/settings_state.dart';
+import 'desktop_overview.dart';
 import 'editor_page.dart';
 import 'fields.dart';
 import 'home_page.dart';
@@ -30,6 +40,12 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   final _searchFocus = FocusNode();
   var _editor = GlobalKey<EditorPageState>();
   late final AppLifecycleListener _lifecycle;
+  late final RuntimeController _runtime;
+  AppPrefs? _prefs;
+  SettingsState? _activeSettings;
+  static final _emptyDoc = YamlDoc.parse('proxies: []');
+  String _appVersion = '';
+  bool _showOverview = true;
   List<StoredProfile> _profiles = const [];
   String? _current;
   String? _error;
@@ -39,8 +55,15 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   @override
   void initState() {
     super.initState();
+    final random = Random.secure();
+    _runtime = RuntimeController(
+      configProvider: () => _activeSettings?.doc ?? _emptyDoc,
+      settingsProvider: () => _activeSettings?.app ?? AppSettings.defaults,
+      windowsKernel: WindowsKernel(),
+      secret: base64UrlEncode(List.generate(24, (_) => random.nextInt(256))),
+    );
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
-    _load();
+    _initialize();
   }
 
   @override
@@ -48,20 +71,50 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     _lifecycle.dispose();
     _searchFocus.dispose();
     _search.dispose();
+    _runtime.dispose();
+    _activeSettings?.dispose();
     super.dispose();
   }
 
   Future<AppExitResponse> _onExitRequested() async {
     if (_busy || !await _canLeave()) return AppExitResponse.cancel;
+    try {
+      await _runtime.shutdownWindows();
+    } catch (_) {
+      // 窗口退出时由原生 Job 关闭本应用的内核。
+    }
     return AppExitResponse.exit;
   }
 
   Future<bool> _canLeave() async =>
       await _editor.currentState?.confirmLeave() ?? true;
 
-  Future<void> _load({String? select}) async {
+  Future<void> _initialize() async {
+    _prefs = await AppPrefs.load(directory: widget.store.dir.parent);
+    await _load();
+    try {
+      final version = (await PackageInfo.fromPlatform()).version;
+      if (mounted) setState(() => _appVersion = version);
+    } catch (_) {
+      // 版本信息与配置编辑独立。
+    }
+  }
+
+  Future<void> _load({String? select, String? active}) async {
     try {
       final items = await widget.store.list();
+      final name = active ?? _activeSettings?.fileName ?? _prefs?.activeProfile;
+      final activeFile = items.any((item) => item.fileName == name)
+          ? name
+          : items.firstOrNull?.fileName;
+      final settings = activeFile == null
+          ? null
+          : await SettingsState.load(widget.store, activeFile);
+      final oldSettings = _activeSettings;
+      if (!mounted) {
+        settings?.dispose();
+        return;
+      }
       if (!mounted) return;
       final wanted = select ?? _current;
       final next = items.any((item) => item.fileName == wanted)
@@ -69,10 +122,13 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
           : items.firstOrNull?.fileName;
       setState(() {
         _profiles = items;
+        _activeSettings = settings;
         _loading = false;
         _error = null;
         if (next != _current) _selectFile(next);
+        if (select != null) _showOverview = false;
       });
+      oldSettings?.dispose();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -102,9 +158,37 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
   }
 
   Future<void> _open(StoredProfile profile) => _withProfileAction(() async {
-    if (_current == profile.fileName || !await _canLeave() || !mounted) return;
-    setState(() => _selectFile(profile.fileName));
+    if ((!_showOverview && _current == profile.fileName) ||
+        !await _canLeave() ||
+        !mounted) {
+      return;
+    }
+    setState(() {
+      _selectFile(profile.fileName);
+      _showOverview = false;
+    });
   });
+
+  Future<void> _openOverview() => _withProfileAction(() async {
+    if (_showOverview || !await _canLeave() || !mounted) return;
+    await _load();
+    if (!mounted) return;
+    setState(() => _showOverview = true);
+  });
+
+  Future<void> _selectRuntimeProfile(String fileName) =>
+      _withProfileAction(() async {
+        if (fileName == _activeSettings?.fileName || _runtime.isBusy) return;
+        final restart = _runtime.phase == RuntimePhase.running;
+        if (restart) {
+          await _runtime.stop();
+          if (_runtime.phase != RuntimePhase.idle) return;
+        }
+        await _load(active: fileName);
+        if (!mounted || _activeSettings?.fileName != fileName) return;
+        await _prefs?.setActiveProfile(fileName);
+        if (restart) await _runtime.start();
+      });
 
   Future<void> _create() => _withProfileAction(() async {
     final name = await _askName('我的配置');
@@ -145,9 +229,14 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
     final name = await _askName(profile.name);
     if (name == null || name == profile.name || !mounted) return;
     final active = profile.fileName == _current;
+    final runningProfile = profile.fileName == _activeSettings?.fileName;
     if (active && !await _canLeave()) return;
     final renamed = await widget.store.rename(profile.fileName, name);
-    await _load(select: active ? renamed : null);
+    await _load(
+      select: active ? renamed : null,
+      active: runningProfile ? renamed : null,
+    );
+    if (runningProfile) await _prefs?.setActiveProfile(renamed);
   });
 
   Future<void> _delete(StoredProfile profile) => _withProfileAction(() async {
@@ -161,8 +250,16 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
       _notify('正在保存，请稍后再删除。');
       return;
     }
+    final runningProfile = profile.fileName == _activeSettings?.fileName;
+    if (runningProfile) {
+      await _runtime.stop();
+      if (_runtime.pid != null) return;
+    }
     await widget.store.delete(profile.fileName);
     await _load();
+    if (runningProfile) {
+      await _prefs?.setActiveProfile(_activeSettings?.fileName);
+    }
   });
 
   Future<String?> _askName(String initial) async {
@@ -215,7 +312,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                 children: [
                   SizedBox(
                     width: bounds.maxWidth >= 1100 ? 242 : 202,
-                    child: ColoredBox(
+                    child: Material(
                       color: colors.surfaceContainerLow,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -240,6 +337,27 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(11, 0, 11, 14),
+                            child: ListTile(
+                              dense: true,
+                              selected: _showOverview,
+                              selectedTileColor: colors.primary.withValues(
+                                alpha: 0.13,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  Radiuses.xs,
+                                ),
+                              ),
+                              leading: const Icon(
+                                Icons.space_dashboard_outlined,
+                                size: 19,
+                              ),
+                              title: const Text('概览'),
+                              onTap: _busy ? null : _openOverview,
                             ),
                           ),
                           Padding(
@@ -301,7 +419,9 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                       final item = visible[index];
                                       return _ProfileListItem(
                                         profile: item,
-                                        selected: item.fileName == _current,
+                                        selected:
+                                            !_showOverview &&
+                                            item.fileName == _current,
                                         onOpen: _busy
                                             ? null
                                             : () => _open(item),
@@ -328,7 +448,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
-                                    'Windows 界面预览',
+                                    'Windows 预览',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: hintStyle(context),
@@ -355,30 +475,67 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace> {
                               child: const Text('重试'),
                             ),
                           )
-                        : selected != null
-                        ? EditorPage(
-                            key: _editor,
-                            store: widget.store,
-                            fileName: selected.fileName,
-                            displayName: selected.name,
-                            embedded: true,
-                            autoSave: false,
-                            onSaved: _load,
-                          )
-                        : Center(
-                            child: EmptyHint(
-                              icon: Icons.folder_open_outlined,
-                              title: '打开一份配置',
-                              message: '导入本地 YAML、节点分享链接或订阅地址。',
-                              action: FilledButton.icon(
-                                onPressed: _busy ? null : _import,
-                                icon: const Icon(
-                                  Icons.file_open_outlined,
-                                  size: 17,
+                        : IndexedStack(
+                            index: _showOverview ? 0 : 1,
+                            children: [
+                              DesktopOverview(
+                                runtime: _runtime,
+                                profiles: _profiles,
+                                activeFile: _activeSettings?.fileName,
+                                profile: Profile.from(
+                                  _activeSettings?.doc ?? _emptyDoc,
                                 ),
-                                label: const Text('导入配置'),
+                                prefs: _prefs,
+                                appVersion: _appVersion,
+                                busy: _busy,
+                                onSelectProfile: _selectRuntimeProfile,
+                                onEditProfile: () {
+                                  final active = _profiles
+                                      .where(
+                                        (entry) =>
+                                            entry.fileName ==
+                                            _activeSettings?.fileName,
+                                      )
+                                      .firstOrNull;
+                                  if (active != null) _open(active);
+                                },
                               ),
-                            ),
+                              if (_showOverview)
+                                const SizedBox.shrink()
+                              else if (selected != null)
+                                EditorPage(
+                                  key: _editor,
+                                  store: widget.store,
+                                  fileName: selected.fileName,
+                                  displayName: selected.name,
+                                  embedded: true,
+                                  autoSave: false,
+                                  runtime: _runtime,
+                                  isActiveProfile:
+                                      selected.fileName ==
+                                      _activeSettings?.fileName,
+                                  cachedDelays:
+                                      _prefs?.latenciesOf(selected.fileName) ??
+                                      const {},
+                                  onSaved: _load,
+                                )
+                              else
+                                Center(
+                                  child: EmptyHint(
+                                    icon: Icons.folder_open_outlined,
+                                    title: '打开一份配置',
+                                    message: '导入本地 YAML、节点分享链接或订阅地址。',
+                                    action: FilledButton.icon(
+                                      onPressed: _busy ? null : _import,
+                                      icon: const Icon(
+                                        Icons.file_open_outlined,
+                                        size: 17,
+                                      ),
+                                      label: const Text('导入配置'),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                   ),
                 ],

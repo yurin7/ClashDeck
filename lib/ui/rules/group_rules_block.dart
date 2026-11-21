@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../widgets/app_draggable.dart';
+
 import '../../core/edit/config_ops.dart';
 import '../../core/edit/rule_targets.dart';
 import '../../core/model/profile.dart';
@@ -250,7 +252,7 @@ class _GroupRulesBlockState extends State<GroupRulesBlock> {
                       // RuleChip 是 kChipRadius 的胶囊，红块跟着裁成同一圆角。
                       borderRadius: BorderRadius.circular(kChipRadius),
                       onAction: () => _delete(rule),
-                      child: LongPressDraggable<RuleDragData>(
+                      child: AppDraggable<RuleDragData>(
                         data: RuleDragData(rule),
                         feedback: Material(
                           color: Colors.transparent,

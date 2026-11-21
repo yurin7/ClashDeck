@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'data/profile_store.dart';
 import 'ui/app_shell.dart';
+import 'ui/desktop_workspace.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
@@ -44,7 +45,12 @@ class _BootstrapState extends State<_Bootstrap> {
       future: _store,
       builder: (context, snapshot) {
         final store = snapshot.data;
-        if (store != null) return AppShell(store: store);
+        if (store != null) {
+          if (Theme.of(context).platform == TargetPlatform.windows) {
+            return DesktopWorkspace(store: store);
+          }
+          return AppShell(store: store);
+        }
         if (snapshot.hasError) {
           return Scaffold(
             body: Center(

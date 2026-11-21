@@ -963,58 +963,76 @@ class _RulesTabState extends State<RulesTab> {
   }
 
   Widget _buildRuleRow(BuildContext context, RuleEntry rule, int i) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
+    final handle = Icon(
+      Icons.drag_indicator,
+      size: desktop ? 17 : 20,
+      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+    );
+    final ordinal = Text('${i + 1}', style: monoStyle(context, size: 10));
+    final card = RuleRowCard(
+      rule: rule,
+      trailing: _cacheTrailing(context, rule),
+      onRefresh: _refreshFor(rule),
+      onDelete: desktop ? () => _confirmDelete(rule) : null,
+      dragHandle: ReorderableDragStartListener(
+        index: i,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Padding(
+            padding: const EdgeInsets.all(Insets.xs),
+            child: desktop
+                ? SizedBox(
+                    width: 43,
+                    child: Row(
+                      children: [
+                        handle,
+                        const SizedBox(width: 3),
+                        Flexible(child: ordinal),
+                      ],
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [handle, ordinal],
+                  ),
+          ),
+        ),
+      ),
+      groupNames: {for (final g in s.profile.groups) g.name},
+      onTap: () => showRuleDetailDialog(
+        context,
+        rule: rule,
+        onEdit: () => _editRule(initial: rule, index: rule.index),
+        onMoveToGroup: () => _moveRuleToGroup(rule),
+      ),
+      onEdit: () => _editRule(initial: rule, index: rule.index),
+      onMoveToGroup: () => _moveRuleToGroup(rule),
+    );
     return RepaintBoundary(
       key: ValueKey('rule-${rule.index}'),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
-        // 只有行本体参与左滑，露出删除；不再是整块区域一起滑。
-        child: SlidableRow(
-          open: _swipedRule == rule.index,
-          onOpenChanged: (open) =>
-              setState(() => _swipedRule = open ? rule.index : null),
-          actionLabel: '删除',
-          // 与 RuleRowCard 的 16 圆角一致：红块跟着卡片一起裁，不露直角。
-          borderRadius: BorderRadius.circular(16),
-          onAction: () => _confirmDelete(rule),
-          child: RuleRowCard(
-            rule: rule,
-            trailing: _cacheTrailing(context, rule),
-            onRefresh: _refreshFor(rule),
-            dragHandle: ReorderableDragStartListener(
-              index: i,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Insets.xs,
-                    vertical: Insets.xs,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.drag_indicator,
-                        size: 20,
-                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-                      ),
-                      Text('${i + 1}', style: monoStyle(context, size: 10)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            groupNames: {for (final g in s.profile.groups) g.name},
-            onTap: () => showRuleDetailDialog(
-              context,
-              rule: rule,
-              onEdit: () => _editRule(initial: rule, index: rule.index),
-              onMoveToGroup: () => _moveRuleToGroup(rule),
-            ),
-            onEdit: () => _editRule(initial: rule, index: rule.index),
-            onMoveToGroup: () => _moveRuleToGroup(rule),
-          ),
+        padding: EdgeInsets.fromLTRB(
+          Insets.lg,
+          0,
+          Insets.lg,
+          desktop ? 4 : Insets.sm,
         ),
+        // 只有行本体参与左滑，露出删除；不再是整块区域一起滑。
+        child: desktop
+            ? card
+            : SlidableRow(
+                open: _swipedRule == rule.index,
+                onOpenChanged: (open) =>
+                    setState(() => _swipedRule = open ? rule.index : null),
+                actionLabel: '删除',
+                // 与 RuleRowCard 的 16 圆角一致：红块跟着卡片一起裁，不露直角。
+                borderRadius: BorderRadius.circular(16),
+                onAction: () => _confirmDelete(rule),
+                child: card,
+              ),
       ),
     );
   }
@@ -1100,7 +1118,9 @@ class _RulesTabState extends State<RulesTab> {
               const SizedBox(width: Insets.sm),
               Expanded(
                 child: Text(
-                  '拖动右侧手柄排序，点击一行编辑；MATCH 必须在最后',
+                  Theme.of(context).platform == TargetPlatform.windows
+                      ? '拖动行首手柄调整顺序，MATCH 规则放在最后'
+                      : '拖动右侧手柄排序，点击一行编辑；MATCH 必须在最后',
                   style: hintStyle(context),
                 ),
               ),

@@ -25,6 +25,7 @@ class RuleRowCard extends StatelessWidget {
     this.dragHandle,
     this.onRefresh,
     this.trailing,
+    this.onDelete,
     this.compact = false,
     this.groupNames = const <String>{},
   });
@@ -47,6 +48,7 @@ class RuleRowCard extends StatelessWidget {
 
   /// 副标题行尾的附加信息（在线规则集的缓存时间 / 更新失败标记）。
   final Widget? trailing;
+  final VoidCallback? onDelete;
 
   final bool compact;
 
@@ -57,6 +59,10 @@ class RuleRowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final targetColor = _targetColor(scheme, rule.target);
+
+    if (!compact && Theme.of(context).platform == TargetPlatform.windows) {
+      return _desktopRow(context, scheme, targetColor);
+    }
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -110,6 +116,84 @@ class RuleRowCard extends StatelessWidget {
                 ),
               if (!compact) _swapButton(context),
               ?dragHandle,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _desktopRow(
+    BuildContext context,
+    ColorScheme scheme,
+    Color targetColor,
+  ) {
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(Radiuses.sm),
+      clipBehavior: Clip.antiAlias,
+      child: AppInkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Insets.sm),
+          child: Row(
+            children: [
+              ?dragHandle,
+              const SizedBox(width: Insets.sm),
+              Expanded(
+                child: Text(
+                  ruleDisplayTitle(rule),
+                  style: mono(12, weight: 650),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: Insets.sm),
+              if (rule.noResolve)
+                const Tooltip(
+                  message: '不解析域名（no-resolve）',
+                  child: Icon(Icons.dns_outlined, size: 16),
+                ),
+              const SizedBox(width: Insets.sm),
+              SizedBox(
+                width: 122,
+                child: Text(
+                  rule.type,
+                  style: mono(10.5, color: scheme.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(
+                width: 132,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _TargetChip(label: rule.target, color: targetColor),
+                ),
+              ),
+              if (trailing != null) Flexible(child: trailing!),
+              _swapButton(context),
+              PopupMenuButton<String>(
+                tooltip: '规则操作',
+                icon: const Icon(Icons.more_horiz, size: 18),
+                onSelected: (action) {
+                  switch (action) {
+                    case 'edit':
+                      onEdit();
+                    case 'refresh':
+                      onRefresh?.call();
+                    case 'delete':
+                      onDelete?.call();
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('编辑')),
+                  if (onRefresh != null)
+                    const PopupMenuItem(value: 'refresh', child: Text('更新规则集')),
+                  if (onDelete != null)
+                    const PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+              ),
             ],
           ),
         ),

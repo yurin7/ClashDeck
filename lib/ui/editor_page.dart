@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/edit/config_ops.dart';
@@ -32,6 +33,7 @@ class EditorPage extends StatefulWidget {
     this.cachedDelays = const <String, int?>{},
     this.isActiveProfile = true,
     this.onSaved,
+    this.embedded = false,
   });
 
   final ProfileStore store;
@@ -56,14 +58,20 @@ class EditorPage extends StatefulWidget {
   /// 保存后同步主页面的活动配置，再由内核读取最新的内容与选择。
   final Future<void> Function()? onSaved;
 
+  /// Windows 工作区内的编辑器，由外壳负责切换配置。
+  final bool embedded;
+
   @override
-  State<EditorPage> createState() => _EditorPageState();
+  State<EditorPage> createState() => EditorPageState();
 }
 
-class _EditorPageState extends State<EditorPage> {
+class EditorPageState extends State<EditorPage> {
   EditorState? _state;
   String? _loadError;
   bool _saving = false;
+  bool _confirmingLeave = false;
+
+  bool get saving => _saving;
 
   /// 组 → 上次选中的节点；来自当前配置 sidecar 的 `app.groupNodes`。
   Map<String, String> _groupSelection = const <String, String>{};
@@ -136,7 +144,7 @@ class _EditorPageState extends State<EditorPage> {
 
   Future<void> _save() async {
     final state = _state;
-    if (state == null) return;
+    if (state == null || _saving) return;
     setState(() => _saving = true);
     try {
       // 写盘前把 rules 段按「本地精确 → 在线 → 兜底」排一次；
@@ -171,72 +179,67 @@ class _EditorPageState extends State<EditorPage> {
 
   /// 返回上一级：有改动时按「自动保存」设置决定保存还是确认放弃。
   Future<void> _handleBack() async {
+    if (await confirmLeave() && mounted) Navigator.of(context).pop();
+  }
+
+  Future<bool> confirmLeave() async {
+    if (_saving || _confirmingLeave) return false;
     final state = _state;
-    if (state == null) {
-      Navigator.of(context).pop();
-      return;
-    }
-    if (_saving) return;
-    if (!state.dirty) {
-      Navigator.of(context).pop();
-      return;
-    }
+    if (state == null || !state.dirty) return true;
+    _confirmingLeave = true;
 
-    final report = state.report;
-    if (report.hasErrors) {
-      final leave = await showConfirmDialog(
-        context,
-        title: '配置还有错误',
-        message: '还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？',
-        confirmLabel: '仍然返回',
-        cancelLabel: '留下处理',
-      );
-      if (leave == true && mounted) Navigator.of(context).pop();
-      return;
-    }
+    try {
+      final report = state.report;
+      if (report.hasErrors) {
+        final leave = await showConfirmDialog(
+          context,
+          title: '配置还有错误',
+          message: widget.embedded
+              ? '还有 ${report.errors.length} 处错误。离开时会放弃未保存的改动。'
+              : '还有 ${report.errors.length} 处错误没有处理，这次改动不会被保存。仍要返回吗？',
+          confirmLabel: widget.embedded ? '放弃改动' : '仍然返回',
+          cancelLabel: '留下处理',
+        );
+        return mounted && leave == true;
+      }
 
-    if (widget.autoSave) {
+      if (!widget.autoSave) {
+        final choice = await showAppDialog<String>(
+          context,
+          width: dialogWidthOf(context),
+          builder: (ctx) => EditDialog(
+            title: '有未保存的改动',
+            content: Text(
+              widget.embedded ? '离开之前要保存这份配置吗？' : '设置里关掉了「自动保存」，这次改动还没写入磁盘。',
+            ),
+            onCancel: () => Navigator.of(ctx).pop('cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('cancel'),
+                child: const Text('取消'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop('discard'),
+                child: const Text('不保存'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop('save'),
+                child: const Text('保存'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return false;
+        if (choice == 'discard') return true;
+        if (choice != 'save') return false;
+      }
+
       await _save();
-      if (mounted && !(_state?.dirty ?? false)) Navigator.of(context).pop();
-      return;
-    }
-
-    // 关掉「自动保存」时，返回前问一句要不要保存。
-    final choice = await showAppDialog<String>(
-      context,
-      width: dialogWidthOf(context),
-      builder: (ctx) => EditDialog(
-        title: '有未保存的改动',
-        content: const Text('设置里关掉了「自动保存」，这次改动还没写入磁盘。'),
-        onCancel: () => Navigator.of(ctx).pop('cancel'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('cancel'),
-            child: const Text('取消'),
-          ),
-          const Spacer(),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop('discard'),
-            child: const Text('不保存'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop('save'),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    switch (choice) {
-      case 'save':
-        await _save();
-        if (mounted && !(_state?.dirty ?? false)) Navigator.of(context).pop();
-      case 'discard':
-        Navigator.of(context).pop();
-      default:
-        // 取消：留在编辑器里继续改。
-        break;
+      return mounted && !state.dirty;
+    } finally {
+      _confirmingLeave = false;
     }
   }
 
@@ -250,7 +253,12 @@ class _EditorPageState extends State<EditorPage> {
     );
     if (name == null || name.isEmpty) return;
     try {
-      await state.saveAs(widget.store, name);
+      if (widget.embedded) {
+        await widget.store.create(name, state.doc.text);
+        await widget.onSaved?.call();
+      } else {
+        await state.saveAs(widget.store, name);
+      }
       if (!mounted) return;
       showToast(context, '已另存为「$name」');
     } catch (e) {
@@ -395,6 +403,16 @@ class _EditorPageState extends State<EditorPage> {
       );
     }
 
+    if (widget.embedded) {
+      return DefaultTabController(
+        length: 3,
+        child: ListenableBuilder(
+          listenable: state,
+          builder: (context, _) => _buildDesktopEditor(context, state),
+        ),
+      );
+    }
+
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) => DefaultTabController(
@@ -515,26 +533,156 @@ class _EditorPageState extends State<EditorPage> {
                   report: state.report,
                   onTap: () => _showIssues(state.report),
                 ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      ProxyBoard(
-                        state: state,
-                        runtime: widget.runtime,
-                        isActiveProfile: widget.isActiveProfile,
-                        cachedDelays: widget.cachedDelays,
-                        onSubscriptionSaved: _rememberSubscription,
-                        groupSelection: _groupSelection,
-                        onGroupSelection: _rememberGroupSelection,
-                      ),
-                      RulesTab(state: state, runtime: widget.runtime),
-                      RawYamlTab(state: state),
-                    ],
-                  ),
-                ),
+                Expanded(child: _editorViews(state)),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editorViews(EditorState state) => TabBarView(
+    physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
+    children: [
+      ProxyBoard(
+        state: state,
+        runtime: widget.runtime,
+        isActiveProfile: widget.isActiveProfile,
+        cachedDelays: widget.cachedDelays,
+        onSubscriptionSaved: _rememberSubscription,
+        groupSelection: _groupSelection,
+        onGroupSelection: _rememberGroupSelection,
+        desktop: widget.embedded,
+      ),
+      RulesTab(state: state, runtime: widget.runtime),
+      RawYamlTab(state: state, inline: widget.embedded),
+    ],
+  );
+
+  Widget _buildDesktopEditor(BuildContext context, EditorState state) {
+    final canSave = state.dirty && !_saving;
+    final tabs = DefaultTabController.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+          if (canSave) _save();
+        },
+        const SingleActivator(LogicalKeyboardKey.digit1, control: true): () =>
+            tabs.animateTo(0),
+        const SingleActivator(LogicalKeyboardKey.digit2, control: true): () =>
+            tabs.animateTo(1),
+        const SingleActivator(LogicalKeyboardKey.digit3, control: true): () =>
+            tabs.animateTo(2),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 20, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: display(25, weight: 650),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          widget.fileName,
+                          overflow: TextOverflow.ellipsis,
+                          style: mono(11, color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (state.dirty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Pill(
+                        label: '未保存',
+                        color: scheme.tertiary,
+                        dense: true,
+                      ),
+                    ),
+                  IconButton(
+                    tooltip: '撤销',
+                    onPressed: state.canUndo ? state.undo : null,
+                    icon: const Icon(Icons.undo, size: 18),
+                  ),
+                  IconButton(
+                    tooltip: '重做',
+                    onPressed: state.canRedo ? state.redo : null,
+                    icon: const Icon(Icons.redo, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Ctrl+S',
+                    child: FilledButton.icon(
+                      onPressed: canSave ? _save : null,
+                      icon: const Icon(Icons.save_outlined, size: 17),
+                      label: Text(_saving ? '保存中…' : '保存'),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    tooltip: '配置选项',
+                    onSelected: (value) async {
+                      switch (value) {
+                        case 'subscription':
+                          await _subscription();
+                        case 'saveAs':
+                          await _saveAs();
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'subscription', child: Text('订阅…')),
+                      PopupMenuItem(value: 'saveAs', child: Text('保存副本…')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              tabs: [
+                for (final (icon, label, shortcut) in const [
+                  (Icons.account_tree_outlined, '代理与策略组', 'Ctrl+1'),
+                  (Icons.rule_outlined, '分流规则', 'Ctrl+2'),
+                  (Icons.code, 'YAML', 'Ctrl+3'),
+                ])
+                  Tab(
+                    height: 38,
+                    child: Tooltip(
+                      message: shortcut,
+                      child: Row(
+                        children: [
+                          Icon(icon, size: 17),
+                          const SizedBox(width: 8),
+                          Text(label),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Expanded(child: _editorViews(state)),
+            const Hairline(),
+            _StatusBar(
+              report: state.report,
+              onTap: () => _showIssues(state.report),
+            ),
+          ],
         ),
       ),
     );

@@ -46,6 +46,7 @@ class ProxyBoard extends StatefulWidget {
     this.groupSelection = const <String, String>{},
     this.onGroupSelection,
     this.cachedDelays = const <String, int?>{},
+    this.desktop = false,
   });
 
   final EditorState state;
@@ -67,6 +68,7 @@ class ProxyBoard extends StatefulWidget {
 
   /// 上次测速缓存（毫秒；null 表示超时），用于节点行副标题。
   final Map<String, int?> cachedDelays;
+  final bool desktop;
 
   @override
   State<ProxyBoard> createState() => _ProxyBoardState();
@@ -663,6 +665,185 @@ class _ProxyBoardState extends State<ProxyBoard>
     // 有节点就能测速：内核在跑走精确接口，未运行走 TCP 近似。
     // 「测速中是否可点」由卡片按 testing 统一禁用（canTestDelay 的判据）。
 
+    final canTest = !widget.desktop || widget.runtime != null;
+    final nodes = _NodeListCard(
+      nodes: profile.proxies,
+      delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
+      approx: approx,
+      currentName: selection[kDefaultGroupName],
+      alwaysExpanded: widget.desktop,
+      onTestAll: !canTest || profile.proxies.isEmpty
+          ? null
+          : () => _testNodes([for (final p in profile.proxies) p.name]),
+      testing: _testing,
+      testProgress: _testing ? '测速中 $_testDone/$_testTotal' : null,
+      onOpen: _editNode,
+      onDelete: _deleteNode,
+      onMenuNode: (n) => _showNodeActions(n),
+      onAdd: _addNode,
+      onDrop: (data) {
+        if (data.fromGroup == null) return;
+        final ok = s.removeGroupMember(data.fromGroup!, data.name);
+        if (!ok) _fail();
+      },
+    );
+    final policies = <Widget>[
+      _GroupsToolRow(onCreate: _addGroup),
+      for (final group in groups)
+        Padding(
+          padding: const EdgeInsets.only(top: Insets.md),
+          child: _GroupCard(
+            swipeOpen: _swipedGroup == group.name,
+            onSwipeOpenChanged: (open) =>
+                setState(() => _swipedGroup = open ? group.name : null),
+            group: group,
+            isAuto: group.name == kAutoGroupName,
+            state: s,
+            onOpenNode: _editNode,
+            onMove: (n, from) => _moveDialog(n, from),
+            onDeleteNode: _deleteNode,
+            onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
+            selectedName: group.name == kAutoGroupName
+                ? null
+                : selection[group.name],
+            onSelectMember: group.name == kAutoGroupName
+                ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
+                : widget.runtime == null && widget.onGroupSelection == null
+                ? null
+                : (name) => _selectNodeForGroup(group.name, name),
+            onRelayInsert: (node, index) {
+              final from = group.members.length;
+              if (!s.addGroupMember(
+                group.name,
+                node,
+                appendToEnd: group.type == 'relay',
+              )) {
+                _fail();
+                return;
+              }
+              if (!s.moveGroupMember(group.name, from, index)) _fail();
+            },
+            onRelayReorder: (from, to) {
+              if (!s.moveGroupMember(group.name, from, to)) _fail();
+            },
+            onEdit: () => _editGroup(group),
+            onDelete: () => _deleteGroup(group),
+            onTestGroup: !canTest || group.members.isEmpty
+                ? null
+                : () => _testNodes([...group.members]),
+            testing: _testing,
+            delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
+            approx: approx,
+            onAddMember: () async {
+              final picked = await _pickMembers(profile, group);
+              if (picked == null || picked.isEmpty) return;
+              final names = group.type == 'relay'
+                  ? orderNamesByNodeList(
+                      profile,
+                      picked.where(profile.proxyByName.containsKey),
+                    )
+                  : picked;
+              if (names.isEmpty) {
+                _toast('链式代理只能添加节点');
+                return;
+              }
+              var added = 0;
+              for (final name in names) {
+                if (s.addGroupMember(
+                  group.name,
+                  name,
+                  appendToEnd: group.type == 'relay',
+                )) {
+                  added++;
+                }
+              }
+              if (added == 0) {
+                _fail();
+                return;
+              }
+              // 组头计数直接读 state，刷新一次就能看到新成员。
+              if (mounted) {
+                setState(() {});
+                _toast('已加入 $added 个');
+              }
+            },
+            onDrop: (data) async {
+              final name = data.name;
+              final ok = data.fromGroup == null
+                  ? s.addGroupMember(
+                      group.name,
+                      name,
+                      appendToEnd: group.type == 'relay',
+                    )
+                  : s.moveMember(name, data.fromGroup!, group.name);
+              if (!ok) {
+                _fail();
+                return;
+              }
+              final runtime = _selectionRuntime;
+              await _selectNodeForGroup(group.name, name);
+              if (mounted && runtime == null) {
+                _toast('已加入并切换到「$name」');
+              }
+            },
+            onRemove: (name) {
+              if (!s.removeGroupMember(group.name, name)) _fail();
+            },
+            onDropRule: (rule) => _retargetRule(rule, group.name),
+          ),
+        ),
+      // 系统策略：不进 YAML 建同名组，只在这里只读展示，但可以挂规则。
+      const SizedBox(height: Insets.md),
+      MicroLabel('系统策略'),
+      for (final (name, subtitle) in const [
+        ('DIRECT', '直连：不经过代理，直接访问目标'),
+        ('REJECT', '拒绝：直接断开，不发出请求'),
+      ]) ...[
+        const SizedBox(height: Insets.sm),
+        _SystemPolicyCard(
+          state: s,
+          target: name,
+          subtitle: subtitle,
+          onDropRule: (rule) => _retargetRule(rule, name),
+        ),
+      ],
+      const SizedBox(height: Insets.xl),
+    ];
+
+    if (widget.desktop) {
+      return LayoutBuilder(
+        builder: (context, bounds) {
+          if (bounds.maxWidth < 750) {
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [nodes, const SizedBox(height: 12), ...policies],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: bounds.maxWidth >= 1030 ? 328 : 292,
+                child: ListView(
+                  primary: false,
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
+                  children: [nodes],
+                ),
+              ),
+              VerticalDivider(width: 1, color: scheme.outlineVariant),
+              Expanded(
+                child: ListView(
+                  primary: false,
+                  padding: const EdgeInsets.fromLTRB(18, 12, 20, 16),
+                  children: policies,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(Insets.lg, Insets.sm, Insets.lg, 120),
       children: [
@@ -675,147 +856,9 @@ class _ProxyBoardState extends State<ProxyBoard>
             style: mono(11, color: scheme.onSurfaceVariant, letterSpacing: 0.3),
           ),
         ),
-        _NodeListCard(
-          nodes: profile.proxies,
-          delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
-          approx: approx,
-          currentName: selection[kDefaultGroupName],
-          onTestAll: profile.proxies.isEmpty
-              ? null
-              : () => _testNodes([for (final p in profile.proxies) p.name]),
-          testing: _testing,
-          testProgress: _testing ? '测速中 $_testDone/$_testTotal' : null,
-          onOpen: _editNode,
-          onDelete: _deleteNode,
-          onMenuNode: (n) => _showNodeActions(n),
-          onAdd: _addNode,
-          onDrop: (data) {
-            if (data.fromGroup == null) return;
-            final ok = s.removeGroupMember(data.fromGroup!, data.name);
-            if (!ok) _fail();
-          },
-        ),
+        nodes,
         const SizedBox(height: Insets.md),
-        _GroupsToolRow(onCreate: _addGroup),
-        for (final group in groups)
-          Padding(
-            padding: const EdgeInsets.only(top: Insets.md),
-            child: _GroupCard(
-              swipeOpen: _swipedGroup == group.name,
-              onSwipeOpenChanged: (open) =>
-                  setState(() => _swipedGroup = open ? group.name : null),
-              group: group,
-              isAuto: group.name == kAutoGroupName,
-              state: s,
-              onOpenNode: _editNode,
-              onMove: (n, from) => _moveDialog(n, from),
-              onDeleteNode: _deleteNode,
-              onMenuNode: (n, from) => _showNodeActions(n, fromGroup: from),
-              selectedName: group.name == kAutoGroupName
-                  ? null
-                  : selection[group.name],
-              onSelectMember: group.name == kAutoGroupName
-                  ? (_) => _toast('「自动选择」按测速结果自动选，不能手动切')
-                  : widget.runtime == null && widget.onGroupSelection == null
-                  ? null
-                  : (name) => _selectNodeForGroup(group.name, name),
-              onRelayInsert: (node, index) {
-                final from = group.members.length;
-                if (!s.addGroupMember(
-                  group.name,
-                  node,
-                  appendToEnd: group.type == 'relay',
-                )) {
-                  _fail();
-                  return;
-                }
-                if (!s.moveGroupMember(group.name, from, index)) _fail();
-              },
-              onRelayReorder: (from, to) {
-                if (!s.moveGroupMember(group.name, from, to)) _fail();
-              },
-              onEdit: () => _editGroup(group),
-              onDelete: () => _deleteGroup(group),
-              onTestGroup: group.members.isEmpty
-                  ? null
-                  : () => _testNodes([...group.members]),
-              testing: _testing,
-              delays: {...widget.cachedDelays, ...?widget.runtime?.delays},
-              approx: approx,
-              onAddMember: () async {
-                final picked = await _pickMembers(profile, group);
-                if (picked == null || picked.isEmpty) return;
-                final names = group.type == 'relay'
-                    ? orderNamesByNodeList(
-                        profile,
-                        picked.where(profile.proxyByName.containsKey),
-                      )
-                    : picked;
-                if (names.isEmpty) {
-                  _toast('链式代理只能添加节点');
-                  return;
-                }
-                var added = 0;
-                for (final name in names) {
-                  if (s.addGroupMember(
-                    group.name,
-                    name,
-                    appendToEnd: group.type == 'relay',
-                  )) {
-                    added++;
-                  }
-                }
-                if (added == 0) {
-                  _fail();
-                  return;
-                }
-                // 组头计数直接读 state，刷新一次就能看到新成员。
-                if (mounted) {
-                  setState(() {});
-                  _toast('已加入 $added 个');
-                }
-              },
-              onDrop: (data) async {
-                final name = data.name;
-                final ok = data.fromGroup == null
-                    ? s.addGroupMember(
-                        group.name,
-                        name,
-                        appendToEnd: group.type == 'relay',
-                      )
-                    : s.moveMember(name, data.fromGroup!, group.name);
-                if (!ok) {
-                  _fail();
-                  return;
-                }
-                final runtime = _selectionRuntime;
-                await _selectNodeForGroup(group.name, name);
-                if (mounted && runtime == null) {
-                  _toast('已加入并切换到「$name」');
-                }
-              },
-              onRemove: (name) {
-                if (!s.removeGroupMember(group.name, name)) _fail();
-              },
-              onDropRule: (rule) => _retargetRule(rule, group.name),
-            ),
-          ),
-        // 系统策略：不进 YAML 建同名组，只在这里只读展示，但可以挂规则。
-        const SizedBox(height: Insets.md),
-        MicroLabel('系统策略'),
-        for (final (name, subtitle) in const [
-          ('DIRECT', '直连：不经过代理，直接访问目标'),
-          ('REJECT', '拒绝：直接断开，不发出请求'),
-        ]) ...[
-          const SizedBox(height: Insets.sm),
-          _SystemPolicyCard(
-            state: s,
-            target: name,
-            subtitle: subtitle,
-            onDropRule: (rule) => _retargetRule(rule, name),
-          ),
-        ],
-        const SizedBox(height: Insets.xl),
+        ...policies,
       ],
     );
   }
@@ -864,6 +907,7 @@ class _NodeListCard extends StatefulWidget {
     this.onTestAll,
     this.testing = false,
     this.testProgress,
+    this.alwaysExpanded = false,
   });
 
   final List<ProxyEntry> nodes;
@@ -892,6 +936,7 @@ class _NodeListCard extends StatefulWidget {
   /// 测速进行中：禁用入口并显示 [testProgress]。
   final bool testing;
   final String? testProgress;
+  final bool alwaysExpanded;
 
   @override
   State<_NodeListCard> createState() => _NodeListCardState();
@@ -914,6 +959,7 @@ class _NodeListCardState extends State<_NodeListCard> {
     final scheme = Theme.of(context).colorScheme;
     final motion = Motion.of(context);
     final count = widget.nodes.length;
+    final expanded = widget.alwaysExpanded || _expanded;
     return DragTarget<DragNodeData>(
       onWillAcceptWithDetails: (d) => d.data.fromGroup != null,
       onAcceptWithDetails: (d) => widget.onDrop(d.data),
@@ -928,7 +974,9 @@ class _NodeListCardState extends State<_NodeListCard> {
             Insets.lg,
             Insets.md,
           ),
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: widget.alwaysExpanded
+              ? null
+              : () => setState(() => _expanded = !_expanded),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -963,16 +1011,17 @@ class _NodeListCardState extends State<_NodeListCard> {
                     onPressed: widget.onAdd,
                     icon: const Icon(Icons.add_circle_outline, size: 20),
                   ),
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: motion.arrow,
-                    curve: motion.enter,
-                    child: Icon(
-                      Icons.expand_more,
-                      size: 20,
-                      color: scheme.onSurfaceVariant,
+                  if (!widget.alwaysExpanded)
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: motion.arrow,
+                      curve: motion.enter,
+                      child: Icon(
+                        Icons.expand_more,
+                        size: 20,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -980,6 +1029,8 @@ class _NodeListCardState extends State<_NodeListCard> {
                 widget.testProgress ??
                     (active
                         ? '松手就从当前组移除'
+                        : widget.alwaysExpanded
+                        ? '点击编辑，拖到策略组添加成员'
                         : (_expanded ? '点行编辑，长按拖到组卡' : '点这里展开；所有节点都在，不管有没有进组')),
                 style: widget.testProgress == null
                     ? hintStyle(context)
@@ -989,7 +1040,7 @@ class _NodeListCardState extends State<_NodeListCard> {
                 duration: motion.expand,
                 curve: motion.enter,
                 alignment: Alignment.topCenter,
-                child: !_expanded
+                child: !expanded
                     ? const SizedBox(width: double.infinity)
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1188,6 +1239,7 @@ class _GroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
     final profile = state.profile;
     final currentLabel = _currentLabel;
     final issue = groupCardIssue(group: group, profile: profile);
@@ -1291,11 +1343,11 @@ class _GroupCard extends StatelessWidget {
                     (currentLabel != null && !active
                         ? scheme.primary.withValues(alpha: 0.35)
                         : _dropBorder(scheme, active)),
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             Insets.lg,
-            Insets.md,
+            desktop ? Insets.sm : Insets.md,
             Insets.sm,
-            Insets.lg,
+            desktop ? Insets.sm : Insets.lg,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1428,7 +1480,24 @@ class _GroupCard extends StatelessWidget {
                                 size: 20,
                               ),
                             ),
-                          if (!isAuto)
+                          if (!isAuto && desktop)
+                            PopupMenuButton<String>(
+                              tooltip: '策略组操作',
+                              onSelected: (value) =>
+                                  value == 'edit' ? onEdit() : onDelete(),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('编辑组'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('删除组'),
+                                ),
+                              ],
+                              icon: const Icon(Icons.more_horiz, size: 19),
+                            )
+                          else if (!isAuto)
                             IconButton(
                               tooltip: '组设置',
                               onPressed: onEdit,
@@ -1450,11 +1519,11 @@ class _GroupCard extends StatelessWidget {
                         ),
                       )
                     else ...[
-                      const SizedBox(height: Insets.md),
+                      SizedBox(height: desktop ? Insets.sm : Insets.md),
                       const Hairline(),
                       Padding(
-                        padding: const EdgeInsets.only(
-                          top: Insets.md,
+                        padding: EdgeInsets.only(
+                          top: desktop ? Insets.sm : Insets.md,
                           right: Insets.sm,
                         ),
                         child: group.type == 'relay'

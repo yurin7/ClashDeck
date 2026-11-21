@@ -11,7 +11,14 @@ import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.system.Os
 import android.system.OsConstants
+import org.json.JSONException
+import org.json.JSONObject
 import java.io.File
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.Proxy
+import java.net.URL
+import java.util.Locale
 
 /**
  * 建立 TUN 并把 fd 交给内核子进程。
@@ -92,6 +99,8 @@ class ClashVpnService : VpnService() {
     private var fromAction: Boolean = false
     private var profileName: String = ""
     private var globalExit: String = ""
+    private var trafficThread: Thread? = null
+    private var notificationRates: String? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -152,6 +161,7 @@ class ClashVpnService : VpnService() {
                     ),
                 )
                 RuntimePrefs.setKernel(this, RuntimePrefs.STATE_STARTING)
+                stopTrafficUpdates()
                 promoteToForeground()
                 bootThread?.interrupt()
                 bootThread = Thread(
@@ -180,6 +190,7 @@ class ClashVpnService : VpnService() {
     override fun onDestroy() {
         bootThread?.interrupt()
         MihomoCore.stop()
+        stopTrafficUpdates()
         closeTun()
         running = false
         if (instance === this) instance = null
@@ -214,7 +225,7 @@ class ClashVpnService : VpnService() {
             if (proxyMode == "port") {
                 MihomoCore.log("仅代理端口模式：跳过 TUN")
                 RuntimeBridge.requestConfig(0, port, secret, tunStack) { yaml ->
-                    startCore(workDir, yaml, 0)
+                    startCore(workDir, yaml, 0, port, secret)
                 }
                 return
             }
@@ -230,7 +241,7 @@ class ClashVpnService : VpnService() {
             socketProtector = protector
             MihomoCore.log("TUN 已建立，fd=$fd，协议栈=$tunStack")
             RuntimeBridge.requestConfig(fd, port, secret, tunStack) { yaml ->
-                startCore(workDir, yaml, fd, protector)
+                startCore(workDir, yaml, fd, port, secret, protector)
             }
         } catch (t: Throwable) {
             fail("启动异常：${t.message}")
@@ -241,6 +252,8 @@ class ClashVpnService : VpnService() {
         workDir: File,
         yaml: String?,
         tunFd: Int,
+        port: Int,
+        secret: String?,
         protector: CoreSocketProtector? = null,
     ) {
         Thread({
@@ -268,10 +281,12 @@ class ClashVpnService : VpnService() {
                 if (error != null) {
                     fail(error)
                 } else {
+                    val pid = MihomoCore.pid
                     running = true
-                    RuntimePrefs.setKernel(this, RuntimePrefs.STATE_RUNNING, pid = MihomoCore.pid)
+                    RuntimePrefs.setKernel(this, RuntimePrefs.STATE_RUNNING, pid = pid)
                     runCatching { refreshNotification(); ClashWidgetProvider.refresh(this) }
-                    RuntimeBridge.notifyState("running", pid = MihomoCore.pid)
+                    startTrafficUpdates(port, secret, pid)
+                    RuntimeBridge.notifyState("running", pid = pid)
                 }
             } catch (t: Throwable) {
                 fail("写入配置或启动内核失败：${t.message}")
@@ -386,6 +401,7 @@ class ClashVpnService : VpnService() {
 
     private fun shutdown(reason: String?, notify: Boolean = true) {
         MihomoCore.stop()
+        stopTrafficUpdates()
         closeTun()
         running = false
         if (reason != null) MihomoCore.log("内核停止：$reason")
@@ -424,12 +440,87 @@ class ClashVpnService : VpnService() {
 
     // ------------------------------------------------------------- 前台通知
 
+    @Synchronized
+    private fun startTrafficUpdates(port: Int, secret: String?, pid: Int) {
+        if (pid <= 0 || MihomoCore.pid != pid || !RuntimePrefs.isRunning(this)) return
+        stopTrafficUpdates()
+        val thread = Thread({ watchTraffic(port, secret, pid) }, "clashdeck-traffic")
+        thread.isDaemon = true
+        trafficThread = thread
+        thread.start()
+    }
+
+    @Synchronized
+    private fun stopTrafficUpdates() {
+        trafficThread?.interrupt()
+        trafficThread = null
+        notificationRates = null
+    }
+
+    /** 直接订阅内核的速率流，冷启动和界面退到后台时也能更新通知。 */
+    private fun watchTraffic(port: Int, secret: String?, pid: Int) {
+        val thread = Thread.currentThread()
+        val url = URL("http://127.0.0.1:$port/traffic")
+        while (!thread.isInterrupted && MihomoCore.pid == pid) {
+            val connection = (url.openConnection(Proxy.NO_PROXY) as HttpURLConnection).apply {
+                connectTimeout = 2_000
+                readTimeout = 5_000
+                instanceFollowRedirects = false
+                if (!secret.isNullOrEmpty()) setRequestProperty("Authorization", "Bearer $secret")
+            }
+            try {
+                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    connection.inputStream.bufferedReader().use { reader ->
+                        while (!thread.isInterrupted && MihomoCore.pid == pid) {
+                            val line = reader.readLine() ?: break
+                            val sample = try {
+                                JSONObject(line)
+                            } catch (_: JSONException) {
+                                continue
+                            }
+                            val down = formatRate(sample.optLong("down"))
+                            val up = formatRate(sample.optLong("up"))
+                            updateNotificationRates(thread, "↓ $down  ·  ↑ $up")
+                        }
+                    }
+                }
+            } catch (_: IOException) {
+                // 内核 REST 可能还在启动，或在重载配置期间断流。
+            } finally {
+                connection.disconnect()
+            }
+            updateNotificationRates(thread, null)
+            if (MihomoCore.pid != pid) return
+            try {
+                Thread.sleep(1_000)
+            } catch (_: InterruptedException) {
+                return
+            }
+        }
+    }
+
+    @Synchronized
+    private fun updateNotificationRates(thread: Thread, rates: String?) {
+        if (trafficThread !== thread || notificationRates == rates) return
+        notificationRates = rates
+        refreshNotification()
+    }
+
+    private fun formatRate(bytesPerSecond: Long): String = when {
+        bytesPerSecond < 1024L -> "${bytesPerSecond.coerceAtLeast(0)} B/s"
+        bytesPerSecond < 1024L * 1024 -> String.format(Locale.ROOT, "%.1f KB/s", bytesPerSecond / 1024.0)
+        bytesPerSecond < 1024L * 1024 * 1024 ->
+            String.format(Locale.ROOT, "%.1f MB/s", bytesPerSecond / (1024.0 * 1024))
+        else -> String.format(Locale.ROOT, "%.1f GB/s", bytesPerSecond / (1024.0 * 1024 * 1024))
+    }
+
+    @Synchronized
     private fun promoteToForeground() {
         ensureChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
-    /** 状态/配置变化后刷新通知文案，不重建前台服务。 */
+    @Synchronized
     private fun refreshNotification() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification())
@@ -476,15 +567,19 @@ class ClashVpnService : VpnService() {
             profile?.takeIf { it.isNotBlank() },
             exit?.takeIf { it.isNotBlank() },
         ).joinToString(" · ").ifBlank { "轻点打开 ClashDeck" }
+        val rates = if (state == RuntimePrefs.STATE_RUNNING) notificationRates ?: "↓ —  ·  ↑ —" else null
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
+        if (rates != null) {
+            builder.setStyle(Notification.BigTextStyle().bigText("$rates\n$detail"))
+        }
         return builder
             .setContentTitle(title)
-            .setContentText(detail)
+            .setContentText(rates ?: detail)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentIntent(open)
             .setOngoing(true)

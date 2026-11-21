@@ -516,6 +516,7 @@ class _EditorPageState extends State<EditorPage> {
                       ProxyBoard(
                         state: state,
                         runtime: widget.runtime,
+                        isActiveProfile: widget.isActiveProfile,
                         cachedDelays: widget.cachedDelays,
                         onSubscriptionSaved: _rememberSubscription,
                         groupSelection: _groupSelection,

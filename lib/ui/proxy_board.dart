@@ -42,6 +42,7 @@ class ProxyBoard extends StatefulWidget {
     required this.state,
     this.onSubscriptionSaved,
     this.runtime,
+    this.isActiveProfile = true,
     this.groupSelection = const <String, String>{},
     this.onGroupSelection,
     this.cachedDelays = const <String, int?>{},
@@ -52,8 +53,11 @@ class ProxyBoard extends StatefulWidget {
   /// 用户导入/记下订阅地址时回调（编辑器用它把地址写进 sidecar meta）。
   final Future<void> Function(String url)? onSubscriptionSaved;
 
-  /// 非空时，组内点节点 = 让这个组改用该节点（运行期切换）。
+  /// 用于测速和读取当前出口的运行控制器。
   final RuntimeController? runtime;
+
+  /// 面板打开的是当前启用的配置。
+  final bool isActiveProfile;
 
   /// 每个组上次选中的节点（sidecar 里记的选择）。停止状态下也用它做高亮。
   final Map<String, String> groupSelection;
@@ -71,6 +75,13 @@ class ProxyBoard extends StatefulWidget {
 class _ProxyBoardState extends State<ProxyBoard>
     with SingleTickerProviderStateMixin {
   EditorState get s => widget.state;
+
+  RuntimeController? get _selectionRuntime {
+    final runtime = widget.runtime;
+    return widget.isActiveProfile && runtime?.phase == RuntimePhase.running
+        ? runtime
+        : null;
+  }
 
   /// 当前左滑露出「删除」的组名。
   String? _swipedGroup;
@@ -357,19 +368,13 @@ class _ProxyBoardState extends State<ProxyBoard>
 
   /// 组内点节点 = 把这个组当前出口改成该节点。
   ///
-  /// 关键点：选择先写进 sidecar（`meta.app.groupNodes`），不依赖内核在跑。
-  /// 内核运行中再顺带调一次接口立刻生效；停止状态下只记偏好、刷 UI，
-  /// 不弹「请先启动内核」，也不报错——下次启动内核会自动应用。
-  /// 组内任何成员（节点 / 策略组 / 系统策略）都能点成当前出口。
-  ///
-  /// 停止状态下只写偏好（sidecar）并刷新 UI；运行中再顺带通知内核。
+  /// 选择先写入当前配置的 sidecar，内核运行此配置时同步切换出口。
   Future<void> _selectNodeForGroup(String group, String name) async {
-    final runtime = widget.runtime;
-    final running = runtime != null && runtime.phase == RuntimePhase.running;
     await widget.onGroupSelection?.call(group, name);
     if (!mounted) return;
     setState(() {});
-    if (!running) return;
+    final runtime = _selectionRuntime;
+    if (runtime == null) return;
     final ok = await runtime.selectNode(group, name);
     if (!ok) {
       _toast('切换失败，内核可能已经退出');
@@ -631,18 +636,16 @@ class _ProxyBoardState extends State<ProxyBoard>
         ),
       );
     }
-    // 高亮用的选择：sidecar 里记的优先，运行中的实际选择覆盖它（会话内切换不回写）。
-    // 两路都可能过期（成员被删、组被重命名），所以只在成员仍在组里时才采用，
-    // 否则交给 selectedInGroup 按规范自动回落。
-    final merged = <String, String>{
-      ...groupSelectionSnapshot(profile, widget.groupSelection),
-      ...?widget.runtime?.selected,
-    };
-    final selection = <String, String>{
-      for (final group in groups)
-        if (merged[group.name] case final String name)
-          if (group.members.contains(name)) group.name: name,
-    };
+    final selection = groupSelectionSnapshot(profile, widget.groupSelection);
+    final liveSelection = _selectionRuntime?.selected;
+    if (liveSelection != null) {
+      for (final group in groups) {
+        final name = liveSelection[group.name];
+        if (name != null && group.members.contains(name)) {
+          selection[group.name] = name;
+        }
+      }
+    }
     final approx = <String>{...?widget.runtime?.approxDelays};
     // 有节点就能测速：内核在跑走精确接口，未运行走 TCP 近似。
     // 「测速中是否可点」由卡片按 testing 统一禁用（canTestDelay 的判据）。
@@ -772,7 +775,7 @@ class _ProxyBoardState extends State<ProxyBoard>
                   return;
                 }
                 // 拖进来就说明用户想用这个节点：顺手把本组当前出口切过去。
-                final running = widget.runtime?.phase == RuntimePhase.running;
+                final running = _selectionRuntime != null;
                 await _selectNodeForGroup(group.name, data.node);
                 if (!running && mounted) {
                   _toast('已加入并切换到「${data.node}」');

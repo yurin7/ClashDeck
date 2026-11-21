@@ -22,24 +22,24 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ClashDeckTheme.dark(),
-        home: Scaffold(
-          body: Center(
-            child: RepaintBoundary(
-              key: boundaryKey,
-              child: const DesktopWindowCaption(),
-            ),
-          ),
+        builder: (context, child) => RepaintBoundary(
+          key: boundaryKey,
+          child: DesktopWindowFrame(child: child),
         ),
+        home: const Scaffold(),
       ),
     );
-    Future<int?> sample() => tester.runAsync(() async {
+    Future<int?> sample(Offset point) => tester.runAsync(() async {
       final boundary =
           boundaryKey.currentContext!.findRenderObject()!
               as RenderRepaintBoundary;
       final image = await boundary.toImage();
       try {
         final rgba = await image.toByteData(format: ImageByteFormat.rawRgba);
-        return rgba!.getUint32((image.width * 16 + 12) * 4);
+        final local = boundary.globalToLocal(point);
+        return rgba!.getUint32(
+          (image.width * local.dy.floor() + local.dx.floor()) * 4,
+        );
       } finally {
         image.dispose();
       }
@@ -51,16 +51,18 @@ void main() {
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: outside);
     await tester.pumpAndSettle();
-    final initial = await sample();
+    final initial = await sample(inside);
     expect(initial, isNotNull);
 
     await mouse.moveTo(inside);
     await tester.pumpAndSettle();
-    expect(await sample(), isNot(initial));
+    expect(find.text('最小化'), findsOneWidget);
+    expect(await sample(inside), isNot(initial));
 
     await mouse.moveTo(outside);
     await tester.pumpAndSettle();
-    expect(await sample(), initial);
+    expect(find.text('最小化'), findsNothing);
+    expect(await sample(inside), initial);
     await mouse.removePointer();
   });
 

@@ -41,17 +41,7 @@ class ClashDeckApp extends StatelessWidget {
       theme: ClashDeckTheme.light(),
       darkTheme: ClashDeckTheme.dark(),
       builder: Platform.isWindows
-          ? (context, child) => Stack(
-              fit: StackFit.expand,
-              children: [
-                ?child,
-                const Positioned(
-                  top: 0,
-                  right: 0,
-                  child: DesktopWindowCaption(),
-                ),
-              ],
-            )
+          ? (context, child) => DesktopWindowFrame(child: child)
           : null,
       home: const _Bootstrap(),
     );

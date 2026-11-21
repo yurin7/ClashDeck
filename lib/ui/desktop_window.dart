@@ -9,6 +9,24 @@ const _windowChannel = MethodChannel('dev.clashdeck/windows-window');
 
 Future<void> closeDesktopWindow() => _windowChannel.invokeMethod<void>('close');
 
+class DesktopWindowFrame extends StatelessWidget {
+  const DesktopWindowFrame({super.key, this.child});
+
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => Overlay.wrap(
+    // The caption sits above the Navigator, so its tooltips need their own host.
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        ?child,
+        const Positioned(top: 0, right: 0, child: DesktopWindowCaption()),
+      ],
+    ),
+  );
+}
+
 class DesktopWindowCaption extends StatefulWidget {
   const DesktopWindowCaption({super.key});
 

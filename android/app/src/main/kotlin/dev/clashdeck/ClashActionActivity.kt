@@ -93,6 +93,7 @@ class ClashActionActivity : Activity() {
             .putExtra(ClashVpnService.EXTRA_ROUTE_MODE, args["routeMode"] as? String ?: "all")
             .putExtra(ClashVpnService.EXTRA_MTU, (args["mtu"] as? Number)?.toInt() ?: 9000)
             .putExtra(ClashVpnService.EXTRA_TUN_ADDRESS, args["tunAddress"] as? String)
+            .putExtra(ClashVpnService.EXTRA_TUN_STACK, args["tunStack"] as? String)
             .putExtra(ClashVpnService.EXTRA_IPV6, args["ipv6"] as? Boolean ?: false)
             .putExtra(ClashVpnService.EXTRA_PROFILE_NAME, args["profileName"] as? String)
             .putExtra(ClashVpnService.EXTRA_GLOBAL_EXIT, args["globalExit"] as? String)

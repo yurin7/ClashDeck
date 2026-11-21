@@ -75,6 +75,7 @@ if (Test-Path $ifaceGo) {
 }
 
 # --- 编译 --------------------------------------------------------------------
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'mihomo/clashdeck_protect_linux.go') -Destination $tree -Force
 $env:CGO_ENABLED = '0'
 $env:GOOS = 'linux'
 if (-not $env:GOPROXY) { $env:GOPROXY = 'https://goproxy.cn,direct' }

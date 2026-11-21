@@ -108,6 +108,7 @@ class RuntimeController extends ChangeNotifier {
   int? _pid;
   String? _workDir;
   int _lastFd = 0;
+  String? _startedTunStack;
   List<String> _logs = const [];
   Map<String, String> _selected = const {};
   Map<String, List<String>> _members = const {};
@@ -359,6 +360,7 @@ class RuntimeController extends ChangeNotifier {
         // system / mixed 栈要在网卡上 bind 内核算出来的 tun 地址，这里把同一个
         // 地址交给 Kotlin 建网卡（gVisor 不看地址，但写了也无害）。
         'tunAddress': RuntimeConfig.tunAddressFor(config),
+        'tunStack': RuntimeConfig.tunStackFor(config),
         // 只有 YAML 里 ipv6: true 才让 VpnService 加 v6 地址/路由，否则 v6
         // 流量会被吸进 tun 后丢弃，部分网络下表现为「连不上」。
         'ipv6': config.plainAt(['ipv6']) == true,
@@ -846,6 +848,7 @@ class RuntimeController extends ChangeNotifier {
       tunFileDescriptor: fd,
       controller: '127.0.0.1:$port',
       secret: secret,
+      tunStack: _startedTunStack,
     );
   }
 
@@ -997,6 +1000,10 @@ class RuntimeController extends ChangeNotifier {
         final args = (call.arguments as Map<Object?, Object?>?) ?? const {};
         final fd = (args['fd'] as num?)?.toInt() ?? 0;
         _lastFd = fd;
+        _startedTunStack = fd > 0
+            ? (args['tunStack'] as String?) ??
+                  RuntimeConfig.tunStackFor(_activeConfig())
+            : null;
         final yaml = _buildRuntimeYaml(fd);
         // 顺带落一份模板：Flutter 不在时（磁贴/小组件冷启动）Kotlin 用它
         // 替换 file-descriptor 后 spawn。写失败不影响本次启动。

@@ -65,8 +65,9 @@ object MihomoCore {
      * @param workDir `-d` 参数（geo 数据库、缓存都落在这里）
      * @param configFile `-f` 参数（运行期生成的配置，里面写着 `tun.file-descriptor: <tunFd>`）
      * @param tunFd VpnService 建立并 detach 出来的 TUN fd
+     * @param protectSocket system / mixed 出站套接字的 Android VPN 保护入口
      */
-    fun start(binary: File, workDir: File, configFile: File, tunFd: Int): String? {
+    fun start(binary: File, workDir: File, configFile: File, tunFd: Int, protectSocket: String? = null): String? {
         if (isRunning) return "内核已在运行"
         if (!binary.exists()) return "找不到内核文件：${binary.absolutePath}"
         if (!configFile.exists()) return "找不到运行配置：${configFile.absolutePath}"
@@ -75,12 +76,14 @@ object MihomoCore {
 
         val logFile = File(workDir, LOG_FILE_NAME)
         logFile.delete()
-        val argv = arrayOf(
+        val baseArgs = arrayOf(
             binary.absolutePath,
             "-d", workDir.absolutePath,
             "-f", configFile.absolutePath,
         )
-        log("启动内核：" + argv.joinToString(" ") + "（fd=" + tunFd + "）")
+        val argv = if (protectSocket == null) baseArgs else
+            baseArgs + arrayOf("-clashdeck-protect-socket", protectSocket)
+        log("启动内核：" + baseArgs.joinToString(" ") + "（fd=" + tunFd + "）")
 
         val spawned = try {
             NativeSpawn.spawn(

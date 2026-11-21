@@ -1,7 +1,12 @@
 import 'package:clashdeck/core/edit/config_ops.dart';
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
+import 'package:clashdeck/state/editor_state.dart';
+import 'package:clashdeck/ui/chips.dart';
+import 'package:clashdeck/ui/proxy_board.dart';
+import 'package:clashdeck/ui/widgets/relay_chain.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 const _relayYaml = '''
 mixed-port: 7890
@@ -55,5 +60,52 @@ void main() {
     // 落在自己原来的间隙：纯空操作，文本都不变。
     final noop = ConfigOps.moveGroupMember(doc, '链式', 1, 1);
     expect(noop.text, doc.text);
+
+    // 落在紧邻右侧的间隙也不会改变成员顺序。
+    expect(_members(ConfigOps.moveGroupMember(doc, '链式', 0, 1)), [
+      'A',
+      'B',
+      'C',
+    ]);
+  });
+
+  testWidgets('从胶囊菜单连续后移 A，链条顺序更新到最后一阶', (tester) async {
+    final state = EditorState(doc: YamlDoc.parse(_relayYaml));
+    addTearDown(state.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: state,
+            builder: (context, _) => ProxyBoard(state: state),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final chip = find.descendant(
+      of: find.byType(RelayChain),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is NodeChip && widget.node.name == 'A',
+      ),
+    );
+    final menu = find.descendant(
+      of: chip,
+      matching: find.byIcon(Icons.more_vert),
+    );
+    final moveRight = find.text('后移一位');
+
+    for (final expected in const [
+      ['B', 'A', 'C'],
+      ['B', 'C', 'A'],
+    ]) {
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(moveRight);
+      await tester.pumpAndSettle();
+      expect(_members(state.doc), expected);
+    }
   });
 }

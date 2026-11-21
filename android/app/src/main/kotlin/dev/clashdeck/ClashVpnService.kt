@@ -49,6 +49,7 @@ class ClashVpnService : VpnService() {
 
         /// Dart 侧按 `dns.fake-ip-range` 算出的 tun 地址（`ip/prefix`），要和内核一致。
         const val EXTRA_TUN_ADDRESS = "tunAddress"
+        const val EXTRA_TUN_STACK = "tunStack"
 
         /** 从磁贴 / 小组件 / 通知发起的启停：停止后直接结束进程。 */
         const val EXTRA_FROM_ACTION = "fromAction"
@@ -84,7 +85,10 @@ class ClashVpnService : VpnService() {
     }
 
     private var bootThread: Thread? = null
+    @Volatile
     private var tunFd: Int = -1
+    @Volatile
+    private var socketProtector: CoreSocketProtector? = null
     private var fromAction: Boolean = false
     private var profileName: String = ""
     private var globalExit: String = ""
@@ -120,6 +124,10 @@ class ClashVpnService : VpnService() {
                 val mtu = intent.getIntExtra(EXTRA_MTU, (stored?.get("mtu") as? Number)?.toInt() ?: TUN_MTU)
                 val tunAddress = intent.getStringExtra(EXTRA_TUN_ADDRESS)
                     ?: stored?.get("tunAddress") as? String
+                val tunStack = intent.getStringExtra(EXTRA_TUN_STACK)
+                    ?: stored?.get("tunStack") as? String
+                    ?: RuntimeTemplate.tunStack(File(workDir))
+                    ?: "gvisor"
                 val ipv6 = intent.getBooleanExtra(EXTRA_IPV6, stored?.get("ipv6") as? Boolean ?: false)
                 fromAction = intent.getBooleanExtra(EXTRA_FROM_ACTION, false)
                 profileName = intent.getStringExtra(EXTRA_PROFILE_NAME)
@@ -137,6 +145,7 @@ class ClashVpnService : VpnService() {
                         "routeApps" to routeApps,
                         "mtu" to mtu,
                         "tunAddress" to tunAddress,
+                        "tunStack" to tunStack,
                         "ipv6" to ipv6,
                         "profileName" to profileName,
                         "globalExit" to globalExit,
@@ -146,7 +155,7 @@ class ClashVpnService : VpnService() {
                 promoteToForeground()
                 bootThread?.interrupt()
                 bootThread = Thread(
-                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress, ipv6) },
+                    { boot(File(workDir), port, secret, proxyMode, routeMode, routeApps, mtu, tunAddress, tunStack, ipv6) },
                     "clashdeck-boot",
                 ).also {
                     it.isDaemon = true
@@ -191,6 +200,7 @@ class ClashVpnService : VpnService() {
         routeApps: List<String>,
         mtu: Int,
         tunAddress: String?,
+        tunStack: String,
         ipv6: Boolean,
     ) {
         lastError = null
@@ -203,30 +213,39 @@ class ClashVpnService : VpnService() {
             // 仅代理端口模式：不建 TUN，内核只开 mixed-port / REST。
             if (proxyMode == "port") {
                 MihomoCore.log("仅代理端口模式：跳过 TUN")
-                RuntimeBridge.requestConfig(0, port, secret) { yaml ->
+                RuntimeBridge.requestConfig(0, port, secret, tunStack) { yaml ->
                     startCore(workDir, yaml, 0)
                 }
                 return
             }
 
-            val descriptor = establishTun(routeMode, routeApps, mtu, tunAddress, ipv6)
+            val systemTcp = tunStack == "system" || tunStack == "mixed"
+            val descriptor = establishTun(routeMode, routeApps, mtu, tunAddress, ipv6, systemTcp)
             if (descriptor == null) {
                 fail("建立 VPN 失败：没有拿到授权或系统拒绝")
                 return
             }
             val fd = handOver(descriptor)
-            MihomoCore.log("TUN 已建立，fd=$fd，开始向 Dart 索取运行配置")
-            RuntimeBridge.requestConfig(fd, port, secret) { yaml ->
-                startCore(workDir, yaml, fd)
+            val protector = if (systemTcp) CoreSocketProtector(this) else null
+            socketProtector = protector
+            MihomoCore.log("TUN 已建立，fd=$fd，协议栈=$tunStack")
+            RuntimeBridge.requestConfig(fd, port, secret, tunStack) { yaml ->
+                startCore(workDir, yaml, fd, protector)
             }
         } catch (t: Throwable) {
             fail("启动异常：${t.message}")
         }
     }
 
-    private fun startCore(workDir: File, yaml: String?, tunFd: Int) {
+    private fun startCore(
+        workDir: File,
+        yaml: String?,
+        tunFd: Int,
+        protector: CoreSocketProtector? = null,
+    ) {
         Thread({
             try {
+                if (tunFd > 0 && (this.tunFd != tunFd || socketProtector !== protector)) return@Thread
                 // Flutter engine 不在（从磁贴 / 小组件冷启动）时拿不到 Dart 现算的
                 // 配置：用 App 内启动时留下的 tpl + 本次真实 fd 回填。
                 val fromEngine = yaml?.takeIf { it.isNotBlank() }
@@ -245,7 +264,7 @@ class ClashVpnService : VpnService() {
                 val configFile = File(workDir, "runtime.yaml")
                 configFile.writeText(resolved)
                 val binary = File(applicationInfo.nativeLibraryDir, "libmihomo.so")
-                val error = MihomoCore.start(binary, workDir, configFile, tunFd)
+                val error = MihomoCore.start(binary, workDir, configFile, tunFd, protector?.name)
                 if (error != null) {
                     fail(error)
                 } else {
@@ -284,6 +303,7 @@ class ClashVpnService : VpnService() {
         mtu: Int,
         tunAddress: String?,
         ipv6: Boolean,
+        systemTcp: Boolean,
     ): ParcelFileDescriptor? {
         // 地址要和内核算出来的一致，否则 system / mixed 栈 bind 会失败。
         val (tunIp, tunPrefix) = parseTunAddress(tunAddress)
@@ -294,8 +314,8 @@ class ClashVpnService : VpnService() {
             .addDnsServer(TUN_DNS)
             .addRoute("0.0.0.0", 0)
 
-        // 分应用代理：allow 只让选中应用进来（自身默认不在其中，天然排除）；
-        // block / all 先把自身排除掉，避免回环。
+        // 系统 TCP 的回包需要走本 VPN。出站套接字经 protect() 走上游网络。
+        // gVisor 的 TCP 在用户态处理，继续排除本应用。
         var allowApplied = 0
         if (routeMode == "allow" && routeApps.isNotEmpty()) {
             routeApps.forEach { pkg ->
@@ -307,14 +327,12 @@ class ClashVpnService : VpnService() {
                 }
             }
         }
-        if (allowApplied == 0) {
-            try {
-                builder.addDisallowedApplication(packageName)
-            } catch (t: Throwable) {
-                MihomoCore.log("排除自身应用失败：${t.message}")
-            }
+        if (allowApplied > 0 && systemTcp) {
+            builder.addAllowedApplication(packageName)
+        } else if (allowApplied == 0) {
+            if (!systemTcp) builder.addDisallowedApplication(packageName)
             if (routeMode == "block") {
-                routeApps.forEach { pkg ->
+                routeApps.filterNot { systemTcp && it == packageName }.forEach { pkg ->
                     try {
                         builder.addDisallowedApplication(pkg)
                     } catch (t: Throwable) {
@@ -389,6 +407,9 @@ class ClashVpnService : VpnService() {
     }
 
     private fun closeTun() {
+        val protector = socketProtector
+        socketProtector = null
+        protector?.close()
         val fd = tunFd
         tunFd = -1
         if (fd >= 0) {

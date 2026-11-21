@@ -1,5 +1,7 @@
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
+import 'package:clashdeck/ui/chips.dart';
+import 'package:clashdeck/ui/widgets/drag_state.dart';
 import 'package:clashdeck/ui/widgets/relay_chain.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -18,21 +20,25 @@ rules:
   - MATCH,链式
 ''';
 
+Finder _node(String name) => find.byWidgetPredicate(
+  (widget) => widget is NodeChip && widget.node.name == name,
+);
+
 void main() {
-  testWidgets('链内间隙命中区至少 20 宽，长按拖 A 到 A、B 之间回调 (0,1)', (tester) async {
-    tester.view.physicalSize = const Size(1080, 1400);
-    tester.view.devicePixelRatio = 2;
-    addTearDown(tester.view.reset);
+  tearDown(dragState.reset);
 
-    final profile = Profile.from(YamlDoc.parse(_relayYaml));
-    final group = profile.group('链式')!;
-    final moved = <List<int>>[];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: RelayChain(
+  for (final (name, from, forward) in const [('A', 0, true), ('C', 2, false)]) {
+    testWidgets('$name 从对应边缘覆盖 B 的 30% 时才预览换位', (tester) async {
+      tester.view.physicalSize = const Size(1080, 1400);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+      final profile = Profile.from(YamlDoc.parse(_relayYaml));
+      final group = profile.group('链式')!;
+      final moved = <List<int>>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RelayChain(
               group: group,
               profile: profile,
               delays: const {},
@@ -40,43 +46,56 @@ void main() {
               onOpen: (_) {},
               onDelete: (_) {},
               onRemove: (_) {},
-              onSelect: (_) {},
               onAddMember: () {},
               onMoveLeft: (_, _) {},
               onMoveRight: (_, _) {},
               onInsertAt: (_, _) {},
-              onMoveMember: (from, to) => moved.add([from, to]),
+              onMoveMember: (from, gap) => moved.add([from, gap]),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // 3 个成员 = 首/中/尾三个间隙 + 末尾「加一阶」前的一个间隙。
-    final gaps = find.byType(DragTarget<Object>);
-    expect(gaps, findsNWidgets(4));
-    for (var i = 0; i < 4; i++) {
-      expect(
-        tester.getSize(gaps.at(i)).width,
-        greaterThanOrEqualTo(20),
-        reason: '第 $i 个间隙命中区太窄，真机手指落不进去',
       );
-    }
+      await tester.pumpAndSettle();
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.text('A').first),
-    );
-    // 长按 250ms 后才进入拖拽态。
-    await tester.pump(const Duration(milliseconds: 300));
-    await gesture.moveTo(tester.getCenter(gaps.at(1)));
-    await tester.pump(const Duration(milliseconds: 60));
-    expect(find.text('A'), findsWidgets, reason: '拖拽浮层应该跟着手指');
+      final source = tester.getRect(_node(name));
+      final target = tester.getRect(_node('B'));
+      final touch = tester.getCenter(find.text(name));
+      final anchor = touch - source.topLeft;
+      final placeholder = find.descendant(
+        of: _node(name),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is CustomPaint && widget.painter != null,
+        ),
+      );
+      final gesture = await tester.startGesture(touch);
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await gesture.up();
-    await tester.pumpAndSettle();
-    expect(moved, [
-      [0, 1],
-    ]);
-  });
+      Future<void> overlap(double fraction) async {
+        final left = forward
+            ? target.left + target.width * fraction - source.width
+            : target.right - target.width * fraction;
+        await gesture.moveTo(Offset(left, target.top) + anchor);
+        await tester.pumpAndSettle();
+      }
+
+      await overlap(0.29);
+      expect(placeholder, findsNothing);
+      expect(tester.getRect(_node('B')), target);
+
+      await overlap(0.31);
+      expect(placeholder, findsOneWidget);
+      expect(tester.getSize(placeholder), source.size);
+      expect(
+        tester.getTopLeft(_node('B')).dx,
+        forward ? lessThan(target.left) : greaterThan(target.left),
+      );
+      expect(moved, isEmpty);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(moved, [
+        [from, forward ? 2 : 1],
+      ]);
+    });
+  }
 }

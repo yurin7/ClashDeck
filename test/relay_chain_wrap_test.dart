@@ -30,6 +30,9 @@ Future<void> _pump(
   double width = 360,
   Map<String, int?> delays = const {},
 }) async {
+  tester.view.physicalSize = Size(width, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final profile = Profile.from(YamlDoc.parse(_yaml(nodes)));
   final group = profile.groupByName['chain']!;
   await tester.pumpWidget(
@@ -62,11 +65,21 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('长名在 360dp 下不溢出，箭头与加一阶仍在', (tester) async {
+  testWidgets('长名在 360dp 下紧凑换行，连接线区域与加一阶仍在', (tester) async {
     await _pump(tester, const ['HK-01', 'JP-02', 'SG-04', _long]);
     expect(tester.takeException(), isNull);
     expect(find.text('加一阶'), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_right_alt_rounded), findsNWidgets(3));
+    final wrap = find.byType(Wrap);
+    expect(tester.widget<Wrap>(wrap).spacing, lessThan(24));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter != null &&
+            widget.child is Wrap,
+      ),
+      findsOneWidget,
+    );
   });
 
   for (final width in const [320.0, 360.0]) {

@@ -247,6 +247,7 @@ class MainActivity : FlutterActivity() {
             .putExtra(ClashVpnService.EXTRA_ROUTE_MODE, routeMode)
             .putExtra(ClashVpnService.EXTRA_MTU, mtu)
             .putExtra(ClashVpnService.EXTRA_TUN_ADDRESS, tunAddress)
+            .putExtra(ClashVpnService.EXTRA_TUN_STACK, arguments["tunStack"] as? String)
             .putExtra(ClashVpnService.EXTRA_IPV6, arguments["ipv6"] as? Boolean ?: false)
             .putExtra(ClashVpnService.EXTRA_PROFILE_NAME, arguments["profileName"] as? String)
             .putExtra(ClashVpnService.EXTRA_GLOBAL_EXIT, arguments["globalExit"] as? String)

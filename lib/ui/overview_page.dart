@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/model/app_settings.dart';
+import '../runtime/runtime_config.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'theme.dart';
@@ -363,28 +364,17 @@ class _QuickControls extends StatelessWidget {
                       const MicroLabel('TUN 协议栈'),
                       const SizedBox(height: Insets.sm),
                       _Segmented<String>(
-                        values: const ['gvisor', 'system', 'mixed'],
+                        values: RuntimeConfig.tunStacks,
                         selected: state.tunStack,
-                        labelOf: (stack) =>
-                            stack == 'gvisor' ? stack : '$stack（实验）',
+                        labelOf: (stack) => stack,
                         onSelected: (stack) async {
-                          if (stack != 'gvisor') {
-                            showToast(
-                              context,
-                              '实验项：fd 模式下 system / mixed 目前无法联网，后续版本再支持',
-                            );
-                            return;
-                          }
                           await state.setTunStack(stack);
                           await runtime.restartIfRunning(reason: 'TUN 协议栈已切换');
                           onChanged();
                         },
                       ),
                       const SizedBox(height: Insets.xs),
-                      Text(
-                        '默认 gvisor；system / mixed 是实验项，暂时不可用。改动需重启内核生效。',
-                        style: hintStyle(context),
-                      ),
+                      Text('默认 gvisor，切换后重启内核生效。', style: hintStyle(context)),
                     ],
                   )
                 : const SizedBox(width: double.infinity),

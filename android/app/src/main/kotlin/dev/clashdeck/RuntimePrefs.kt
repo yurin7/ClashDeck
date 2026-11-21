@@ -23,6 +23,7 @@ object RuntimePrefs {
     private const val KEY_ROUTE_APPS = "routeApps"
     private const val KEY_MTU = "mtu"
     private const val KEY_TUN_ADDRESS = "tunAddress"
+    private const val KEY_TUN_STACK = "tunStack"
     private const val KEY_IPV6 = "ipv6"
     private const val KEY_PROFILE_NAME = "profileName"
     private const val KEY_GLOBAL_EXIT = "globalExit"
@@ -53,6 +54,7 @@ object RuntimePrefs {
             .putStringSet(KEY_ROUTE_APPS, routeApps.toSet())
             .putInt(KEY_MTU, (arguments["mtu"] as? Number)?.toInt() ?: 9000)
             .putString(KEY_TUN_ADDRESS, arguments["tunAddress"] as? String)
+            .putString(KEY_TUN_STACK, arguments["tunStack"] as? String)
             .putBoolean(KEY_IPV6, arguments["ipv6"] as? Boolean ?: false)
             .putString(KEY_PROFILE_NAME, arguments["profileName"] as? String ?: "")
             .putString(KEY_GLOBAL_EXIT, arguments["globalExit"] as? String ?: "")
@@ -72,6 +74,7 @@ object RuntimePrefs {
             "routeApps" to (p.getStringSet(KEY_ROUTE_APPS, emptySet()) ?: emptySet()).toList(),
             "mtu" to p.getInt(KEY_MTU, 9000),
             "tunAddress" to p.getString(KEY_TUN_ADDRESS, null),
+            "tunStack" to p.getString(KEY_TUN_STACK, null),
             "ipv6" to p.getBoolean(KEY_IPV6, false),
             "profileName" to p.getString(KEY_PROFILE_NAME, ""),
             "globalExit" to p.getString(KEY_GLOBAL_EXIT, ""),

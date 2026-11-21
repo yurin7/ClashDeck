@@ -74,6 +74,7 @@ if [[ -f "$anet/interface.go" ]] && grep -q '^//go:build !android$' "$anet/inter
 fi
 
 echo "==> 编译内核"
+cp "$ROOT/tool/mihomo/clashdeck_protect_linux.go" "$WORK/"
 export CGO_ENABLED=0
 export GOOS=linux
 export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"

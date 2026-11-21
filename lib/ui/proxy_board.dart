@@ -1433,8 +1433,10 @@ class _GroupCard extends StatelessWidget {
                               onRelayInsert?.call(node, index),
                           onMoveLeft: (from, to) =>
                               onRelayReorder?.call(from, to),
+                          // 菜单给的是相邻索引，moveGroupMember 的 to 是插入
+                          // gap 索引：右移要落到下一阶之后，才能真的后移一位。
                           onMoveRight: (from, to) =>
-                              onRelayReorder?.call(from, to),
+                              onRelayReorder?.call(from, to + 1),
                           onMoveMember: (from, to) =>
                               onRelayReorder?.call(from, to),
                           onAddMember: onAddMember,

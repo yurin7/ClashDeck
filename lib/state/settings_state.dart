@@ -7,6 +7,7 @@ import '../core/edit/import_links.dart' as links;
 import '../core/model/app_settings.dart';
 import '../core/yaml/yaml_doc.dart';
 import '../data/profile_store.dart';
+import '../runtime/runtime_config.dart';
 
 /// 一份配置的"运行时设置"：一部分落在 YAML（内核真正读的键），
 /// 一部分落在 sidecar meta（本 App 的行为）。
@@ -45,10 +46,7 @@ class SettingsState extends ChangeNotifier {
   bool get tunEnabled => _bool(['tun', 'enable'], true);
 
   /// YAML 里的 TUN 栈（gvisor / system / mixed）。
-  String get tunStack =>
-      (_doc.plainAt(['tun', 'stack']) as String?)?.trim().isNotEmpty == true
-      ? (_doc.plainAt(['tun', 'stack']) as String).trim()
-      : 'gvisor';
+  String get tunStack => RuntimeConfig.tunStackFor(_doc);
 
   int get tunMtu {
     final raw = _doc.plainAt(['tun', 'mtu']);

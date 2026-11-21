@@ -13,6 +13,13 @@ class RuntimeConfig {
   static const String defaultController = '127.0.0.1:9090';
 
   static const String defaultStack = 'gvisor';
+  static const List<String> tunStacks = [defaultStack, 'system', 'mixed'];
+
+  static String tunStackFor(YamlDoc doc) {
+    final raw = doc.plainAt(['tun', 'stack']);
+    final stack = raw is String ? raw.trim().toLowerCase() : '';
+    return stack.isEmpty ? defaultStack : stack;
+  }
 
   /// TUN 网卡地址由**内核**决定，而不是配置里的 `inet4-address`。
   ///
@@ -71,6 +78,7 @@ class RuntimeConfig {
     String? secret,
     bool allowLan = false,
     bool ensureDns = true,
+    String? tunStack,
   }) {
     var next = doc;
 
@@ -93,15 +101,10 @@ class RuntimeConfig {
       // 内核是认的，得和 VpnService 配的一致。
       final configuredMtu = doc.plainAt(['tun', 'mtu']);
       final effectiveMtu = configuredMtu is num ? configuredMtu.toInt() : null;
-      final configuredStack = doc.plainAt(['tun', 'stack']);
-      final stack =
-          configuredStack is String && configuredStack.trim().isNotEmpty
-          ? configuredStack.trim().toLowerCase()
-          : defaultStack;
       final ipv6 = doc.plainAt(['ipv6']);
       final tunOptions = <String, Object?>{
         'enable': true,
-        'stack': stack,
+        'stack': tunStack ?? tunStackFor(doc),
         'file-descriptor': tunFileDescriptor,
         'auto-route': false,
         'auto-detect-interface': false,

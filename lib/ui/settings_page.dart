@@ -6,6 +6,7 @@ import '../core/model/app_settings.dart';
 import '../core/update/semver.dart';
 import '../core/update/update_check.dart';
 import '../data/app_prefs.dart';
+import '../runtime/runtime_config.dart';
 import '../runtime/runtime_controller.dart';
 import '../state/settings_state.dart';
 import 'app_picker_page.dart';
@@ -286,7 +287,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _ChoiceRow<AppRouteMode>(
                       label: '分应用代理',
                       description: state.app.routeMode == AppRouteMode.all
-                          ? '所有应用走代理（排除本 App）'
+                          ? '所有应用走代理'
                           : '已选 ${state.app.routePackages.length} 个应用',
                       value: state.app.routeMode,
                       items: AppRouteMode.values,
@@ -321,27 +322,14 @@ class _SettingsPageState extends State<SettingsPage> {
                         );
                       },
                     ),
-                    // 技术背景（只给维护者看）：system / mixed 栈会自己给网卡套地址再 bind，
-                    // 而本项目的 TUN 是 VpnService 建好、把 fd 传来的，内核只把它当既有网卡
-                    // （sing-tun: FileDescriptor != 0 时仅 os.NewFile 包装，stack_system.go /
-                    // stack_mixed.go 依赖 interfaceFinder/bindInterface）。实测两个栈能启动、
-                    // ip addr 有 198.18.0.1/30，但 core.log 没有任何连接、网页空白；gvisor 正常。
                     _ChoiceRow<String>(
                       label: 'TUN 协议栈',
-                      description: '默认 gvisor；system / mixed 是实验项，暂时不可用',
+                      description: '默认 gvisor，改动在重启内核后生效',
                       value: state.tunStack,
-                      items: const ['gvisor', 'system', 'mixed'],
-                      labelOf: (v) => v == 'gvisor' ? v : '$v（实验）',
-                      onChanged: (v) {
-                        if (v != 'gvisor') {
-                          showToast(
-                            context,
-                            '实验项：fd 模式下 system / mixed 目前无法联网，后续版本再支持',
-                          );
-                          return;
-                        }
-                        _applyRestart(() => state.setTunStack(v));
-                      },
+                      items: RuntimeConfig.tunStacks,
+                      labelOf: (v) => v,
+                      onChanged: (v) =>
+                          _applyRestart(() => state.setTunStack(v)),
                     ),
                     _ChoiceRow<int>(
                       label: 'TUN MTU',

@@ -10,8 +10,8 @@ import 'package:material_ui/material_ui.dart';
 /// - 页面 300ms（`appRoute` 自带，这里只做参考值）
 /// - 禁止 > 350ms
 ///
-/// `MediaQuery.disableAnimations`（系统「减少动画」）时降为 60ms，
-/// 不做大幅位移，只保留最低限度的状态变化提示。
+/// `MediaQuery.disableAnimations`（系统「减少动画」）时使用 [calm]。
+/// 链内让位和落位直接切换状态，其余组件过渡保留 60ms。
 class Motion {
   const Motion({
     required this.fast,
@@ -20,6 +20,8 @@ class Motion {
     required this.expand,
     required this.page,
     required this.snapBack,
+    required this.relayPreview,
+    required this.relayReorder,
     required this.reduceMotion,
   });
 
@@ -41,6 +43,12 @@ class Motion {
   /// 拖拽被拒绝后的「滑回原位」回弹。
   final Duration snapBack;
 
+  /// 链节拖过相邻胶囊时的换位预览。
+  final Duration relayPreview;
+
+  /// 链式成员顺序改变后的过渡。
+  final Duration relayReorder;
+
   /// 当前是否处于「减少动画」。
   final bool reduceMotion;
 
@@ -51,10 +59,12 @@ class Motion {
     expand: Duration(milliseconds: 220),
     page: Duration(milliseconds: 300),
     snapBack: Duration(milliseconds: 240),
+    relayPreview: Duration(milliseconds: 120),
+    relayReorder: Duration(milliseconds: 200),
     reduceMotion: false,
   );
 
-  /// 减少动画：保留 60ms 的淡入淡出，不跳变也不拖沓。
+  /// 减少动画时的过渡时长。
   static const Motion calm = Motion(
     fast: Duration(milliseconds: 60),
     chip: Duration(milliseconds: 60),
@@ -62,6 +72,8 @@ class Motion {
     expand: Duration(milliseconds: 60),
     page: Duration(milliseconds: 60),
     snapBack: Duration(milliseconds: 60),
+    relayPreview: Duration.zero,
+    relayReorder: Duration.zero,
     reduceMotion: true,
   );
 

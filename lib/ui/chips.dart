@@ -259,6 +259,8 @@ class NodeChip extends StatelessWidget {
     this.delayText,
     this.maxNameWidth,
     this.draggable = true,
+    this.dragData,
+    this.dragPlaceholder,
   });
 
   final ProxyEntry node;
@@ -285,9 +287,14 @@ class NodeChip extends StatelessWidget {
   /// 节点名最大宽度；用于链式代理等窄格子里截断长名。
   final double? maxNameWidth;
 
-  /// 是否自带拖拽浮层。链式代理的链节由外层接管拖拽，这里要关掉，
-  /// 否则内层 `DragNodeData` 会吞掉手势、链内换位永远收不到事件。
+  /// 是否支持长按拖拽。
   final bool draggable;
+
+  /// 链节使用链内换位数据，拿起和浮层共用普通节点的行为。
+  final Object? dragData;
+
+  /// 活动拖拽在布局中的目标占位。
+  final Widget? dragPlaceholder;
 
   static String typeBadge(String type) => switch (type) {
     'vless' => 'V',
@@ -360,8 +367,8 @@ class NodeChip extends StatelessWidget {
 
     return ListenableBuilder(
       listenable: dragState,
-      builder: (context, _) => LongPressDraggable<DragNodeData>(
-        data: DragNodeData(node.name, fromGroup),
+      builder: (context, _) => LongPressDraggable<Object>(
+        data: dragData ?? DragNodeData(node.name, fromGroup),
         // 回弹动画期间不允许再起拖，避免两层浮层叠在一起。
         maxSimultaneousDrags: dragState.animating ? 0 : null,
         // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
@@ -414,7 +421,8 @@ class NodeChip extends StatelessWidget {
             ),
           ),
         ),
-        childWhenDragging: Opacity(opacity: 0.3, child: shell),
+        childWhenDragging:
+            dragPlaceholder ?? Opacity(opacity: 0.3, child: shell),
         child: GestureDetector(
           onSecondaryTapDown: (details) async {
             final choice = await showMenu<String>(

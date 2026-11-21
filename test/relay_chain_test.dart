@@ -57,7 +57,7 @@ void main() {
     expect(added, isTrue);
   });
 
-  testWidgets('三阶链条按顺序显示，阶间有箭头，末尾有加一阶', (tester) async {
+  testWidgets('三阶链条按顺序显示并绘制连接线，末尾有加一阶', (tester) async {
     await tester.pumpWidget(_app(_profile(['a', 'b', 'c'])));
 
     expect(find.text('a'), findsOneWidget);
@@ -67,8 +67,15 @@ void main() {
     expect(find.text('1'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
-    // 三阶之间两个箭头。
-    expect(find.byIcon(Icons.arrow_right_alt_rounded), findsNWidgets(2));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter != null &&
+            widget.child is Wrap,
+      ),
+      findsOneWidget,
+    );
     expect(find.text('加一阶'), findsOneWidget);
   });
 

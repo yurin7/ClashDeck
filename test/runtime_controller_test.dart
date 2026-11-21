@@ -80,6 +80,15 @@ void main() {
       expect(yaml.contains('# 用户配置，注释要保留'), isTrue);
     });
 
+    test('运行配置采用 Android 建立 VPN 时选定的协议栈', () async {
+      for (final stack in ['system', 'mixed']) {
+        final yaml = await callFromNative(
+          MethodCall('buildRuntimeConfig', {'fd': 7, 'tunStack': stack}),
+        ) as String;
+        expect(YamlDoc.parse(yaml).plainAt(['tun', 'stack']), stack);
+      }
+    });
+
     test('onRuntimeState starting → running 会刷新阶段', () async {
       await callFromNative(
         const MethodCall('onRuntimeState', {'state': 'starting'}),

@@ -1,5 +1,7 @@
 import 'package:clashdeck/core/model/profile.dart';
 import 'package:clashdeck/core/yaml/yaml_doc.dart';
+import 'package:clashdeck/ui/chips.dart';
+import 'package:clashdeck/ui/widgets/drag_state.dart';
 import 'package:clashdeck/ui/widgets/relay_chain.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -93,48 +95,74 @@ Future<void> _pumpHost(
   await tester.pumpAndSettle();
 }
 
-/// 长按拖起 [from] 到第 [gap] 个间隙（0 表示放到最前）。
-Future<TestGesture> _dragToGap(
-  WidgetTester tester,
-  String from,
-  int gap,
-) async {
-  final gaps = find.byType(DragTarget<Object>);
-  final gesture = await tester.startGesture(
-    tester.getCenter(find.text(from).first),
-  );
+Finder _node(String name) => find.byWidgetPredicate(
+  (widget) => widget is NodeChip && widget.node.name == name,
+);
+
+Future<TestGesture> _dragCOverA(WidgetTester tester) async {
+  final source = tester.getRect(_node('C'));
+  final target = tester.getRect(_node('A'));
+  final touch = tester.getCenter(find.text('C'));
+  final anchor = touch - source.topLeft;
+  final gesture = await tester.startGesture(touch);
   await tester.pump(const Duration(milliseconds: 300));
-  await gesture.moveTo(tester.getCenter(gaps.at(gap)));
-  await tester.pump(const Duration(milliseconds: 60));
+  await gesture.moveTo(
+    Offset(target.right - target.width * 0.35, target.top) + anchor,
+  );
+  await tester.pumpAndSettle();
   return gesture;
 }
 
-double _x(WidgetTester tester, String name) =>
-    tester.getTopLeft(find.text(name).first).dx;
+List<String> _members(WidgetTester tester) =>
+    tester.widget<RelayChain>(find.byType(RelayChain)).group.members;
 
 void main() {
-  testWidgets('松手后播放淡入过渡，结束后顺序正确', (tester) async {
+  tearDown(dragState.reset);
+
+  testWidgets('松手前预览新位置，松手后从浮层滑入占位框', (tester) async {
     await _pumpHost(tester);
-    final gesture = await _dragToGap(tester, 'B', 0);
+    final gesture = await _dragCOverA(tester);
+    expect(_members(tester), ['A', 'B', 'C']);
+
+    final floating = find.descendant(
+      of: find.byWidgetPredicate(
+        (widget) => widget is Opacity && widget.opacity == 0.92,
+      ),
+      matching: find.text('C'),
+    );
+    final releasePosition = tester.getTopLeft(floating);
+    final slot = tester.getTopLeft(_node('C'));
+    final adjacent = tester.getTopLeft(_node('A'));
+    expect(slot.dx, lessThan(adjacent.dx));
+
     await gesture.up();
+    await tester.pump();
+    expect(_members(tester), ['C', 'A', 'B']);
+    expect(
+      (tester.getTopLeft(find.text('C')) - releasePosition).distance,
+      lessThan(0.01),
+    );
 
-    // 过渡进行中：AnimatedSwitcher 在、也不应该抛异常。
     await tester.pump(const Duration(milliseconds: 100));
-    expect(tester.takeException(), isNull);
-    expect(find.byType(AnimatedSwitcher), findsOneWidget);
+    final halfway = tester.getTopLeft(find.text('C'));
+    await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.pumpAndSettle();
-    expect(_x(tester, 'B'), lessThan(_x(tester, 'A')));
-    expect(_x(tester, 'A'), lessThan(_x(tester, 'C')));
+    final finalLabel = tester.getTopLeft(find.text('C'));
+    expect(
+      (halfway - releasePosition).distance,
+      inExclusiveRange(0, (finalLabel - releasePosition).distance),
+    );
+    expect(tester.getTopLeft(_node('C')), slot);
+    expect(tester.getTopLeft(_node('A')), adjacent);
   });
 
-  testWidgets('disableAnimations 时一次 pump 即落位', (tester) async {
+  testWidgets('关闭动画时松手即提交预览顺序', (tester) async {
     await _pumpHost(tester, disableAnimations: true);
-    final gesture = await _dragToGap(tester, 'C', 0);
+    final gesture = await _dragCOverA(tester);
+    final slot = tester.getTopLeft(_node('C'));
     await gesture.up();
-
     await tester.pump();
-    expect(_x(tester, 'C'), lessThan(_x(tester, 'A')));
-    await tester.pumpAndSettle();
+    expect(_members(tester), ['C', 'A', 'B']);
+    expect(tester.getTopLeft(_node('C')), slot);
   });
 }

@@ -33,7 +33,7 @@ object RuntimeBridge {
      * 请求 Dart 侧用真实 fd 生成运行配置。
      * 回调在主线程；失败时传 null。
      */
-    fun requestConfig(fd: Int, port: Int, secret: String?, done: (String?) -> Unit) {
+    fun requestConfig(fd: Int, port: Int, secret: String?, tunStack: String, done: (String?) -> Unit) {
         val current = channel
         if (current == null) {
             MihomoCore.log("Dart 通道未就绪，无法生成运行配置")
@@ -43,7 +43,7 @@ object RuntimeBridge {
         main.post {
             current.invokeMethod(
                 "buildRuntimeConfig",
-                mapOf("fd" to fd, "port" to port, "secret" to secret),
+                mapOf("fd" to fd, "port" to port, "secret" to secret, "tunStack" to tunStack),
                 object : MethodChannel.Result {
                     override fun success(result: Any?) {
                         done(result as? String)

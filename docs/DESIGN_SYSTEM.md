@@ -84,10 +84,12 @@
 | `arrow` | 180ms | 60ms | 展开箭头旋转 |
 | `expand` | 220ms | 60ms | 区展开折叠、成员/组卡增删的高度变化 |
 | `page` | 300ms | 60ms | 仅记录参考值；`appRoute` 实际固定 300/260ms |
+| `relayPreview` | 120ms | 0ms | 胶囊重叠时预览链节换位 |
+| `relayReorder` | 200ms | 0ms | 链式成员顺序更新时滑至新位置 |
 
 - 曲线：入场 `Motion.enter` = `easeOutCubic`，退场 `Motion.exit` = `easeInCubic`；仅 toast / 底部 sheet 允许轻微 `easeOutBack`。
-- `Motion.of(context)` 读 `MediaQuery.disableAnimations`：系统开启「减少动画」时全部降到 `calm`（60ms）；页面路由由 `appRoute` 固定，不随该 token 变化。
-- 允许的动效点**只有这些**：区展开 `AnimatedSize` + 箭头 `AnimatedRotation`；成员/组卡增删的单项 `MotionEntrance`（fade + 0.98→1）；chip 选中 `AnimatedContainer` + scale 0.98→1（不发光、不抖动）；内核启停 `StartStopButton`（`lib/ui/widgets/start_stop_button.dart`）cross-fade。
+- `Motion.of(context)` 读取 `MediaQuery.disableAnimations` 并在系统开启「减少动画」时使用表中的 `calm` 时长。页面路由由 `appRoute` 固定。
+- 允许的动效点**只有这些**：区展开 `AnimatedSize` + 箭头 `AnimatedRotation`；成员/组卡增删的单项 `MotionEntrance`（fade + 0.98→1）；chip 选中 `AnimatedContainer` + scale 0.98→1（不发光、不抖动）；内核启停 `StartStopButton`（`lib/ui/widgets/start_stop_button.dart`）cross-fade；链节重叠换位预览和落位。链节长按拿起与普通策略组共用 `NodeChip` 的拖拽效果。
 - 禁止：整页缩放、整列表 fade 入场、并行超过 2 个动画、单项超过 350ms、动画回调里 `setState` 整表。动画只重建自身；大列表继续用惰性 sliver。
 
 ## 6. 禁止清单（CI 自检，0 基线）

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../runtime/windows_connections.dart';
 import 'dropdown.dart';
 import 'fields.dart';
+import 'motion.dart';
 import 'overview_page.dart' show rateParts;
 import 'theme.dart';
 import 'widgets.dart';
@@ -232,6 +233,14 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
       });
     }
     final colors = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
+    final emptyTitle = filtered
+        ? '没有匹配的连接'
+        : _closed
+        ? '暂无关闭记录'
+        : _monitor.running
+        ? '暂无活动连接'
+        : '内核未运行';
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.xl, 11, Insets.xl, Insets.xl),
       child: Column(
@@ -352,13 +361,22 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
                             ),
                           ],
                         ),
-                        if (_monitor.stale && !_closed) ...[
-                          const SizedBox(height: Insets.sm),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('连接数据暂未更新', style: hintStyle(context)),
-                          ),
-                        ],
+                        MotionSize(
+                          child: _monitor.stale && !_closed
+                              ? Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: Insets.sm,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '连接数据暂未更新',
+                                      style: hintStyle(context),
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ],
                     ),
                   ),
@@ -387,47 +405,64 @@ class _DesktopConnectionsState extends State<DesktopConnections> {
                     ),
                   ),
                   Expanded(
-                    child: entries.isEmpty
-                        ? Center(
-                            child: EmptyHint(
-                              compact: true,
-                              icon: Icons.link,
-                              title: filtered
-                                  ? '没有匹配的连接'
-                                  : _closed
-                                  ? '暂无关闭记录'
-                                  : _monitor.running
-                                  ? '暂无活动连接'
-                                  : '内核未运行',
-                              action: filtered
-                                  ? TextButton(
-                                      onPressed: _resetFilters,
-                                      child: const Text('清除筛选'),
-                                    )
-                                  : !_closed && !_monitor.running
-                                  ? TextButton(
-                                      onPressed: widget.onOpenOverview,
-                                      child: const Text('返回概览'),
-                                    )
-                                  : null,
+                    child: AnimatedSwitcher(
+                      duration: motion.reduceMotion
+                          ? Duration.zero
+                          : motion.expand,
+                      switchInCurve: motion.enter,
+                      switchOutCurve: motion.exit,
+                      layoutBuilder: (current, previous) => Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          for (final child in previous)
+                            IgnorePointer(
+                              child: ExcludeSemantics(child: child),
                             ),
-                          )
-                        : ListView.builder(
-                            itemCount: entries.length,
-                            itemExtent: 59,
-                            itemBuilder: (context, index) {
-                              final entry = entries[index];
-                              return _ConnectionRow(
-                                key: ValueKey(entry.id),
-                                entry: entry,
-                                live: !_closed,
-                                onDetails: () => _details(entry),
-                                onClose: _closed || _monitor.closing
-                                    ? null
-                                    : () => _disconnect(id: entry.id),
-                              );
-                            },
-                          ),
+                          ?current,
+                        ],
+                      ),
+                      child: entries.isEmpty
+                          ? Center(
+                              key: ValueKey(emptyTitle),
+                              child: EmptyHint(
+                                compact: true,
+                                icon: Icons.link,
+                                title: emptyTitle,
+                                action: filtered
+                                    ? TextButton(
+                                        onPressed: _resetFilters,
+                                        child: const Text('清除筛选'),
+                                      )
+                                    : !_closed && !_monitor.running
+                                    ? TextButton(
+                                        onPressed: widget.onOpenOverview,
+                                        child: const Text('返回概览'),
+                                      )
+                                    : null,
+                              ),
+                            )
+                          : ListView.builder(
+                              key: PageStorageKey(
+                                _closed
+                                    ? 'closed-connections'
+                                    : 'active-connections',
+                              ),
+                              itemCount: entries.length,
+                              itemExtent: 59,
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                return _ConnectionRow(
+                                  key: ValueKey(entry.id),
+                                  entry: entry,
+                                  live: !_closed,
+                                  onDetails: () => _details(entry),
+                                  onClose: _closed || _monitor.closing
+                                      ? null
+                                      : () => _disconnect(id: entry.id),
+                                );
+                              },
+                            ),
+                    ),
                   ),
                 ],
               ),

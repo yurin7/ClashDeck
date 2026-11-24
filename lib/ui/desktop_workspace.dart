@@ -628,23 +628,7 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace>
                                       : _showCommands,
                                 ),
                                 const SizedBox(height: Insets.md),
-                                _destination(
-                                  _DesktopPage.overview,
-                                  Icons.space_dashboard_outlined,
-                                  '概览',
-                                ),
-                                const SizedBox(height: Insets.xs),
-                                _destination(
-                                  _DesktopPage.profiles,
-                                  Icons.layers_outlined,
-                                  '配置',
-                                ),
-                                const SizedBox(height: Insets.xs),
-                                _destination(
-                                  _DesktopPage.connections,
-                                  Icons.swap_vert_circle_outlined,
-                                  '连接',
-                                ),
+                                _navigation(),
                               ],
                             ),
                           ),
@@ -811,27 +795,80 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace>
     );
   }
 
-  Widget _destination(_DesktopPage page, IconData icon, String label) {
+  Widget _navigation() {
+    const destinations = [
+      (_DesktopPage.overview, Icons.space_dashboard_outlined, '概览'),
+      (_DesktopPage.profiles, Icons.layers_outlined, '配置'),
+      (_DesktopPage.connections, Icons.swap_vert_circle_outlined, '连接'),
+    ];
+    const height = 42.0;
+    const step = height + Insets.xs;
     final colors = Theme.of(context).colorScheme;
-    final selected =
-        _page == page ||
-        (_page == _DesktopPage.edit && page == _DesktopPage.profiles);
+    final selected = _page == _DesktopPage.edit ? _DesktopPage.profiles : _page;
+    final motion = Motion.of(context);
     final radius = BorderRadius.circular(Radiuses.sm);
-    return Material(
-      animationDuration: Motion.of(context).fast,
-      color: selected
-          ? colors.primary.withValues(alpha: 0.13)
-          : Colors.transparent,
-      borderRadius: radius,
-      child: ListTile(
-        dense: true,
-        selected: selected,
-        hoverColor: colors.primary.withValues(alpha: 0.07),
-        shape: RoundedRectangleBorder(borderRadius: radius),
-        leading: Icon(icon, size: 19),
-        title: Text(label),
-        onTap: _busy ? null : () => _navigate(page),
-      ),
+    return Stack(
+      children: [
+        AnimatedPositioned(
+          duration: motion.reduceMotion ? Duration.zero : motion.expand,
+          curve: motion.enter,
+          top: selected.index * step,
+          left: 0,
+          right: 0,
+          height: height,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(
+                  color: colors.primary.withValues(alpha: 0.19),
+                ),
+                gradient: LinearGradient(
+                  colors: [
+                    colors.primary.withValues(alpha: 0.19),
+                    colors.primary.withValues(alpha: 0.06),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Column(
+          spacing: Insets.xs,
+          children: [
+            for (final (page, icon, label) in destinations)
+              SizedBox(
+                height: height,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: Insets.md,
+                    ),
+                    selected: selected == page,
+                    hoverColor: colors.primary.withValues(alpha: 0.07),
+                    shape: RoundedRectangleBorder(borderRadius: radius),
+                    leading: AnimatedScale(
+                      scale: selected == page ? 1.08 : 1,
+                      duration: motion.reduceMotion
+                          ? Duration.zero
+                          : motion.fast,
+                      curve: motion.enter,
+                      child: Icon(icon, size: 19),
+                    ),
+                    title: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: _busy ? null : () => _navigate(page),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

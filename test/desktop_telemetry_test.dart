@@ -16,9 +16,14 @@ void main() {
       (at: time.subtract(const Duration(seconds: 1)), up: 512, down: 2048),
       (at: time, up: 1024, down: 4096),
     ];
-    Future<void> showChart() => tester.pumpWidget(
+    Future<void> showChart({bool reduceMotion = false}) => tester.pumpWidget(
       MaterialApp(
         theme: ClashDeckTheme.dark(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         home: Scaffold(
           body: Center(
             child: SizedBox(
@@ -52,6 +57,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('8.0'), findsOneWidget);
     expect(find.text('已暂停'), findsNothing);
+
+    readings.add((
+      at: time.add(const Duration(seconds: 2)),
+      up: 2048,
+      down: 16384,
+    ));
+    await showChart();
+    expect(find.text('8.0'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('16.0'), findsOneWidget);
+
+    readings.add((
+      at: time.add(const Duration(seconds: 3)),
+      up: 2048,
+      down: 32768,
+    ));
+    await showChart(reduceMotion: true);
+    expect(find.text('32.0'), findsOneWidget);
   });
 
   testWidgets('点击流量排行中的进程，连接页随即筛到该进程', (tester) async {

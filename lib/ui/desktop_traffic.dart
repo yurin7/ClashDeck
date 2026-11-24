@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../runtime/runtime_controller.dart';
 import 'dropdown.dart';
+import 'motion.dart';
 import 'overview_page.dart' show rateParts;
 import 'theme.dart';
 import 'widgets.dart';
@@ -38,10 +39,22 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
   List<RuntimeTrafficSample>? _frozenSamples;
   RuntimeTrafficSample? _hovered;
   RuntimeTrafficSample? _pinned;
+  bool _smoothTime = false;
 
   @override
   void didUpdateWidget(covariant DesktopTrafficChart oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final previous = oldWidget.samples.lastOrNull?.at;
+    final latest = widget.samples.lastOrNull?.at;
+    if (previous != latest) {
+      final elapsed = previous == null || latest == null
+          ? Duration.zero
+          : latest.difference(previous);
+      _smoothTime =
+          _frozenSamples == null &&
+          elapsed > Duration.zero &&
+          elapsed <= const Duration(seconds: 2);
+    }
     if (!widget.running && oldWidget.running) {
       _frozenSamples = null;
       _hovered = null;
@@ -108,6 +121,7 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
     final download = context.semantic.ok;
     final upload = colors.primary;
     final frozen = _frozenSamples != null;
@@ -120,6 +134,10 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
     final marker = _hovered ?? _pinned;
     final selected = marker != null && visible.contains(marker) ? marker : null;
     final reading = selected ?? visible.lastOrNull;
+    final liveMotion = !motion.reduceMotion && !frozen && selected == null;
+    final timeDuration = liveMotion && _smoothTime
+        ? motion.expand
+        : Duration.zero;
     final peak = visible.fold(
       1024,
       (peak, sample) => math.max(peak, math.max(sample.down, sample.up)),
@@ -142,8 +160,17 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
                   style: display(16, weight: 650),
                 ),
               ),
-              if (frozen)
-                Pill(label: '已暂停', color: colors.primary, dense: true),
+              AnimatedSwitcher(
+                duration: motion.reduceMotion ? Duration.zero : motion.fast,
+                child: frozen
+                    ? Pill(
+                        key: const ValueKey('paused'),
+                        label: '已暂停',
+                        color: colors.primary,
+                        dense: true,
+                      )
+                    : const SizedBox.shrink(),
+              ),
               const SizedBox(width: Insets.sm),
               SizedBox(
                 width: 91,
@@ -180,6 +207,7 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
                   icon: Icons.south,
                   color: download,
                   bytes: reading?.down,
+                  animate: liveMotion,
                 ),
               ),
               Expanded(
@@ -188,13 +216,20 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
                   icon: Icons.north,
                   color: upload,
                   bytes: reading?.up,
+                  animate: liveMotion,
                 ),
               ),
-              if (selected != null)
-                Padding(
+              SizedBox(
+                width: 60,
+                child: Padding(
                   padding: const EdgeInsets.only(top: Insets.xs),
-                  child: Text(_timeOf(selected.at), style: ticks),
+                  child: Text(
+                    selected == null ? '' : _timeOf(selected.at),
+                    textAlign: TextAlign.end,
+                    style: ticks,
+                  ),
                 ),
+              ),
             ],
           ),
           const SizedBox(height: Insets.lg),
@@ -240,16 +275,30 @@ class _DesktopTrafficChartState extends State<DesktopTrafficChart> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              CustomPaint(
-                                painter: _TrafficPainter(
-                                  samples: visible,
-                                  end: end,
-                                  seconds: _span.seconds,
-                                  upper: upper,
-                                  downColor: download,
-                                  upColor: upload,
-                                  gridColor: colors.outlineVariant,
-                                  marker: selected,
+                              TweenAnimationBuilder<double>(
+                                key: ValueKey(timeDuration != Duration.zero),
+                                tween: Tween(
+                                  end:
+                                      end?.millisecondsSinceEpoch.toDouble() ??
+                                      0,
+                                ),
+                                duration: timeDuration,
+                                curve: motion.enter,
+                                builder: (context, time, _) => CustomPaint(
+                                  painter: _TrafficPainter(
+                                    samples: visible,
+                                    end: end == null
+                                        ? null
+                                        : DateTime.fromMillisecondsSinceEpoch(
+                                            time.round(),
+                                          ),
+                                    seconds: _span.seconds,
+                                    upper: upper,
+                                    downColor: download,
+                                    upColor: upload,
+                                    gridColor: colors.outlineVariant,
+                                    marker: selected,
+                                  ),
                                 ),
                               ),
                               if (visible.isEmpty)
@@ -308,16 +357,18 @@ class _TrafficRate extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.bytes,
+    required this.animate,
   });
 
   final String label;
   final IconData icon;
   final Color color;
   final int? bytes;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
-    final rate = bytes == null ? null : rateParts(bytes!);
+    final motion = Motion.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -329,16 +380,27 @@ class _TrafficRate extends StatelessWidget {
           ],
         ),
         const SizedBox(height: Insets.xs),
-        Wrap(
-          spacing: Insets.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              rate?.value ?? '—',
-              style: display(30, weight: 650, color: color),
-            ),
-            if (rate != null) Text(rate.unit, style: hintStyle(context)),
-          ],
+        TweenAnimationBuilder<double>(
+          key: ValueKey(animate && bytes != null),
+          tween: Tween(end: bytes?.toDouble() ?? 0),
+          duration: animate && bytes != null ? motion.fast : Duration.zero,
+          curve: motion.enter,
+          builder: (context, value, _) {
+            final rate = bytes == null ? null : rateParts(value.round());
+            return Wrap(
+              spacing: Insets.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  rate?.value ?? '—',
+                  style: display(30, weight: 650, color: color).copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                if (rate != null) Text(rate.unit, style: hintStyle(context)),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -376,6 +438,8 @@ class _TrafficPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
     }
     if (end == null || samples.isEmpty) return;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
 
     double xFor(DateTime at) {
       final age = end!.difference(at).inMilliseconds;
@@ -447,6 +511,7 @@ class _TrafficPainter extends CustomPainter {
         Paint()..color = color,
       );
     }
+    canvas.restore();
   }
 
   @override

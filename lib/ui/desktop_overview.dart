@@ -129,6 +129,7 @@ class _DesktopOverviewState extends State<DesktopOverview> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final motion = Motion.of(context);
     final status = runtimeStatusColor(context, _runtime.phase);
     final blocked = _testing || widget.busy || _runtime.restarting;
     final running = _runtime.phase == RuntimePhase.running;
@@ -136,6 +137,7 @@ class _DesktopOverviewState extends State<DesktopOverview> {
     final needsAdmin = widget.tunStack != null && !widget.admin && !running;
     final active = widget.active;
     final prefs = widget.prefs;
+    final error = _runtime.lastError;
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
@@ -151,16 +153,23 @@ class _DesktopOverviewState extends State<DesktopOverview> {
                       Text('概览', style: display(27, weight: 670)),
                       const SizedBox(width: Insets.md),
                       Flexible(
-                        child: Pill(
-                          label: switch (_runtime.phase) {
-                            RuntimePhase.idle => '未运行',
-                            RuntimePhase.starting => '启动中',
-                            RuntimePhase.running => '运行中',
-                            RuntimePhase.stopping => '停止中',
-                            RuntimePhase.error => '运行错误',
-                          },
-                          color: status,
-                          dense: true,
+                        child: AnimatedSwitcher(
+                          duration: motion.reduceMotion
+                              ? Duration.zero
+                              : motion.fast,
+                          switchInCurve: motion.enter,
+                          child: Pill(
+                            key: ValueKey(_runtime.phase),
+                            label: switch (_runtime.phase) {
+                              RuntimePhase.idle => '未运行',
+                              RuntimePhase.starting => '启动中',
+                              RuntimePhase.running => '运行中',
+                              RuntimePhase.stopping => '停止中',
+                              RuntimePhase.error => '运行错误',
+                            },
+                            color: status,
+                            dense: true,
+                          ),
                         ),
                       ),
                     ],
@@ -214,13 +223,17 @@ class _DesktopOverviewState extends State<DesktopOverview> {
               )
             else
               Text('从配置库新建或导入配置后即可启动内核。', style: hintStyle(context)),
-            if (_runtime.lastError case final error?)
-              Padding(
-                padding: const EdgeInsets.only(top: Insets.sm),
-                child: Text(error, style: TextStyle(color: scheme.error)),
-              ),
+            MotionSize(
+              child: error == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: Insets.sm),
+                      child: Text(error, style: TextStyle(color: scheme.error)),
+                    ),
+            ),
             const SizedBox(height: Insets.lg),
             _OverviewColumns(
+              alignHeight: true,
               primary: DesktopTrafficChart(
                 samples: List.of(_samples),
                 running: running,
@@ -272,20 +285,39 @@ class _DesktopOverviewState extends State<DesktopOverview> {
 }
 
 class _OverviewColumns extends StatelessWidget {
-  const _OverviewColumns({required this.primary, required this.secondary});
+  const _OverviewColumns({
+    required this.primary,
+    required this.secondary,
+    this.alignHeight = false,
+  });
 
   final Widget primary;
   final Widget secondary;
+  final bool alignHeight;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) => bounds.maxWidth >= 850
-        ? Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ? Table(
+            columnWidths: const {
+              0: FlexColumnWidth(),
+              1: FixedColumnWidth(Insets.lg),
+              2: FixedColumnWidth(322),
+            },
             children: [
-              Expanded(child: primary),
-              const SizedBox(width: Insets.lg),
-              SizedBox(width: 322, child: secondary),
+              TableRow(
+                children: [
+                  primary,
+                  const SizedBox.shrink(),
+                  if (alignHeight)
+                    TableCell(
+                      verticalAlignment: TableCellVerticalAlignment.fill,
+                      child: secondary,
+                    )
+                  else
+                    secondary,
+                ],
+              ),
             ],
           )
         : Column(

@@ -11,6 +11,7 @@ import '../runtime/runtime_controller.dart';
 import '../runtime/speed_test.dart';
 import '../runtime/windows_connections.dart';
 import 'desktop_activity.dart';
+import 'desktop_hover.dart';
 import 'desktop_traffic.dart';
 import 'dropdown.dart';
 import 'motion.dart';
@@ -175,33 +176,44 @@ class _DesktopOverviewState extends State<DesktopOverview> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: widget.onShowLogs,
-                  tooltip: '内核日志',
-                  icon: const Icon(Icons.terminal_outlined, size: 20),
+                DesktopHover(
+                  borderRadius: BorderRadius.circular(Radiuses.xl),
+                  child: IconButton(
+                    onPressed: widget.onShowLogs,
+                    tooltip: '内核日志',
+                    icon: const Icon(Icons.terminal_outlined, size: 20),
+                  ),
                 ),
                 const SizedBox(width: Insets.sm),
                 SizedBox(
                   width: 148,
-                  child: active == null || blocked
-                      ? OutlinedButton(
-                          onPressed: null,
-                          child: Text(_testing ? '测速中…' : '启动内核'),
-                        )
-                      : needsAdmin
-                      ? FilledButton.icon(
-                          onPressed: widget.onStart,
-                          icon: const Icon(
-                            Icons.admin_panel_settings_outlined,
-                            size: 17,
+                  child: DesktopHover(
+                    enabled: active != null && !blocked && !startingOrStopping,
+                    borderRadius: BorderRadius.circular(Radiuses.md),
+                    color: running ? context.semantic.ok : Colors.white,
+                    intensity: running ? 1 : 1.8,
+                    lift: 2,
+                    tilt: 0.05,
+                    child: active == null || blocked
+                        ? OutlinedButton(
+                            onPressed: null,
+                            child: Text(_testing ? '测速中…' : '启动内核'),
+                          )
+                        : needsAdmin
+                        ? FilledButton.icon(
+                            onPressed: widget.onStart,
+                            icon: const Icon(
+                              Icons.admin_panel_settings_outlined,
+                              size: 17,
+                            ),
+                            label: const Text('授权 TUN'),
+                          )
+                        : StartStopButton(
+                            phase: _runtime.phase,
+                            onStart: widget.onStart,
+                            onStop: _runtime.stop,
                           ),
-                          label: const Text('授权 TUN'),
-                        )
-                      : StartStopButton(
-                          phase: _runtime.phase,
-                          onStart: widget.onStart,
-                          onStop: _runtime.stop,
-                        ),
+                  ),
                 ),
               ],
             ),
@@ -405,16 +417,25 @@ class _ActiveProfileCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: Insets.md),
-              OutlinedButton.icon(
-                onPressed: onSwitch,
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: const Text('切换配置'),
+              DesktopHover(
+                enabled: onSwitch != null,
+                borderRadius: BorderRadius.circular(Radiuses.md),
+                lift: 1,
+                child: OutlinedButton.icon(
+                  onPressed: onSwitch,
+                  icon: const Icon(Icons.swap_horiz, size: 16),
+                  label: const Text('切换配置'),
+                ),
               ),
               const SizedBox(width: Insets.xs),
-              IconButton(
-                onPressed: onEdit,
-                tooltip: '编辑已选配置',
-                icon: const Icon(Icons.edit_outlined, size: 17),
+              DesktopHover(
+                enabled: onEdit != null,
+                borderRadius: BorderRadius.circular(Radiuses.xl),
+                child: IconButton(
+                  onPressed: onEdit,
+                  tooltip: '编辑已选配置',
+                  icon: const Icon(Icons.edit_outlined, size: 17),
+                ),
               ),
             ],
           ),

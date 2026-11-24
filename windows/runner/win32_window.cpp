@@ -192,6 +192,12 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
+  // Windows supplies a caption when creating an overlapped window. Clear it
+  // before Show() so activation cannot repaint the system title bar.
+  const LONG_PTR style = GetWindowLongPtr(window, GWL_STYLE);
+  SetWindowLongPtr(window, GWL_STYLE,
+                   style & ~static_cast<LONG_PTR>(WS_CAPTION));
+
   UpdateTheme(window);
   native_corners_ = SUCCEEDED(DwmSetWindowAttribute(
       window, kCornerPreference, &kRoundCorners, sizeof(kRoundCorners)));

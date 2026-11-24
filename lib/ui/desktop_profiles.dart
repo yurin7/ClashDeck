@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/model/config_summary.dart';
 import '../data/profile_store.dart';
+import 'desktop_hover.dart';
 import 'fields.dart';
 import 'motion.dart';
 import 'theme.dart';
@@ -65,17 +66,29 @@ class DesktopProfiles extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text('配置库', style: display(27, weight: 670))),
-              OutlinedButton.icon(
-                onPressed: onImport,
-                icon: const Icon(Icons.file_download_outlined, size: 19),
-                label: const Text('导入'),
+              DesktopHover(
+                enabled: onImport != null,
+                borderRadius: BorderRadius.circular(Radiuses.md),
+                child: OutlinedButton.icon(
+                  onPressed: onImport,
+                  icon: const Icon(Icons.file_download_outlined, size: 19),
+                  label: const Text('导入'),
+                ),
               ),
               const SizedBox(width: Insets.md),
-              AccentButton(
-                label: '新建配置',
-                icon: Icons.add,
-                onPressed: onCreate,
-                expand: false,
+              DesktopHover(
+                enabled: onCreate != null,
+                borderRadius: BorderRadius.circular(Radiuses.md),
+                color: Colors.white,
+                intensity: 1.8,
+                lift: 2,
+                tilt: 0.05,
+                child: AccentButton(
+                  label: '新建配置',
+                  icon: Icons.add,
+                  onPressed: onCreate,
+                  expand: false,
+                ),
               ),
             ],
           ),
@@ -107,7 +120,7 @@ class DesktopProfiles extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: Insets.xl),
+          const SizedBox(height: Insets.lg),
           Expanded(
             child: visible.isEmpty
                 ? Center(
@@ -118,6 +131,7 @@ class DesktopProfiles extends StatelessWidget {
                   )
                 : LayoutBuilder(
                     builder: (context, bounds) => GridView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: Insets.sm),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: bounds.maxWidth >= 810 ? 2 : 1,
                         mainAxisExtent: 108,
@@ -186,7 +200,7 @@ class _ProfileCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final summary = info?.summary;
     final origin = info?.origin ?? ProfileOrigin.local;
-    return Semantics(
+    final card = Semantics(
       selected: active,
       child: AppCard(
         onTap: onActivate,
@@ -288,6 +302,13 @@ class _ProfileCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return DesktopHover(
+      enabled: onActivate != null || onEdit != null,
+      borderRadius: const BorderRadius.all(Radiuses.card),
+      lift: 2,
+      tilt: 0.055,
+      child: card,
     );
   }
 }

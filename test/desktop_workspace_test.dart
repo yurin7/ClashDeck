@@ -3,6 +3,7 @@ import 'dart:ui' show ImageByteFormat, PointerDeviceKind;
 
 import 'package:clashdeck/data/profile_store.dart';
 import 'package:clashdeck/state/editor_state.dart';
+import 'package:clashdeck/ui/desktop_hover.dart';
 import 'package:clashdeck/ui/desktop_profiles.dart';
 import 'package:clashdeck/ui/desktop_window.dart';
 import 'package:clashdeck/ui/desktop_workspace.dart';
@@ -17,6 +18,67 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 void main() {
+  testWidgets('悬停时控件跟随鼠标微倾，点击范围保持稳定', (tester) async {
+    var clicks = 0;
+    const buttonKey = ValueKey('hover-button');
+    Future<void> show({bool reduceMotion = false}) => tester.pumpWidget(
+      MaterialApp(
+        theme: ClashDeckTheme.dark(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Center(
+            child: DesktopHover(
+              borderRadius: BorderRadius.circular(Radiuses.md),
+              lift: 3,
+              tilt: 0.055,
+              child: SizedBox(
+                width: 148,
+                height: 46,
+                key: buttonKey,
+                child: FilledButton(
+                  onPressed: () => clicks++,
+                  child: const Text('启动内核'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await show();
+    final control = find.byKey(buttonKey);
+    final resting = tester.getRect(control);
+    final outside = resting.topLeft - const Offset(30, 30);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: outside);
+    await mouse.moveTo(resting.center);
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(control).dy, closeTo(resting.top - 3, 0.1));
+
+    await mouse.moveTo(resting.centerLeft + const Offset(12, 0));
+    await tester.pump();
+    final leftLean = tester.getTopLeft(control);
+    await mouse.moveTo(resting.centerRight - const Offset(12, 0));
+    await tester.pump();
+    expect(tester.getTopLeft(control), isNot(leftLean));
+    await tester.tapAt(resting.bottomCenter - const Offset(0, 1));
+    expect(clicks, 1);
+
+    await mouse.moveTo(outside);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(control), resting);
+    await show(reduceMotion: true);
+    await mouse.moveTo(resting.center);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(control), resting);
+    await mouse.removePointer();
+  });
+
   testWidgets('鼠标离开窗口按钮后恢复初始底色', (tester) async {
     final boundaryKey = GlobalKey();
     await tester.pumpWidget(

@@ -21,6 +21,7 @@ import '../runtime/windows_kernel.dart';
 import '../state/settings_state.dart';
 import 'desktop_commands.dart';
 import 'desktop_connections.dart';
+import 'desktop_hover.dart';
 import 'desktop_overview.dart';
 import 'desktop_profiles.dart';
 import 'desktop_window.dart';
@@ -839,30 +840,35 @@ class _DesktopWorkspaceState extends State<DesktopWorkspace>
             for (final (page, icon, label) in destinations)
               SizedBox(
                 height: height,
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: Insets.md,
+                child: DesktopHover(
+                  borderRadius: radius,
+                  enabled: !_busy,
+                  intensity: 0.82,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: Insets.md,
+                      ),
+                      selected: selected == page,
+                      hoverColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: radius),
+                      leading: AnimatedScale(
+                        scale: selected == page ? 1.08 : 1,
+                        duration: motion.reduceMotion
+                            ? Duration.zero
+                            : motion.fast,
+                        curve: motion.enter,
+                        child: Icon(icon, size: 19),
+                      ),
+                      title: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: _busy ? null : () => _navigate(page),
                     ),
-                    selected: selected == page,
-                    hoverColor: colors.primary.withValues(alpha: 0.07),
-                    shape: RoundedRectangleBorder(borderRadius: radius),
-                    leading: AnimatedScale(
-                      scale: selected == page ? 1.08 : 1,
-                      duration: motion.reduceMotion
-                          ? Duration.zero
-                          : motion.fast,
-                      curve: motion.enter,
-                      child: Icon(icon, size: 19),
-                    ),
-                    title: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: _busy ? null : () => _navigate(page),
                   ),
                 ),
               ),

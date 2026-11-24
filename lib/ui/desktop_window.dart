@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'desktop_hover.dart';
 import 'motion.dart';
 
 const desktopCaptionHeight = 36.0;
@@ -93,40 +94,55 @@ class _DesktopWindowCaptionState extends State<DesktopWindowCaption> {
   }) {
     final colors = Theme.of(context).colorScheme;
     final tint = error ?? colors.primary;
+    final motion = Motion.of(context);
+    final duration = motion.reduceMotion ? Duration.zero : motion.fast;
+    final radius = BorderRadius.circular(6);
     return SizedBox(
       width: _buttonWidth,
       height: desktopCaptionHeight - 7,
-      child: IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        icon: Icon(icon, size: 15),
-        style: ButtonStyle(
-          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          foregroundColor: WidgetStateProperty.resolveWith((states) {
-            return states.contains(WidgetState.hovered)
-                ? error ?? colors.onSurface
-                : colors.onSurfaceVariant;
-          }),
-          overlayColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.pressed)) {
-              return tint.withValues(alpha: 0.25);
-            }
-            if (states.contains(WidgetState.hovered)) {
-              return tint.withValues(alpha: 0.13);
-            }
-            return Colors.transparent;
-          }),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      child: DesktopHover(
+        borderRadius: radius,
+        color: tint,
+        intensity: 1.2,
+        child: IconButton(
+          onPressed: onPressed,
+          tooltip: tooltip,
+          icon: AnimatedSwitcher(
+            duration: duration,
+            switchInCurve: motion.enter,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: animation.drive(Tween(begin: 0.7, end: 1.0)),
+                child: child,
+              ),
+            ),
+            child: Icon(icon, key: ValueKey(icon), size: 15),
           ),
-          side: WidgetStateProperty.resolveWith((states) {
-            return states.contains(WidgetState.focused)
-                ? BorderSide(color: tint.withValues(alpha: 0.65))
-                : BorderSide.none;
-          }),
-          splashFactory: NoSplash.splashFactory,
-          animationDuration: Motion.of(context).fast,
+          style: ButtonStyle(
+            padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              return states.contains(WidgetState.hovered)
+                  ? error ?? colors.onSurface
+                  : colors.onSurfaceVariant;
+            }),
+            overlayColor: WidgetStateProperty.resolveWith((states) {
+              return states.contains(WidgetState.pressed)
+                  ? tint.withValues(alpha: 0.25)
+                  : Colors.transparent;
+            }),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: radius),
+            ),
+            side: WidgetStateProperty.resolveWith((states) {
+              return states.contains(WidgetState.focused)
+                  ? BorderSide(color: tint.withValues(alpha: 0.65))
+                  : BorderSide.none;
+            }),
+            splashFactory: NoSplash.splashFactory,
+            animationDuration: duration,
+          ),
         ),
       ),
     );

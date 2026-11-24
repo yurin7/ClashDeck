@@ -54,7 +54,8 @@ class PulsePage extends StatefulWidget {
     this.globalExit,
     this.onLatencyCached,
     this.speedTest,
-    required this.onClose,
+    this.onClose,
+    this.desktopLayout,
   });
 
   final String appVersion;
@@ -75,14 +76,17 @@ class PulsePage extends StatefulWidget {
   onLatencyCached;
 
   /// 抽屉右上角 ×：由 AppShell 负责收起。
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
+
+  final Widget Function(Widget speed, Widget updates, Widget runtime)?
+  desktopLayout;
 
   @override
   State<PulsePage> createState() => _PulsePageState();
 }
 
 class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
-  late final List<String> _allNodes;
+  List<String> _allNodes = const [];
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _customUrlCtrl = TextEditingController();
   String? _node;
@@ -138,6 +142,15 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     widget.runtime?.addListener(_onRuntimeChanged);
   }
 
+  @override
+  void didUpdateWidget(covariant PulsePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.profile != oldWidget.profile) {
+      _allNodes = widget.profile.proxies.map((p) => p.name).toList();
+      if (!_allNodes.contains(_node)) _node = _allNodes.firstOrNull;
+    }
+  }
+
   /// 内核状态可能在 Pulse 打开后才变化（例如刚点了「启动内核」），
   /// 所以监听 controller，进入运行态时补上运行时长/连接数轮询。
   void _onRuntimeChanged() {
@@ -149,7 +162,9 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final reduced =
+        widget.desktopLayout != null ||
+        (MediaQuery.maybeDisableAnimationsOf(context) ?? false);
     if (_motionReady && reduced == _reducedMotion) return;
     _motionReady = true;
     _reducedMotion = reduced;
@@ -172,6 +187,7 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
     widget.runtime?.removeListener(_onRuntimeChanged);
     _uptimeTimer?.cancel();
     _connTimer?.cancel();
+    _speedCancel?.cancel();
     _float.dispose();
     _backdrop.dispose();
     _enter.dispose();
@@ -182,12 +198,15 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
   bool get _kernelRunning => widget.runtime?.phase == RuntimePhase.running;
 
   void _startRuntimeTimers() {
-    _uptimeTimer?.cancel();
-    _connTimer?.cancel();
     if (!_kernelRunning) {
+      _uptimeTimer?.cancel();
+      _uptimeTimer = null;
+      _connTimer?.cancel();
+      _connTimer = null;
       _connections = null;
       return;
     }
+    if (_uptimeTimer != null) return;
     _uptimeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _now = DateTime.now());
@@ -391,11 +410,19 @@ class _PulsePageState extends State<PulsePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.desktopLayout case final layout?) {
+      return layout(
+        _speedCard(context),
+        _updateCard(context),
+        _runtimeCard(context),
+      );
+    }
     final motion = Motion.of(context);
     final disableAnimations =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final cards = <Widget>[
-      _PulseHeader(onClose: widget.onClose, motion: motion),
+      if (widget.onClose case final close?)
+        _PulseHeader(onClose: close, motion: motion),
       _infoCard(context, motion, disableAnimations),
       _speedCard(context),
       _updateCard(context),
@@ -866,6 +893,9 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Theme.of(context).platform == TargetPlatform.windows) {
+      return AppCard(padding: const EdgeInsets.all(Insets.lg), child: child);
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(

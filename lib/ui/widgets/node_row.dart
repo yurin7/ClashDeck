@@ -6,6 +6,7 @@ import '../../core/model/profile.dart';
 import '../chips.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'app_draggable.dart';
 import 'app_ink.dart';
 
 /// 节点列表里的行：左侧协议方块、中间名称 +「协议 · 上次延迟」、右侧
@@ -54,11 +55,12 @@ class NodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final desktop = Theme.of(context).platform == TargetPlatform.windows;
     final br = BorderRadius.circular(radius);
     final content = Material(
       color: scheme.surfaceContainerHigh.withValues(alpha: 0.55),
       borderRadius: br,
-      child: LongPressDraggable<DragNodeData>(
+      child: AppDraggable<DragNodeData>(
         data: DragNodeData(node.name, fromGroup),
         feedback: Material(
           color: Colors.transparent,
@@ -78,7 +80,7 @@ class NodeRow extends StatelessWidget {
           borderRadius: br,
           onTap: onTap,
           child: SizedBox(
-            height: 60,
+            height: desktop ? 48 : 60,
             child: Row(
               children: [
                 const SizedBox(width: Insets.md),
@@ -125,7 +127,7 @@ class NodeRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: Insets.xs),
-                DelayBadge(text: delayText),
+                if (!desktop || delayText != '未测速') DelayBadge(text: delayText),
                 if (selected) ...[
                   const SizedBox(width: Insets.xs),
                   Pill(label: '当前', color: scheme.primary, dense: true),
@@ -150,6 +152,7 @@ class NodeRow extends StatelessWidget {
       ),
     );
 
+    if (desktop) return content;
     return SlidableRow(
       open: open,
       onOpenChanged: onOpenChanged,

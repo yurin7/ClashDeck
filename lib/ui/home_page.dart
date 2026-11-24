@@ -21,6 +21,7 @@ import './widgets/text_input_dialog.dart';
 import 'widgets/delete_confirm.dart';
 import 'widgets/file_pick.dart';
 import 'widgets/edit_dialog.dart';
+import 'widgets/profile_icon.dart';
 import 'motion.dart';
 
 class HomePage extends StatefulWidget {
@@ -243,17 +244,16 @@ class _HomePageState extends State<HomePage> {
   Future<void> _import() async {
     final store = _store;
     if (store == null) return;
-    final input = await showAppDialog<_ImportInput>(
+    final input = await showProfileImportDialog(
       context,
-      width: dialogWidthOf(context),
-      builder: (_) => _ImportDialog(pickFile: widget.pickYamlFile),
+      pickFile: widget.pickYamlFile,
     );
     if (input == null || !mounted) return;
     final text = input.text.trim();
     if (text.isEmpty) return;
     final name = input.name.isEmpty ? '导入的配置' : input.name;
 
-    if (_looksLikeUrl(text)) {
+    if (looksLikeSubscriptionUrl(text)) {
       await _importFromSubscriptionUrl(store, text, name);
       return;
     }
@@ -271,12 +271,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  static bool _looksLikeUrl(String text) {
-    if (text.contains('\n')) return false;
-    final lower = text.toLowerCase();
-    return lower.startsWith('http://') || lower.startsWith('https://');
-  }
-
   Future<void> _importFromSubscriptionUrl(
     ProfileStore store,
     String url,
@@ -288,7 +282,7 @@ class _HomePageState extends State<HomePage> {
       final name = result.title?.trim().isNotEmpty == true
           ? result.title!.trim()
           : fallbackName;
-      final yaml = _yamlFromSubscription(result, name);
+      final yaml = profileYamlFromSubscription(result, name);
       final stored = await store.create(name, yaml);
       await store.setSubscriptionUrl(stored.fileName, url);
       await _refresh();
@@ -300,22 +294,6 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       _toast('订阅导入失败：$e');
     }
-  }
-
-  /// 订阅体是完整配置就整份用；否则在骨架配置上追加节点（进 PROXY 组）。
-  static String _yamlFromSubscription(SubscriptionResult result, String name) {
-    final whole = result.yamlConfig;
-    if (whole != null) return whole;
-    final doc = YamlDoc.parse(ProfileStore.starterConfig(name: name));
-    final outcome = importProxies(
-      doc,
-      result.proxies,
-      group: kDefaultGroupName,
-    );
-    if (outcome.isEmpty) {
-      throw ConfigEditException('订阅里没有可导入的节点');
-    }
-    return outcome.doc.text;
   }
 
   void _toast(String msg) {
@@ -745,9 +723,6 @@ class _ProfileRow extends StatelessWidget {
         : '';
     final switching = phase == ProfileRowPhase.switching;
     final active = phase == ProfileRowPhase.active;
-    final iconColor = active || hasSubscription
-        ? scheme.primary
-        : scheme.onSurfaceVariant;
 
     final meta = <String>[
       s == null ? '— 节点' : '${s.proxies} 节点',
@@ -778,43 +753,13 @@ class _ProfileRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedContainer(
-                duration: Motion.of(context).expand,
-                curve: Curves.easeOutCubic,
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: active
-                      ? scheme.primaryContainer
-                      : scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(Radiuses.sm),
-                  border: Border.all(
-                    color: active ? scheme.primary : scheme.outlineVariant,
-                  ),
-                ),
-                child: AnimatedSwitcher(
-                  duration: Motion.of(context).expand,
-                  child: Icon(
-                    switching
-                        ? Icons.sync
-                        : active
-                        ? Icons.play_circle_outline
-                        : hasSubscription
-                        ? Icons.rss_feed
-                        : Icons.description_outlined,
-                    key: ValueKey<String>(
-                      switching
-                          ? 'switching'
-                          : active
-                          ? 'active'
-                          : hasSubscription
-                          ? 'subscription'
-                          : 'plain',
-                    ),
-                    size: 20,
-                    color: iconColor,
-                  ),
-                ),
+              ProfileIcon(
+                origin: hasSubscription
+                    ? ProfileOrigin.subscription
+                    : ProfileOrigin.local,
+                selected: active,
+                running: active,
+                switching: switching,
               ),
               const SizedBox(width: Insets.md),
               Expanded(
@@ -1008,9 +953,37 @@ String buildConfigFromText(String text, {String name = '导入的配置'}) {
   return doc.text;
 }
 
-/// 导入对话框的返回值。
-class _ImportInput {
-  const _ImportInput({required this.name, required this.text});
+bool looksLikeSubscriptionUrl(String text) {
+  if (text.contains('\n')) return false;
+  final lower = text.toLowerCase();
+  return lower.startsWith('http://') || lower.startsWith('https://');
+}
+
+/// 订阅体是完整配置就整份用；否则在骨架配置上追加节点（进 DEFAULT 组）。
+String profileYamlFromSubscription(SubscriptionResult result, String name) {
+  final whole = result.yamlConfig;
+  if (whole != null) return whole;
+  final doc = YamlDoc.parse(ProfileStore.starterConfig(name: name));
+  final outcome = importProxies(doc, result.proxies, group: kDefaultGroupName);
+  if (outcome.isEmpty) {
+    throw ConfigEditException('订阅里没有可导入的节点');
+  }
+  return outcome.doc.text;
+}
+
+Future<ProfileImportInput?> showProfileImportDialog(
+  BuildContext context, {
+  YamlFilePicker pickFile = pickYamlFileFromDevice,
+}) {
+  return showAppDialog<ProfileImportInput>(
+    context,
+    width: dialogWidthOf(context),
+    builder: (_) => _ImportDialog(pickFile: pickFile),
+  );
+}
+
+class ProfileImportInput {
+  const ProfileImportInput({required this.name, required this.text});
 
   final String name;
   final String text;
@@ -1045,7 +1018,7 @@ class _ImportDialogState extends State<_ImportDialog> {
   void _submit() {
     Navigator.pop(
       context,
-      _ImportInput(name: _name.text.trim(), text: _text.text),
+      ProfileImportInput(name: _name.text.trim(), text: _text.text),
     );
   }
 

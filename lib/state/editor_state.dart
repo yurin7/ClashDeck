@@ -123,8 +123,9 @@ class EditorState extends ChangeNotifier {
   Future<void> save(ProfileStore store) async {
     final name = fileName;
     if (name == null) throw StateError('还没有文件名，先 create()');
-    await store.write(name, _doc.text);
-    _savedText = _doc.text;
+    final text = _doc.text;
+    await store.write(name, text);
+    _savedText = text;
     notifyListeners();
   }
 

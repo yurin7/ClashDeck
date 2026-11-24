@@ -35,6 +35,7 @@ Future<T?> showAppDialog<T>(
   Color? barrierColor,
   bool useRootNavigator = true,
   double? width,
+  Duration transitionDuration = const Duration(milliseconds: 240),
   BarrierAction<T> Function()? onBarrierTap,
 }) {
   return showGeneralDialog<T>(
@@ -43,7 +44,7 @@ Future<T?> showAppDialog<T>(
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: barrierColor ?? Colors.black54,
     useRootNavigator: useRootNavigator,
-    transitionDuration: const Duration(milliseconds: 240),
+    transitionDuration: transitionDuration,
     pageBuilder: (ctx, _, _) {
       final child = builder(ctx);
       final sized = width == null

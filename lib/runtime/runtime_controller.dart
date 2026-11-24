@@ -19,9 +19,12 @@ import 'runtime_template.dart';
 import 'speed_test.dart';
 import 'speed_test_config.dart';
 import 'tcp_delay_probe.dart';
+import 'windows_kernel.dart';
 
 /// 内核 + VPN 的生命周期阶段。
 enum RuntimePhase { idle, starting, running, stopping, error }
+
+typedef RuntimeTrafficSample = ({DateTime at, int up, int down});
 
 /// 运行期控制器：把 Dart 侧的配置生成、REST 观察、Android 侧 VpnService
 /// 与子进程编排串起来。
@@ -48,8 +51,10 @@ class RuntimeController extends ChangeNotifier {
     this.pruneSavedExit,
     this.pruneSavedGlobalExit,
     this.apiOverride,
+    this.windowsKernel,
+    this.windowsTunStackProvider,
   }) : _channel = channel ?? const MethodChannel(channelName) {
-    _channel.setMethodCallHandler(_handleDartCall);
+    if (windowsKernel == null) _channel.setMethodCallHandler(_handleDartCall);
   }
 
   /// 通道名必须与 `android/app/src/main/kotlin/dev/clashdeck/RuntimeBridge.kt` 一致。
@@ -65,6 +70,8 @@ class RuntimeController extends ChangeNotifier {
   final MethodChannel _channel;
   final bool? androidOverride;
   final Future<String> Function()? workDirProvider;
+  final WindowsKernel? windowsKernel;
+  final String? Function()? windowsTunStackProvider;
 
   /// 测试注入：替代真实 REST 的单节点测速。
   final Future<int?> Function(String name)? delayProbe;
@@ -92,6 +99,10 @@ class RuntimeController extends ChangeNotifier {
   final int port;
   final String? secret;
   final Duration pollInterval;
+  int? _windowsPort;
+  String? _windowsTunStack;
+  int _windowsOperation = 0;
+  bool _windowsClosing = false;
 
   /// 测速期间临时内核使用的最小配置；为 null 时用当前配置。
   YamlDoc? _speedTestConfig;
@@ -130,6 +141,7 @@ class RuntimeController extends ChangeNotifier {
   bool _autoDelayed = false;
   int _up = 0;
   int _down = 0;
+  RuntimeTrafficSample? _latestTraffic;
 
   /// VpnService 是否在运行（Kotlin 侧 `ClashVpnService.running`）。
   bool _serviceRunning = false;
@@ -139,6 +151,7 @@ class RuntimeController extends ChangeNotifier {
   /// 本次启动时间；内核未运行时为 null。
   DateTime? _startedAt;
   StreamSubscription<({int up, int down})>? _trafficSub;
+  MihomoApi? _trafficClient;
   bool _disposed = false;
 
   /// 配置保存后的自动重启：500ms 内多次保存只重启一次。
@@ -186,6 +199,7 @@ class RuntimeController extends ChangeNotifier {
 
   int get up => _up;
   int get down => _down;
+  RuntimeTrafficSample? get latestTraffic => _latestTraffic;
 
   /// 本次启动时补拉也失败的规则集缓存个数（UI 用来提示「N 个规则集未生效」）。
   int get missingRuleCaches => _missingRuleCaches;
@@ -193,8 +207,12 @@ class RuntimeController extends ChangeNotifier {
   bool get isBusy =>
       _phase == RuntimePhase.starting || _phase == RuntimePhase.stopping;
 
+  int get _controllerPort => _windowsPort ?? port;
+  bool get isTemporaryConfig => _tempConfigActive;
+
   MihomoApi get api =>
-      apiOverride ?? MihomoApi(host: '127.0.0.1', port: port, secret: secret);
+      apiOverride ??
+      MihomoApi(host: '127.0.0.1', port: _controllerPort, secret: secret);
 
   // ------------------------------------------------------------------ 生命周期
 
@@ -203,8 +221,21 @@ class RuntimeController extends ChangeNotifier {
     _disposed = true;
     _restartTimer?.cancel();
     _stopPolling();
-    _channel.setMethodCallHandler(null);
+    if (windowsKernel == null) _channel.setMethodCallHandler(null);
+    if (windowsKernel != null && !_windowsClosing) {
+      unawaited(shutdownWindows().catchError((Object _) {}));
+    }
     super.dispose();
+  }
+
+  Future<void> shutdownWindows() async {
+    final windows = windowsKernel;
+    if (windows == null || _windowsClosing) return;
+    _windowsClosing = true;
+    _windowsOperation++;
+    _restartTimer?.cancel();
+    _clearWindowsSession();
+    await windows.dispose();
   }
 
   /// 是否正在执行「保存后自动重启」。UI 可以据此显示「正在重启」。
@@ -219,7 +250,7 @@ class RuntimeController extends ChangeNotifier {
     String reason = '配置已保存',
     Duration debounce = const Duration(milliseconds: 500),
   }) async {
-    if (_disposed) return;
+    if (_disposed || (windowsKernel != null && _tempConfigActive)) return;
     if (_phase != RuntimePhase.running && _phase != RuntimePhase.starting) {
       return;
     }
@@ -313,7 +344,9 @@ class RuntimeController extends ChangeNotifier {
   /// 启动内核。返回 false 表示被启动前校验拦下（issues 在 [startupReport]），
   /// 没有真正 spawn；[force] 用于用户在弹窗里确认「仍然启动」。
   Future<bool> start({bool force = false, String? proxyModeOverride}) async {
-    if (!(androidOverride ?? supported)) {
+    if (_disposed || _windowsClosing) return false;
+    final windows = windowsKernel;
+    if (windows == null && !(androidOverride ?? supported)) {
       _setError('运行内核只支持 Android 设备');
       return false;
     }
@@ -325,8 +358,21 @@ class RuntimeController extends ChangeNotifier {
     _globalExitApplied = false;
     _autoDelayed = false;
     _delayTesting = false;
+    final operation = ++_windowsOperation;
     _setPhase(RuntimePhase.starting);
     try {
+      if (windows != null) {
+        final stack = proxyModeOverride == 'port'
+            ? null
+            : windowsTunStackProvider?.call();
+        _windowsTunStack = RuntimeConfig.tunStacks.contains(stack)
+            ? stack
+            : null;
+        if (_windowsTunStack != null && !await WindowsKernel.isElevated()) {
+          _setError('TUN 需要管理员权限，请以管理员身份重新打开 ClashDeck。');
+          return false;
+        }
+      }
       // 先做语义自检：组成员/规则目标/规则集引用不存在时 mihomo 会直接退出，
       // 与其让用户看到「启动失败」再猜，不如在 spawn 前拦下并列出问题。
       final config = _activeConfig();
@@ -338,13 +384,77 @@ class RuntimeController extends ChangeNotifier {
           return false;
         }
       }
-      _workDir ??= await (workDirProvider?.call() ?? _resolveWorkDir());
+      _workDir ??= windows != null
+          ? (await windows.workDir).path
+          : await (workDirProvider?.call() ?? _resolveWorkDir());
       // 先把 GEOIP/GEOSITE 数据铺进工作目录：内核缺数据会同步去 GitHub 下载，
       // 国内基本必定超时，带 GEOIP 规则的配置会直接启动失败。
       await Geodata.ensure(Directory(_workDir!));
       // 换机/清数据后 `type: file` 的规则集会找不到文件，这里先补一次；
       // 补不上也不阻塞启动，只把个数报给 UI。
       await _backfillRuleCaches();
+      if (windows != null) {
+        if (_disposed || operation != _windowsOperation) return false;
+        _windowsPort = await WindowsKernel.controllerPort(excluding: proxyPort);
+        if (_disposed || operation != _windowsOperation) return false;
+        final controllerPort = _controllerPort;
+        final tun = _windowsTunStack != null;
+        final localPort = proxyPort;
+        final probe = MihomoApi(
+          host: '127.0.0.1',
+          port: controllerPort,
+          secret: secret,
+          timeout: const Duration(milliseconds: 800),
+        );
+        final int pid;
+        try {
+          pid = await windows.start(
+            yaml: _buildRuntimeYaml(0),
+            proxyPort: localPort,
+            ready: () async {
+              try {
+                final config = await probe.configs();
+                if (config['mixed-port'] != localPort) return false;
+                final state = config['tun'];
+                return !tun || (state is Map && state['enable'] == true);
+              } catch (_) {
+                return false;
+              }
+            },
+            closeTun: !tun
+                ? null
+                : () async {
+                    final client = MihomoApi(
+                      port: controllerPort,
+                      secret: secret,
+                      timeout: const Duration(seconds: 3),
+                    );
+                    try {
+                      await client.patchConfigs({
+                        'tun': {'enable': false},
+                      });
+                    } finally {
+                      client.close();
+                    }
+                  },
+            onExit: (exitCode) {
+              if (operation != _windowsOperation) return;
+              _clearWindowsSession();
+              final tail = windows.logs(1).firstOrNull;
+              _setError(tail ?? 'mihomo 已退出（$exitCode）');
+            },
+          );
+        } finally {
+          probe.close();
+        }
+        if (_disposed || operation != _windowsOperation) return false;
+        _pid = pid;
+        _setPhase(RuntimePhase.running);
+        _startPolling();
+        _subscribeTraffic();
+        unawaited(_refreshRuntimeView());
+        return true;
+      }
       final settings = settingsProvider?.call() ?? AppSettings.defaults;
       final display = displayProvider?.call();
       final rawMtu = config.plainAt(['tun', 'mtu']);
@@ -371,6 +481,7 @@ class RuntimeController extends ChangeNotifier {
       // 系统授权对话框由 Activity 处理，结果通过 onRuntimeState 回来。
       return true;
     } catch (error) {
+      if (windows != null && operation != _windowsOperation) return false;
       _setError('启动失败：$error');
       return false;
     }
@@ -381,10 +492,30 @@ class RuntimeController extends ChangeNotifier {
     _setPhase(RuntimePhase.stopping);
     _autoDelayed = false;
     try {
+      final windows = windowsKernel;
+      if (windows != null) {
+        _windowsOperation++;
+        await windows.stop();
+        _clearWindowsSession();
+        _lastError = null;
+        _setPhase(RuntimePhase.idle);
+        return;
+      }
       await _channel.invokeMethod<void>('stop');
     } catch (error) {
       _setError('停止失败：$error');
     }
+  }
+
+  void _clearWindowsSession() {
+    _stopPolling();
+    _pid = null;
+    _windowsTunStack = null;
+    _up = 0;
+    _down = 0;
+    _latestTraffic = null;
+    _selected = const {};
+    _members = const {};
   }
 
   /// VpnService 是否在运行（Kotlin 侧 ClashVpnService.running）。
@@ -419,6 +550,10 @@ class RuntimeController extends ChangeNotifier {
 
   /// 从 Android 侧同步一次真实状态（进入页面时用）。
   Future<void> refreshStatus() async {
+    if (windowsKernel != null) {
+      if (_phase == RuntimePhase.running) await _refreshRuntimeView();
+      return;
+    }
     if (!(androidOverride ?? supported)) return;
     try {
       final status = await _channel.invokeMethod<Map<Object?, Object?>>(
@@ -496,6 +631,8 @@ class RuntimeController extends ChangeNotifier {
   }
 
   Future<List<String>> loadLogs({int limit = 300}) async {
+    final windows = windowsKernel;
+    if (windows != null) return windows.logs(limit);
     if (!supported) return _logs;
     try {
       final raw = await _channel.invokeMethod<List<Object?>>('logs', limit);
@@ -508,6 +645,10 @@ class RuntimeController extends ChangeNotifier {
   }
 
   Future<void> clearLogs() async {
+    if (windowsKernel case final windows?) {
+      windows.clearLogs();
+      return;
+    }
     if (!supported) return;
     try {
       await _channel.invokeMethod<void>('clearLogs');
@@ -852,9 +993,12 @@ class RuntimeController extends ChangeNotifier {
     return RuntimeConfig.buildRuntimeYaml(
       _activeConfig(),
       tunFileDescriptor: fd,
-      controller: '127.0.0.1:$port',
+      controller: '127.0.0.1:$_controllerPort',
       secret: secret,
       tunStack: _startedTunStack,
+      mixedPort: windowsKernel == null ? null : proxyPort,
+      windows: windowsKernel != null,
+      windowsTunStack: _windowsTunStack,
     );
   }
 
@@ -944,10 +1088,18 @@ class RuntimeController extends ChangeNotifier {
     _pollTimer = null;
     _trafficSub?.cancel();
     _trafficSub = null;
+    _trafficClient?.close();
+    _trafficClient = null;
   }
 
   Future<void> _poll() async {
     if (_disposed) return;
+    if (windowsKernel != null) {
+      if (_phase != RuntimePhase.running) return;
+      if (_trafficSub == null) _subscribeTraffic();
+      await _refreshRuntimeView();
+      return;
+    }
     final client = api;
     try {
       final alive = await client.ping();
@@ -977,21 +1129,36 @@ class RuntimeController extends ChangeNotifier {
   void _subscribeTraffic() {
     _trafficSub?.cancel();
     _trafficSub = null;
+    final client = api;
     final Stream<({int up, int down})> stream;
     try {
-      stream = api.traffic();
+      stream = client.traffic();
     } catch (_) {
+      if (windowsKernel != null) client.close();
       return;
     }
+    // 运行中的流要持有客户端，Windows 停止时一并关闭循环读取。
+    if (windowsKernel != null) _trafficClient = client;
+    void disconnected() {
+      if (_trafficClient != client) return;
+      _trafficClient = null;
+      _trafficSub = null;
+      _latestTraffic = null;
+      client.close();
+      if (!_disposed) notifyListeners();
+    }
+
     _trafficSub = runZonedGuarded<StreamSubscription<({int up, int down})>>(
       () => stream.listen(
         (event) {
           if (_disposed) return;
           _up = event.up;
           _down = event.down;
+          _latestTraffic = (at: DateTime.now(), up: _up, down: _down);
           notifyListeners();
         },
-        onError: (Object _) {},
+        onError: (Object _) => disconnected(),
+        onDone: disconnected,
         cancelOnError: true,
       ),
       (Object _, StackTrace _) {

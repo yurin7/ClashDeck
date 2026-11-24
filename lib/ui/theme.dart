@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 设计系统：一套「网络仪表盘」气质的令牌 —— 暗色为默认画布、细描边代替投影、
@@ -37,6 +38,12 @@ abstract final class Radiuses {
 
 const String kDisplayFont = 'SpaceGrotesk';
 const String kMonoFont = 'JetBrainsMono';
+const String kDesktopCjkFont = 'ClashDeck Rounded SC';
+
+List<String>? get _cjkFallback =>
+    defaultTargetPlatform == TargetPlatform.windows
+    ? const [kDesktopCjkFont]
+    : null;
 
 /// 显示字体（标题 / 大号数值）。变量字体，字重靠 [FontVariation] 指定。
 TextStyle display(
@@ -47,6 +54,7 @@ TextStyle display(
   double? height,
 }) => TextStyle(
   fontFamily: kDisplayFont,
+  fontFamilyFallback: _cjkFallback,
   fontSize: size,
   color: color,
   letterSpacing: letterSpacing ?? (size >= 24 ? -0.8 : -0.2),
@@ -63,6 +71,7 @@ TextStyle mono(
   double? height,
 }) => TextStyle(
   fontFamily: kMonoFont,
+  fontFamilyFallback: _cjkFallback,
   fontSize: size,
   color: color,
   letterSpacing: letterSpacing ?? 0,
@@ -252,7 +261,7 @@ ThemeData buildTheme(Brightness brightness) {
   );
 
   return base.copyWith(
-    textTheme: textTheme,
+    textTheme: textTheme.apply(fontFamilyFallback: _cjkFallback),
     extensions: [semantic],
     appBarTheme: AppBarTheme(
       backgroundColor: canvas,

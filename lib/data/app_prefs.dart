@@ -14,8 +14,8 @@ class AppPrefs {
 
   static const _fileName = 'app_prefs.json';
 
-  static Future<AppPrefs> load() async {
-    final base = await getApplicationSupportDirectory();
+  static Future<AppPrefs> load({Directory? directory}) async {
+    final base = directory ?? await getApplicationSupportDirectory();
     final file = File('${base.path}${Platform.pathSeparator}$_fileName');
     Map<String, Object?> data = const {};
     try {
@@ -39,6 +39,14 @@ class AppPrefs {
 
   Future<void> setActiveProfile(String? fileName) =>
       _put('activeProfile', fileName);
+
+  String? get windowsTunStack {
+    final value = _data['windowsTunStack'];
+    return value is String ? value : null;
+  }
+
+  Future<void> setWindowsTunStack(String? stack) =>
+      _put('windowsTunStack', stack);
 
   Future<void> setLastSubscriptionUpdate(DateTime? time) =>
       _put('lastSubscriptionUpdate', time?.toIso8601String());

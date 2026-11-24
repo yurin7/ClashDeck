@@ -13,6 +13,7 @@ class RuntimeConfig {
   static const String defaultController = '127.0.0.1:9090';
 
   static const String defaultStack = 'gvisor';
+  static const String defaultWindowsStack = 'mixed';
   static const List<String> tunStacks = [defaultStack, 'system', 'mixed'];
 
   static String tunStackFor(YamlDoc doc) {
@@ -70,7 +71,7 @@ class RuntimeConfig {
   /// 生成运行配置文本。
   ///
   /// [tunFileDescriptor] > 0 时写入 `tun.file-descriptor`（Android VpnService
-  /// 拿到的 TUN fd）；传 0 表示不用 TUN（桌面端调试 / 只开 mixed-port）。
+  /// 拿到的 TUN fd）。Windows 用 [windowsTunStack] 请求内核创建网卡。
   static String buildRuntimeYaml(
     YamlDoc doc, {
     required int tunFileDescriptor,
@@ -79,6 +80,9 @@ class RuntimeConfig {
     bool allowLan = false,
     bool ensureDns = true,
     String? tunStack,
+    int? mixedPort,
+    bool windows = false,
+    String? windowsTunStack,
   }) {
     var next = doc;
 
@@ -91,9 +95,14 @@ class RuntimeConfig {
       next = _set(next, ['secret'], secret);
     }
     next = _set(next, ['allow-lan'], allowLan);
-    next = _setIfAbsent(next, ['mixed-port'], 7890);
+    next = mixedPort == null
+        ? _setIfAbsent(next, ['mixed-port'], 7890)
+        : _set(next, ['mixed-port'], mixedPort);
     next = _setIfAbsent(next, ['log-level'], 'info');
     next = _setIfAbsent(next, ['mode'], 'rule');
+    if (windows) {
+      next = _setIfAbsent(next, ['find-process-mode'], 'always');
+    }
 
     if (tunFileDescriptor > 0) {
       // fd 由系统 VpnService 提供：v4 地址由内核从 fake-ip-range 推导（写
@@ -121,6 +130,23 @@ class RuntimeConfig {
         // 不覆盖用户显式写的 `dns.enable`：TUN 下关掉 DNS 是用户的选择，
         // 只在完全没写 dns 段时补默认值（见 `_ensureDns`）。
       }
+    } else if (windows && windowsTunStack != null) {
+      final existing = doc.plainAt(['tun']);
+      final options = existing is Map
+          ? YamlDoc.toPlainMap(existing)
+          : <String, Object?>{};
+      options
+        ..remove('file-descriptor')
+        ..addAll({
+          'enable': true,
+          'stack': windowsTunStack,
+          'device': 'ClashDeck',
+          'auto-route': true,
+          'auto-detect-interface': true,
+        })
+        ..putIfAbsent('dns-hijack', () => ['any:53', 'tcp://any:53']);
+      next = _set(next, ['tun'], options);
+      if (ensureDns) next = _ensureDns(next);
     } else {
       // 仅代理端口模式：显式关掉 TUN，避免内核去读一个不存在的 fd。
       next = _set(next, ['tun', 'enable'], false);

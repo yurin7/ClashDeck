@@ -622,7 +622,7 @@ class _RulesTabState extends State<RulesTab> {
     );
   }
 
-  /// 在线规则集的「更新」入口，从行尾按钮挪进了 ⋮ 菜单。
+  /// 只给内置预设显示单条更新入口。
   VoidCallback? _refreshFor(RuleEntry rule) {
     if (rule.type != 'RULE-SET') return null;
     final preset = _presetOf(rule.payload);
@@ -640,7 +640,9 @@ class _RulesTabState extends State<RulesTab> {
   String get _onlineSummary => _autoUpdate ? '自动更新 · $_intervalLabel' : '自动更新关';
 
   Widget _onlineToolbar(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
     final empty = _onlinePresets().isEmpty;
     return Padding(
       padding: const EdgeInsets.only(top: Insets.xs),
@@ -657,7 +659,7 @@ class _RulesTabState extends State<RulesTab> {
               ),
             ),
           ),
-          const Spacer(),
+          if (desktop) const SizedBox(width: Insets.lg) else const Spacer(),
           Text('间隔', style: hintStyle(context)),
           const SizedBox(width: Insets.xs),
           SizedBox(
@@ -675,7 +677,7 @@ class _RulesTabState extends State<RulesTab> {
               onChanged: (value) => _setInterval(int.parse(value)),
             ),
           ),
-          const SizedBox(width: Insets.xs),
+          if (desktop) const Spacer() else const SizedBox(width: Insets.xs),
           OutlinedButton.icon(
             onPressed: (_refreshing || empty)
                 ? null
@@ -700,119 +702,205 @@ class _RulesTabState extends State<RulesTab> {
     required List<RuleEntry> terminal,
     required bool terminalLate,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
+    final sections = [
+      (
+        title: '本地精确规则',
+        subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
+        rules: local,
+        zone: RuleZone.local,
+        open: _localOpen,
+        toggle: () => setState(() => _localOpen = !_localOpen),
+        add: () => _editRule(),
+      ),
+      (
+        title: '在线规则集',
+        subtitle: '按整包匹配，排在本地规则之后',
+        rules: online,
+        zone: RuleZone.online,
+        open: _onlineOpen,
+        toggle: () => setState(() => _onlineOpen = !_onlineOpen),
+        add: _openOnlineImport,
+      ),
+      (
+        title: 'GEO 数据',
+        subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
+        rules: geo,
+        zone: RuleZone.geo,
+        open: _geoOpen,
+        toggle: () => setState(() => _geoOpen = !_geoOpen),
+        add: _openGeoImport,
+      ),
+      (
+        title: '兜底规则',
+        subtitle: 'MATCH / FINAL，必须在最后',
+        rules: terminal,
+        zone: RuleZone.terminal,
+        open: _terminalOpen,
+        toggle: () => setState(() => _terminalOpen = !_terminalOpen),
+        add: null,
+      ),
+    ];
     return CustomScrollView(
       slivers: [
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _ZoneHeaderDelegate(
-            background: scheme.surface,
-            child: _buildZoneHeader(
-              context,
-              title: '本地精确规则',
-              subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
-              rules: local,
-              zone: RuleZone.local,
-              open: _localOpen,
-              onToggle: () => setState(() => _localOpen = !_localOpen),
-              onAdd: () => _editRule(),
+        for (final (index, section) in sections.indexed) ...[
+          if (index > 0)
+            if (desktop)
+              const SliverToBoxAdapter(child: SizedBox(height: Insets.md))
+            else
+              _zoneDivider(scheme),
+          if (desktop)
+            SliverToBoxAdapter(
+              child: _buildDesktopZoneHeader(
+                context,
+                title: section.title,
+                subtitle: section.subtitle,
+                count: section.rules.length,
+                zone: section.zone,
+                open: section.open,
+                onToggle: section.toggle,
+                onAdd: section.add,
+              ),
+            )
+          else
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _ZoneHeaderDelegate(
+                background: scheme.surface,
+                child: _buildZoneHeader(
+                  context,
+                  title: section.title,
+                  rules: section.rules,
+                  zone: section.zone,
+                  open: section.open,
+                  onToggle: section.toggle,
+                  onAdd: section.add,
+                ),
+              ),
             ),
-          ),
-        ),
-        if (_localOpen)
-          ..._zoneSlivers(
-            context,
-            subtitle: '手写的域名 / IP / 进程规则，先于在线规则集匹配',
-            rules: local,
-            zone: RuleZone.local,
-            onlineOpen: false,
-            terminalLate: terminalLate,
-          ),
-        _zoneDivider(scheme),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _ZoneHeaderDelegate(
-            background: scheme.surface,
-            child: _buildZoneHeader(
+          if (section.open)
+            ..._zoneSlivers(
               context,
-              title: '在线规则集',
-              subtitle: '按整包匹配，排在本地规则之后',
-              rules: online,
-              zone: RuleZone.online,
-              open: _onlineOpen,
-              onToggle: () => setState(() => _onlineOpen = !_onlineOpen),
-              onAdd: _openOnlineImport,
+              subtitle: section.subtitle,
+              rules: section.rules,
+              zone: section.zone,
+              onlineOpen: section.zone == RuleZone.online,
+              terminalLate: terminalLate,
             ),
-          ),
-        ),
-        if (_onlineOpen)
-          ..._zoneSlivers(
-            context,
-            subtitle: '按整包匹配，排在本地规则之后',
-            rules: online,
-            zone: RuleZone.online,
-            onlineOpen: true,
-            terminalLate: terminalLate,
-          ),
-        _zoneDivider(scheme),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _ZoneHeaderDelegate(
-            background: scheme.surface,
-            child: _buildZoneHeader(
-              context,
-              title: 'GEO 数据',
-              subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
-              rules: geo,
-              zone: RuleZone.geo,
-              open: _geoOpen,
-              onToggle: () => setState(() => _geoOpen = !_geoOpen),
-              onAdd: _openGeoImport,
-            ),
-          ),
-        ),
-        if (_geoOpen)
-          ..._zoneSlivers(
-            context,
-            subtitle: 'GEOSITE / GEOIP，离线命中，排在规则集之后',
-            rules: geo,
-            zone: RuleZone.geo,
-            onlineOpen: false,
-            terminalLate: terminalLate,
-          ),
-        _zoneDivider(scheme),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _ZoneHeaderDelegate(
-            background: scheme.surface,
-            child: _buildZoneHeader(
-              context,
-              title: '兜底规则',
-              subtitle: 'MATCH / FINAL，必须在最后',
-              rules: terminal,
-              zone: RuleZone.terminal,
-              open: _terminalOpen,
-              onToggle: () => setState(() => _terminalOpen = !_terminalOpen),
-            ),
-          ),
-        ),
-        if (_terminalOpen)
-          ..._zoneSlivers(
-            context,
-            subtitle: 'MATCH / FINAL，必须在最后',
-            rules: terminal,
-            zone: RuleZone.terminal,
-            onlineOpen: false,
-            terminalLate: terminalLate,
-          ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildDesktopZoneHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required int count,
+    required RuleZone zone,
+    required bool open,
+    required VoidCallback onToggle,
+    VoidCallback? onAdd,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final (icon, tone, addLabel) = switch (zone) {
+      RuleZone.local => (Icons.rule_outlined, scheme.primary, '新建规则'),
+      RuleZone.online => (Icons.cloud_outlined, scheme.tertiary, '导入规则集'),
+      RuleZone.geo => (Icons.public, scheme.secondary, '添加 GEO'),
+      RuleZone.terminal => (Icons.flag_outlined, scheme.error, ''),
+    };
+    return Material(
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radiuses.sm),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+        child: Row(
+          children: [
+            Expanded(
+              child: AppInkWell(
+                onTap: onToggle,
+                hoverColor: scheme.primary.withValues(alpha: 0.06),
+                child: Row(
+                  children: [
+                    Icon(
+                      open ? Icons.expand_more : Icons.chevron_right,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Insets.sm),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: tone.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(Radiuses.xs),
+                      ),
+                      child: Icon(icon, color: tone, size: 18),
+                    ),
+                    const SizedBox(width: Insets.md),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  title,
+                                  style: display(14, weight: 650),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: Insets.sm),
+                              Text(
+                                '$count 条',
+                                style: mono(
+                                  10.5,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            zone == RuleZone.online && !open
+                                ? _onlineSummary
+                                : subtitle,
+                            style: hintStyle(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (onAdd != null) ...[
+              const SizedBox(width: Insets.md),
+              OutlinedButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 16),
+                label: Text(addLabel),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildZoneHeader(
     BuildContext context, {
     required String title,
-    required String subtitle,
     required List<RuleEntry> rules,
     required RuleZone zone,
     required bool open,
@@ -886,6 +974,7 @@ class _RulesTabState extends State<RulesTab> {
     required bool onlineOpen,
     bool terminalLate = false,
   }) {
+    final desktop = Theme.of(context).platform == TargetPlatform.windows;
     return [
       SliverToBoxAdapter(
         child: _buildZoneIntro(
@@ -905,7 +994,10 @@ class _RulesTabState extends State<RulesTab> {
               Insets.lg,
               Insets.md,
             ),
-            child: Text('暂无规则 —— 点右上角「+」添加', style: hintStyle(context)),
+            child: Text(
+              desktop ? '暂无规则' : '暂无规则 —— 点右上角「+」添加',
+              style: hintStyle(context),
+            ),
           ),
         )
       else
@@ -919,7 +1011,9 @@ class _RulesTabState extends State<RulesTab> {
           },
           itemBuilder: (context, i) => _buildRuleRow(context, rules[i], i),
         ),
-      const SliverToBoxAdapter(child: SizedBox(height: Insets.md)),
+      SliverToBoxAdapter(
+        child: SizedBox(height: desktop ? Insets.xs : Insets.md),
+      ),
     ];
   }
 
@@ -930,13 +1024,18 @@ class _RulesTabState extends State<RulesTab> {
     required bool onlineOpen,
     bool terminalLate = false,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
+    if (desktop && zone != RuleZone.online) {
+      return const SizedBox(height: Insets.sm);
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(subtitle, style: hintStyle(context)),
+          if (!desktop) Text(subtitle, style: hintStyle(context)),
           if (zone == RuleZone.online && onlineOpen) ...[
             const SizedBox(height: Insets.sm),
             _onlineToolbar(context),
@@ -963,58 +1062,78 @@ class _RulesTabState extends State<RulesTab> {
   }
 
   Widget _buildRuleRow(BuildContext context, RuleEntry rule, int i) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final desktop = theme.platform == TargetPlatform.windows;
+    final handle = Icon(
+      Icons.drag_indicator,
+      size: desktop ? 17 : 20,
+      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+    );
+    final ordinal = Text(
+      '${i + 1}',
+      style: monoStyle(context, size: 10),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final card = RuleRowCard(
+      rule: rule,
+      trailing: _cacheTrailing(context, rule),
+      onRefresh: _refreshFor(rule),
+      onDelete: desktop ? () => _confirmDelete(rule) : null,
+      dragHandle: ReorderableDragStartListener(
+        index: i,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Padding(
+            padding: const EdgeInsets.all(Insets.xs),
+            child: desktop
+                ? Tooltip(
+                    message: '拖动排序',
+                    child: Row(
+                      children: [
+                        handle,
+                        const SizedBox(width: 3),
+                        Flexible(child: ordinal),
+                      ],
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [handle, ordinal],
+                  ),
+          ),
+        ),
+      ),
+      groupNames: {for (final g in s.profile.groups) g.name},
+      onTap: () => showRuleDetailDialog(
+        context,
+        rule: rule,
+        onEdit: () => _editRule(initial: rule, index: rule.index),
+        onMoveToGroup: () => _moveRuleToGroup(rule),
+      ),
+      onEdit: () => _editRule(initial: rule, index: rule.index),
+      onMoveToGroup: () => _moveRuleToGroup(rule),
+    );
     return RepaintBoundary(
       key: ValueKey('rule-${rule.index}'),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
+        padding: desktop
+            ? const EdgeInsets.only(bottom: 6)
+            : const EdgeInsets.fromLTRB(Insets.lg, 0, Insets.lg, Insets.sm),
         // 只有行本体参与左滑，露出删除；不再是整块区域一起滑。
-        child: SlidableRow(
-          open: _swipedRule == rule.index,
-          onOpenChanged: (open) =>
-              setState(() => _swipedRule = open ? rule.index : null),
-          actionLabel: '删除',
-          // 与 RuleRowCard 的 16 圆角一致：红块跟着卡片一起裁，不露直角。
-          borderRadius: BorderRadius.circular(16),
-          onAction: () => _confirmDelete(rule),
-          child: RuleRowCard(
-            rule: rule,
-            trailing: _cacheTrailing(context, rule),
-            onRefresh: _refreshFor(rule),
-            dragHandle: ReorderableDragStartListener(
-              index: i,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Insets.xs,
-                    vertical: Insets.xs,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.drag_indicator,
-                        size: 20,
-                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-                      ),
-                      Text('${i + 1}', style: monoStyle(context, size: 10)),
-                    ],
-                  ),
-                ),
+        child: desktop
+            ? card
+            : SlidableRow(
+                open: _swipedRule == rule.index,
+                onOpenChanged: (open) =>
+                    setState(() => _swipedRule = open ? rule.index : null),
+                actionLabel: '删除',
+                // 与 RuleRowCard 的 16 圆角一致：红块跟着卡片一起裁，不露直角。
+                borderRadius: BorderRadius.circular(16),
+                onAction: () => _confirmDelete(rule),
+                child: card,
               ),
-            ),
-            groupNames: {for (final g in s.profile.groups) g.name},
-            onTap: () => showRuleDetailDialog(
-              context,
-              rule: rule,
-              onEdit: () => _editRule(initial: rule, index: rule.index),
-              onMoveToGroup: () => _moveRuleToGroup(rule),
-            ),
-            onEdit: () => _editRule(initial: rule, index: rule.index),
-            onMoveToGroup: () => _moveRuleToGroup(rule),
-          ),
-        ),
       ),
     );
   }
@@ -1067,7 +1186,8 @@ class _RulesTabState extends State<RulesTab> {
   @override
   Widget build(BuildContext context) {
     final rules = s.profile.rules;
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final local = <RuleEntry>[];
     final online = <RuleEntry>[];
     final geo = <RuleEntry>[];
@@ -1085,6 +1205,43 @@ class _RulesTabState extends State<RulesTab> {
       }
     }
     final terminalLate = RuleLayout.hasTerminalNotLast(s.doc.text);
+    final list = _buildRuleList(
+      context,
+      local: local,
+      online: online,
+      geo: geo,
+      terminal: terminal,
+      terminalLate: terminalLate,
+    );
+    if (theme.platform == TargetPlatform.windows) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${rules.length} 条规则',
+                        style: display(16, weight: 650),
+                      ),
+                    ),
+                    const DesktopRuleLegend(),
+                  ],
+                ),
+                const SizedBox(height: Insets.xs),
+                const DesktopRuleTableHeader(),
+                Expanded(child: list),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Column(
       children: [
         Padding(
@@ -1116,14 +1273,7 @@ class _RulesTabState extends State<RulesTab> {
                   message: '内核按从上到下的顺序匹配，最后用一条 MATCH 兜底。',
                   compact: true,
                 )
-              : _buildRuleList(
-                  context,
-                  local: local,
-                  online: online,
-                  geo: geo,
-                  terminal: terminal,
-                  terminalLate: terminalLate,
-                ),
+              : list,
         ),
       ],
     );

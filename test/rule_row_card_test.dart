@@ -133,4 +133,83 @@ void main() {
     expect(find.text('DOMAIN-SUFFIX'), findsNothing);
     expect(find.byIcon(Icons.swap_horiz), findsNothing);
   });
+
+  testWidgets('Windows 规则行按目标着色，缓存和刷新入口不挤动操作列', (tester) async {
+    final theme = ThemeData.dark().copyWith(platform: TargetPlatform.windows);
+    var refreshes = 0;
+    var rowTaps = 0;
+    final rows = [
+      ('DOMAIN,example.org,DEFAULT', theme.colorScheme.primary),
+      ('RULE-SET,loyal-apple,DIRECT', const Color(0xFF3FB950)),
+      ('DOMAIN,ads.example.org,REJECT', theme.colorScheme.error),
+    ];
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final width in [980.0, 550.0]) {
+      tester.view.physicalSize = Size(width, 520);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, (raw, _)) in rows.indexed)
+                  RuleRowCard(
+                    key: ValueKey(index),
+                    rule: RuleEntry.parse(index, raw),
+                    onTap: () => rowTaps++,
+                    onEdit: () {},
+                    onMoveToGroup: () {},
+                    onRefresh: index == 1 ? () => refreshes++ : null,
+                    trailing: index == 1
+                        ? const Text(
+                            '缓存于 11/21 22:50',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : null,
+                    dragHandle: const Icon(Icons.drag_indicator),
+                    groupNames: const {'DEFAULT'},
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final swapPositions = <double>[];
+      final menuPositions = <double>[];
+      for (final (index, (_, color)) in rows.indexed) {
+        final row = find.byKey(ValueKey(index));
+        final stripe = find.descendant(
+          of: row,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container &&
+                widget.constraints?.maxWidth == 4 &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration! as BoxDecoration).color == color,
+          ),
+        );
+        final swap = find.descendant(
+          of: row,
+          matching: find.byTooltip('换到别的组'),
+        );
+        final menu = find.descendant(of: row, matching: find.byTooltip('规则操作'));
+        expect(stripe, findsOneWidget);
+        expect(tester.getCenter(stripe).dx, lessThan(tester.getCenter(row).dx));
+        swapPositions.add(tester.getCenter(swap).dx);
+        menuPositions.add(tester.getCenter(menu).dx);
+      }
+      expect(swapPositions.toSet(), hasLength(1));
+      expect(menuPositions.toSet(), hasLength(1));
+      expect(tester.takeException(), isNull);
+    }
+
+    await tester.tap(find.byTooltip('更新规则集'));
+    await tester.pump();
+    expect(refreshes, 1);
+    expect(rowTaps, 0);
+  });
 }

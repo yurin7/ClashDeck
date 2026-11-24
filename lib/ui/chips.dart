@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'widgets/app_draggable.dart';
+
 import 'widgets/delay_badge.dart';
 
 import '../core/edit/rule_labels.dart';
@@ -404,7 +406,9 @@ class NodeChip extends StatelessWidget {
           }
         },
         child: Tooltip(
-          message: onSelect != null
+          message: Theme.of(context).platform == TargetPlatform.windows
+              ? '拖动节点到策略组，右键打开操作'
+              : onSelect != null
               ? '点按 = 让「$fromGroup」改用这个节点\n⋮ 打开操作；长按可拖到别的组'
               : '${node.type} · ${node.subtitle}\n点按编辑，长按可拖到别的组',
           triggerMode: TooltipTriggerMode.manual,
@@ -453,17 +457,17 @@ class _DraggableChipState extends State<_DraggableChip> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final shell = widget.shell;
-    final holdTooltip = widget.holdTooltip;
+    final holdTooltip = Theme.of(context).platform == TargetPlatform.windows
+        ? null
+        : widget.holdTooltip;
     final draggable = ListenableBuilder(
       listenable: dragState,
-      builder: (context, _) => LongPressDraggable<Object>(
+      builder: (context, _) => AppDraggable<Object>(
         data: widget.data,
         // 回弹动画期间不允许再起拖，避免两层浮层叠在一起。
         maxSimultaneousDrags: dragState.animating ? 0 : null,
         // 300ms 比默认 500ms 更容易触发；长按后跟手拖动不会被滚动抢走。
         delay: const Duration(milliseconds: 300),
-        hapticFeedbackOnStart: true,
-        dragAnchorStrategy: childDragAnchorStrategy,
         onDragStarted: () {
           final box = context.findRenderObject() as RenderBox?;
           if (box == null || !box.hasSize) return;
